@@ -12,6 +12,7 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -29,6 +30,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+import net.sybyline.scarlet.util.*;
+import net.sybyline.scarlet.util.tts.TTSService;
+import net.sybyline.scarlet.util.tts.TTSServiceFactory;
 import org.scalasbt.ipcsocket.UnixDomainServerSocket;
 import org.scalasbt.ipcsocket.Win32NamedPipeServerSocket;
 import org.scalasbt.ipcsocket.Win32SecurityLevel;
@@ -279,7 +283,7 @@ public class Scarlet implements Closeable
         catch (InterruptedException iex)
         {
         }
-        MiscUtils.close(this.ttsService);
+//        MiscUtils.close(this.ttsService);
         MiscUtils.close(this.discord);
         MiscUtils.close(this.logs);
         MiscUtils.close(this.ui);
@@ -504,7 +508,6 @@ public class Scarlet implements Closeable
         }
         finally
         {
-            ;
         }
     }
 
@@ -695,6 +698,10 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
                     LOG.error("Exception importing watched groups JSON from "+(isUrl ? "URL: " : "file: ")+from, ex);
                 }
             } break;
+                default: {
+                    LOG.info("Unknown CLI command: "+op);
+                }
+                break;
             }
         }
         catch (Exception ex)
@@ -724,8 +731,8 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
         }
     }
 
-    String newerVersion = null,
-           allVersions[] = {};
+    String newerVersion = null;
+    String[] allVersions = {};
     void checkUpdate()
     {
         try
