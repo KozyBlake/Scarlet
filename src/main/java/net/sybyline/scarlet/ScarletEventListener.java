@@ -477,7 +477,7 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
                     String vtktts = actorId == null
                         ? ("A vote to kick was initiated against "+targetDisplayName+".")
                         : ("A vote to kick was initiated against "+targetDisplayName+" by "+nullable_actorDisplayName+".");
-                    this.scarlet.ttsService.submit("vtk-"+Long.toUnsignedString(System.nanoTime()), vtktts);
+                    this.scarlet.getTtsService().submit("vtk-"+Long.toUnsignedString(System.nanoTime()), vtktts);
                 }
                 OffsetDateTime odt = MiscUtils.odt2utc(timestamp);
                 this.scarlet.data.customEvent_new(GroupAuditTypeEx.VTK_START, odt, actorId, nullable_actorDisplayName, userId, targetDisplayName);

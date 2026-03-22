@@ -12,6 +12,8 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -34,8 +36,6 @@ import net.sybyline.scarlet.util.*;
 import net.sybyline.scarlet.util.tts.TTSService;
 import net.sybyline.scarlet.util.tts.TTSServiceFactory;
 import org.scalasbt.ipcsocket.UnixDomainServerSocket;
-import org.scalasbt.ipcsocket.Win32NamedPipeServerSocket;
-import org.scalasbt.ipcsocket.Win32SecurityLevel;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -161,17 +161,56 @@ public class Scarlet implements Closeable
     static
     {
         String scarletHome = System.getenv("SCARLET_HOME"),
-               localappdata =  System.getenv("LOCALAPPDATA");
+               localappdata = System.getenv("LOCALAPPDATA"),
+               xdgDataHome = System.getenv("XDG_DATA_HOME");
         scarletHome = System.getProperty("SCARLET_HOME", scarletHome);
-        File dir0 = scarletHome != null
-            ? ";".equals(scarletHome.trim()) && MavenDepsLoader.jarPath() != null
-                ? MavenDepsLoader.jarPath().getParent().toFile()
-                : new File(scarletHome).getAbsoluteFile()
-            : localappdata != null
-                ? new File(localappdata, GROUP+"/"+NAME)
-                : new File(user_home, "AppData/Local/"+GROUP+"/"+NAME);
+        
+        File dir0;
+        if (scarletHome != null && !scarletHome.trim().isEmpty() && !";".equals(scarletHome.trim()))
+        {
+            // SCARLET_HOME is explicitly set
+            dir0 = new File(scarletHome).getAbsoluteFile();
+        }
+        else if (";".equals(scarletHome != null ? scarletHome.trim() : null) && MavenDepsLoader.jarPath() != null)
+        {
+            // SCARLET_HOME=";" means use jar directory
+            dir0 = MavenDepsLoader.jarPath().getParent().toFile();
+        }
+        else if (Platform.CURRENT == Platform.$NIX)
+        {
+            // Linux: Use XDG_DATA_HOME if set, otherwise ~/.local/share
+            if (xdgDataHome != null && !xdgDataHome.trim().isEmpty())
+            {
+                dir0 = new File(xdgDataHome, GROUP+"/"+NAME);
+            }
+            else
+            {
+                dir0 = new File(user_home, ".local/share/"+GROUP+"/"+NAME);
+            }
+        }
+        else if (localappdata != null)
+        {
+            // Windows: Use LOCALAPPDATA
+            dir0 = new File(localappdata, GROUP+"/"+NAME);
+        }
+        else if (Platform.CURRENT == Platform.NT)
+        {
+            // Windows fallback
+            dir0 = new File(user_home, "AppData/Local/"+GROUP+"/"+NAME);
+        }
+        else
+        {
+            // Other platforms: use user home
+            dir0 = new File(user_home, "."+GROUP+"/"+NAME);
+        }
+        
         if (!dir0.isDirectory())
-            dir0.mkdirs();
+        {
+            if (!dir0.mkdirs())
+            {
+                System.err.println("Failed to create directory: " + dir0);
+            }
+        }
         dir = dir0;
     }
     public static final Logger LOG = LoggerFactory.getLogger("Scarlet");
@@ -283,7 +322,8 @@ public class Scarlet implements Closeable
         catch (InterruptedException iex)
         {
         }
-//        MiscUtils.close(this.ttsService);
+        if (this.ttsService != null)
+            MiscUtils.close(this.ttsService);
         MiscUtils.close(this.discord);
         MiscUtils.close(this.logs);
         MiscUtils.close(this.ui);
@@ -379,6 +419,9 @@ public class Scarlet implements Closeable
     {
         this.ui.loadSettings();
         this.eventListener.settingsLoaded();
+        // Initialize TTS after UI is ready (for dialog parent component)
+        this.splash.splashSubtext("Initializing Text-to-Speech");
+        this.initTtsService();
         this.splash.splashSubtext("Logging in to VRChat Api");
         try
         {
@@ -508,6 +551,7 @@ public class Scarlet implements Closeable
         }
         finally
         {
+            ;
         }
     }
 
@@ -548,9 +592,7 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
 */
     void runIPC()
     {
-        try (ServerSocket ipcServer = Platform.CURRENT.isNT()
-            ? new Win32NamedPipeServerSocket(255, "\\\\.\\pipe\\ScarletIPC-"+this.vrc.groupId, false, false, Win32SecurityLevel.NO_SECURITY)
-            : new UnixDomainServerSocket("/tmp/ScarletIPC-"+this.vrc.groupId+".sock", false))
+        try (ServerSocket ipcServer = createIpcServer())
         {
             try
             {
@@ -593,6 +635,43 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
         catch (Exception ex)
         {
             LOG.error("Exception in ipc", ex);
+        }
+    }
+
+    /**
+     * Creates the IPC server using platform-specific implementation.
+     * Uses reflection on Windows to avoid ClassNotFoundException when loading Windows-specific classes on Linux.
+     */
+    private ServerSocket createIpcServer() throws Exception
+    {
+        if (Platform.CURRENT.isNT())
+        {
+            // Use reflection to avoid loading Windows-specific classes on non-Windows platforms
+            Class<?> win32SocketClass = Class.forName("org.scalasbt.ipcsocket.Win32NamedPipeServerSocket");
+            Class<?> win32SecurityLevelClass = Class.forName("org.scalasbt.ipcsocket.Win32SecurityLevel");
+            Object noSecurity = win32SecurityLevelClass.getField("NO_SECURITY").get(null);
+            java.lang.reflect.Constructor<?> constructor = win32SocketClass.getConstructor(
+                int.class, String.class, boolean.class, boolean.class, win32SecurityLevelClass
+            );
+            return (ServerSocket) constructor.newInstance(
+                255, "\\\\.\\pipe\\ScarletIPC-"+this.vrc.groupId, false, false, noSecurity
+            );
+        }
+        else
+        {
+            // Clean up any leftover socket file from a previous instance
+            // This handles the case where the previous instance didn't shut down cleanly
+            String socketPath = "/tmp/ScarletIPC-"+this.vrc.groupId+".sock";
+            Path socketFilePath = Paths.get(socketPath);
+            try
+            {
+                Files.deleteIfExists(socketFilePath);
+            }
+            catch (IOException ex)
+            {
+                LOG.warn("Failed to delete existing socket file: " + socketPath, ex);
+            }
+            return new UnixDomainServerSocket(socketPath, false);
         }
     }
 
@@ -698,10 +777,6 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
                     LOG.error("Exception importing watched groups JSON from "+(isUrl ? "URL: " : "file: ")+from, ex);
                 }
             } break;
-                default: {
-                    LOG.info("Unknown CLI command: "+op);
-                }
-                break;
             }
         }
         catch (Exception ex)
@@ -731,8 +806,8 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
         }
     }
 
-    String newerVersion = null;
-    String[] allVersions = {};
+    String newerVersion = null,
+           allVersions[] = {};
     void checkUpdate()
     {
         try

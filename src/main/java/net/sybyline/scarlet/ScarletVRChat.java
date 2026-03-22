@@ -1164,6 +1164,18 @@ finally
     }
     public GroupMember getGroupMembership(String groupId, String targetUserId)
     {
+        // Validate required parameters
+        if (groupId == null || groupId.isEmpty())
+        {
+            LOG.error("getGroupMembership called with null or empty groupId");
+            return null;
+        }
+        if (targetUserId == null || targetUserId.isEmpty())
+        {
+            LOG.error("getGroupMembership called with null or empty targetUserId");
+            return null;
+        }
+        
         GroupsApi groups = new GroupsApi(this.client);
         try
         {
@@ -1172,8 +1184,14 @@ finally
         catch (ApiException apiex)
         {
             this.scarlet.checkVrcRefresh(apiex);
+            // Only return null for 404 (user not in group), propagate other errors
+            if (apiex.getCode() == 404)
+            {
+                LOG.debug("User {} is not a member of group {}", targetUserId, groupId);
+                return null;
+            }
             LOG.error("Error getting group member group: "+apiex.getMessage());
-            return null;
+            throw new RuntimeException("Failed to get group membership: " + apiex.getMessage(), apiex);
         }
     }
     public GroupMember updateGroupMembershipNotes(String groupId, String targetUserId, String managerNotes)
