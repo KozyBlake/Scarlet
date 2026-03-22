@@ -12,8 +12,6 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -31,6 +29,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
+
+import javax.swing.JButton;
+import javax.swing.JOptionPane;
 
 import net.sybyline.scarlet.util.*;
 import net.sybyline.scarlet.util.tts.TTSService;
@@ -52,18 +53,6 @@ import net.dv8tion.jda.api.interactions.commands.build.OptionData;
 import net.dv8tion.jda.api.utils.MarkdownSanitizer;
 import net.sybyline.scarlet.log.ScarletLogger;
 import net.sybyline.scarlet.ui.Swing;
-import net.sybyline.scarlet.util.GithubApi;
-import net.sybyline.scarlet.util.HttpURLInputStream;
-import net.sybyline.scarlet.util.JsonAdapters;
-import net.sybyline.scarlet.util.Location;
-import net.sybyline.scarlet.util.MavenDepsLoader;
-import net.sybyline.scarlet.util.MiscUtils;
-import net.sybyline.scarlet.util.Platform;
-import net.sybyline.scarlet.util.ProcLock;
-import net.sybyline.scarlet.util.VrcIds;
-import net.sybyline.scarlet.util.tts.TtsService;
-import net.sybyline.scarlet.util.EnforcementAgeState;
-import net.sybyline.scarlet.util.EnforcementListState;
 
 public class Scarlet implements Closeable
 {
@@ -322,8 +311,7 @@ public class Scarlet implements Closeable
         catch (InterruptedException iex)
         {
         }
-        if (this.ttsService != null)
-            MiscUtils.close(this.ttsService);
+//        MiscUtils.close(this.ttsService);
         MiscUtils.close(this.discord);
         MiscUtils.close(this.logs);
         MiscUtils.close(this.ui);
@@ -396,10 +384,12 @@ public class Scarlet implements Closeable
     final ScarletSecretStaffList secretStaffList = new ScarletSecretStaffList(new File(dir, "secret_staff_list.json"));
     final ScarletVRChatReportTemplate vrcReport = new ScarletVRChatReportTemplate(new File(dir, "report_template.txt"));
     final ScarletData data = new ScarletData(new File(dir, "data"));
-    final ScarletVRChat vrc = new ScarletVRChat(this, "global", new File(dir, "store.bin"));
+
+
+
+    final ScarletVRChat vrc = new ScarletVRChat(this, new File(dir, "store.bin"));
     final ScarletDiscord discord = new ScarletDiscordJDA(this, new File(dir, "discord_bot.json"), new File(dir, "discord_perms.json"));
-    final TtsService ttsService = new TtsService(new File(dir, "tts"), this.eventListener, this.discord);
-    final ScarletCalendar calendar = new ScarletCalendar(this, new File(dir, "event_schedule.json"));
+    final TTSService ttsService = TTSServiceFactory.build(Paths.get(dir.getAbsolutePath(), "tts"), discord);
     final ScarletVRChatLogs logs = new ScarletVRChatLogs(this.eventListener);
     String[] last25logs = new String[0];
     final ScarletSettings.FileValued<Boolean> confirmGroupInvite = this.settings.new FileValuedBoolean("ui_confirm_group_invite", "Confirmation dialog for group invites", false),
@@ -551,7 +541,6 @@ public class Scarlet implements Closeable
         }
         finally
         {
-            ;
         }
     }
 
@@ -685,22 +674,7 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             String op = ls.next();
             switch (op)
             {
-            default: {
-                LOG.info("Unknown CLI command: "+op);
-            } break;
-            case "info":
-            case "help": {
-                StringBuilder sb = new StringBuilder("CLI commands:");
-                sb.append("\n\thelp (alternate: info)");
-                sb.append("\n\tlogout");
-                sb.append("\n\texit (alternate: halt, quit, stop)");
-                sb.append("\n\texplore");
-                sb.append("\n\ttts <text to speak>");
-                sb.append("\n\tlink <VRChat UserID> <Discord UserSF>");
-                sb.append("\n\timportgroups <file | URL>");
-                sb.append("\n\timportgroupsjson <file | URL>");
-            } break;
-            case "logout": {
+                case "logout": {
                 LOG.info("Logout success: "+this.vrc.logout());
             } // fallthrough
             case "exit":
@@ -777,6 +751,10 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
                     LOG.error("Exception importing watched groups JSON from "+(isUrl ? "URL: " : "file: ")+from, ex);
                 }
             } break;
+                default: {
+                    LOG.info("Unknown CLI command: "+op);
+                }
+                break;
             }
         }
         catch (Exception ex)
@@ -806,8 +784,8 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
         }
     }
 
-    String newerVersion = null,
-           allVersions[] = {};
+    String newerVersion = null;
+    String[] allVersions = {};
     void checkUpdate()
     {
         try
