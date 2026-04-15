@@ -68,6 +68,7 @@ import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.JSlider;
 import javax.swing.JTabbedPane;
+import javax.swing.JTextArea;
 import javax.swing.JTextField;
 import javax.swing.SwingConstants;
 import javax.swing.UIManager;
@@ -342,6 +343,19 @@ public class ScarletUI implements IScarletUI
         return this.connectedPlayers.values().stream().anyMatch(p -> p.left == null);
     }
 
+    /** Appends a line of text to the in-app CLI output panel (thread-safe). */
+    void appendCliOutput(String text)
+    {
+        Swing.invokeLater(() ->
+        {
+            if (this.jtext_cli == null)
+                return;
+            this.jtext_cli.append(text + "\n");
+            // Auto-scroll to bottom
+            this.jtext_cli.setCaretPosition(this.jtext_cli.getDocument().getLength());
+        });
+    }
+
     /** Updates the status-bar player count. Must be called from a synchronized context or after writes. */
     private void updateStatusBar()
     {
@@ -373,6 +387,8 @@ public class ScarletUI implements IScarletUI
     private JTextField jfield_settingsSearch;
     private final List<JPanel>  settingsCardPanels     = new ArrayList<>();
     private final List<String>  settingsCardSearchText = new ArrayList<>();
+    // ── CLI panel ─────────────────────────────────────────────────────────────
+    private JTextArea jtext_cli;
     
     class ConnectedPlayer
     {
@@ -856,6 +872,80 @@ public class ScarletUI implements IScarletUI
                 settingsOuter.add(this.jfield_settingsSearch, BorderLayout.NORTH);
                 settingsOuter.add(settingsScroll, BorderLayout.CENTER);
                 this.jtabs.addTab("  Settings  ", settingsOuter);
+            }
+            // ── CLI tab ────────────────────────────────────────────────────────
+            {
+                final Color CLI_BG   = new Color(14, 14, 20);
+                final Color CLI_FG   = new Color(200, 220, 200);
+                final Color CLI_INBG = new Color(22, 22, 30);
+                final Color CLI_BORD = new Color(55, 55, 72);
+
+                JPanel cliPanel = new JPanel(new BorderLayout());
+                cliPanel.setBackground(CLI_BG);
+
+                // Output area — read-only, monospace, dark terminal style
+                this.jtext_cli = new JTextArea();
+                this.jtext_cli.setEditable(false);
+                this.jtext_cli.setLineWrap(true);
+                this.jtext_cli.setWrapStyleWord(false);
+                this.jtext_cli.setFont(new java.awt.Font("Monospaced", java.awt.Font.PLAIN, 12));
+                this.jtext_cli.setBackground(CLI_BG);
+                this.jtext_cli.setForeground(CLI_FG);
+                this.jtext_cli.setCaretColor(CLI_FG);
+                this.jtext_cli.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
+                this.jtext_cli.setText("Scarlet CLI  —  type a command below or run 'help' to list all commands.\n");
+
+                JScrollPane cliScroll = new JScrollPane(this.jtext_cli);
+                cliScroll.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, CLI_BORD));
+                cliScroll.setBackground(CLI_BG);
+                cliScroll.getViewport().setBackground(CLI_BG);
+                cliScroll.getVerticalScrollBar().setUnitIncrement(20);
+                cliPanel.add(cliScroll, BorderLayout.CENTER);
+
+                // Input row at the bottom
+                JPanel cliInputRow = new JPanel(new BorderLayout(6, 0));
+                cliInputRow.setBackground(CLI_INBG);
+                cliInputRow.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createMatteBorder(1, 0, 0, 0, CLI_BORD),
+                    BorderFactory.createEmptyBorder(6, 10, 6, 10)));
+
+                JLabel cliPrompt = new JLabel(">");
+                cliPrompt.setFont(new java.awt.Font("Monospaced", java.awt.Font.BOLD, 13));
+                cliPrompt.setForeground(new Color(120, 200, 120));
+                cliPrompt.setBorder(BorderFactory.createEmptyBorder(0, 0, 0, 4));
+
+                JTextField cliInput = new JTextField();
+                cliInput.setFont(new java.awt.Font("Monospaced", java.awt.Font.PLAIN, 12));
+                cliInput.setBackground(new Color(28, 28, 38));
+                cliInput.setForeground(CLI_FG);
+                cliInput.setCaretColor(CLI_FG);
+                cliInput.putClientProperty("JTextField.placeholderText", "Enter command (e.g. help)");
+                cliInput.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createLineBorder(CLI_BORD, 1),
+                    BorderFactory.createEmptyBorder(4, 8, 4, 8)));
+
+                JButton cliRunBtn = new JButton("Run");
+                cliRunBtn.setFont(new java.awt.Font("Dialog", java.awt.Font.PLAIN, 12));
+
+                java.util.function.Consumer<String> submitCmd = cmd ->
+                {
+                    if (cmd == null || cmd.isBlank())
+                        return;
+                    String trimmed = cmd.trim();
+                    this.appendCliOutput("> " + trimmed);
+                    cliInput.setText("");
+                    this.scarlet.exec.execute(() -> this.scarlet.rawCommand(trimmed, this::appendCliOutput));
+                };
+
+                cliInput.addActionListener($ -> submitCmd.accept(cliInput.getText()));
+                cliRunBtn.addActionListener($ -> submitCmd.accept(cliInput.getText()));
+
+                cliInputRow.add(cliPrompt,  BorderLayout.WEST);
+                cliInputRow.add(cliInput,   BorderLayout.CENTER);
+                cliInputRow.add(cliRunBtn,  BorderLayout.EAST);
+                cliPanel.add(cliInputRow, BorderLayout.SOUTH);
+
+                this.jtabs.addTab("  CLI  ", cliPanel);
             }
             this.jframe.add(this.jtabs, BorderLayout.CENTER);
         }
@@ -1522,6 +1612,7 @@ public class ScarletUI implements IScarletUI
 
         { "Discord",
           "Discord bot token", "Discord guild snowflake",
+          "discord_kick_ban_enabled",
           "discord_bundle_instance_kick_with_user_ban",
           "moderation_summary_only_activity",
           "discord_ping_instance_warn", "discord_ping_instance_kick",
@@ -1552,6 +1643,9 @@ public class ScarletUI implements IScarletUI
         { "VRChat Credentials",
           "Add alternate credentials", "Remove alternate credentials",
           "List alternate credentials", "Reset VRChat credentials" },
+
+        { "CLI",
+          "Run CLI command" },
     };
 
     private void readSettingUI()

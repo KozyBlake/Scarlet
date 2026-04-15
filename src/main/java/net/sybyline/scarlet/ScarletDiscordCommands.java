@@ -227,6 +227,7 @@ public class ScarletDiscordCommands
     public final SlashOption<String> _entityMessage = SlashOption.ofString("entity-message", "A message to announce with TTS", false, null);
     public final SlashOption<Boolean> _entityCritical = SlashOption.ofBool("entity-critical", "The critical status of the entity", true, null);
     public final SlashOption<Boolean> _entitySilent = SlashOption.ofBool("entity-silent", "The silent status of the entity", true, null);
+    public final SlashOption<String> _actionReason = SlashOption.ofString("reason", "Reason shown to the user and recorded in the audit log", false, null);
 
     // vrchat-search
 
@@ -4141,6 +4142,150 @@ public class ScarletDiscordCommands
             }
             hook.sendMessage("Removed event schedule").setEphemeral(true).queue();
         }
+    }
+
+    // discord-ban
+
+    @SlashCmd("discord-ban")
+    @Desc("Ban a Discord server member")
+    @DefaultPerms(Permission.BAN_MEMBERS)
+    @Ephemeral
+    public void discordBan(SlashCommandInteractionEvent event, InteractionHook hook,
+                           @SlashOpt("discord-user") Member discordUser,
+                           @SlashOpt("reason") String reason)
+    {
+        if (!this.discord.scarlet.discordKickBanEnabled.get())
+        {
+            hook.sendMessage("The built-in Discord ban command is not enabled.\n" +
+                "Enable it under **Settings → Discord** in Scarlet.").queue();
+            return;
+        }
+        if (discordUser == null)
+        {
+            hook.sendMessage("Please select a valid server member.").queue();
+            return;
+        }
+
+        net.dv8tion.jda.api.entities.Guild guild =
+            this.discord.jda.getGuildById(this.discord.guildSf);
+        if (guild == null)
+        {
+            hook.sendMessage("Could not find the configured Discord server.").queue();
+            return;
+        }
+
+        net.dv8tion.jda.api.entities.Member self = guild.getSelfMember();
+
+        if (!self.hasPermission(Permission.BAN_MEMBERS))
+        {
+            hook.sendMessage("The bot does not have the **Ban Members** permission in this server.").queue();
+            return;
+        }
+
+        if (discordUser.isOwner())
+        {
+            hook.sendMessageFormat("Cannot ban **%s** — they are the server owner.",
+                MarkdownSanitizer.escape(discordUser.getEffectiveName())).queue();
+            return;
+        }
+
+        if (!self.canInteract(discordUser))
+        {
+            hook.sendMessageFormat("Cannot ban **%s** — their highest role is equal to or above mine.",
+                MarkdownSanitizer.escape(discordUser.getEffectiveName())).queue();
+            return;
+        }
+
+        // Encode reason into button ID (truncated to fit Discord's 100-char limit)
+        String reasonSuffix = (reason != null && !reason.isBlank())
+            ? ":" + MiscUtils.maybeEllipsis(55, reason.trim())
+            : "";
+        String confirmId = "discord-ban-confirm:" + discordUser.getId() + reasonSuffix;
+
+        String reasonLine = reason != null && !reason.isBlank()
+            ? "\n**Reason:** " + MarkdownSanitizer.escape(reason.trim())
+            : "";
+        hook.sendMessageFormat(
+            "Ban **%s** (`%s`) from the server?%s",
+            MarkdownSanitizer.escape(discordUser.getEffectiveName()),
+            discordUser.getUser().getName(),
+            reasonLine)
+            .setComponents(ActionRow.of(
+                Button.danger(confirmId, "Ban"),
+                Button.secondary("discord-ban-cancel", "Cancel")))
+            .queue();
+    }
+
+    // discord-kick
+
+    @SlashCmd("discord-kick")
+    @Desc("Kick a Discord server member")
+    @DefaultPerms(Permission.KICK_MEMBERS)
+    @Ephemeral
+    public void discordKick(SlashCommandInteractionEvent event, InteractionHook hook,
+                            @SlashOpt("discord-user") Member discordUser,
+                            @SlashOpt("reason") String reason)
+    {
+        if (!this.discord.scarlet.discordKickBanEnabled.get())
+        {
+            hook.sendMessage("The built-in Discord kick command is not enabled.\n" +
+                "Enable it under **Settings → Discord** in Scarlet.").queue();
+            return;
+        }
+        if (discordUser == null)
+        {
+            hook.sendMessage("Please select a valid server member.").queue();
+            return;
+        }
+
+        net.dv8tion.jda.api.entities.Guild guild =
+            this.discord.jda.getGuildById(this.discord.guildSf);
+        if (guild == null)
+        {
+            hook.sendMessage("Could not find the configured Discord server.").queue();
+            return;
+        }
+
+        net.dv8tion.jda.api.entities.Member self = guild.getSelfMember();
+
+        if (!self.hasPermission(Permission.KICK_MEMBERS))
+        {
+            hook.sendMessage("The bot does not have the **Kick Members** permission in this server.").queue();
+            return;
+        }
+
+        if (discordUser.isOwner())
+        {
+            hook.sendMessageFormat("Cannot kick **%s** — they are the server owner.",
+                MarkdownSanitizer.escape(discordUser.getEffectiveName())).queue();
+            return;
+        }
+
+        if (!self.canInteract(discordUser))
+        {
+            hook.sendMessageFormat("Cannot kick **%s** — their highest role is equal to or above mine.",
+                MarkdownSanitizer.escape(discordUser.getEffectiveName())).queue();
+            return;
+        }
+
+        // Encode reason into button ID (truncated to fit Discord's 100-char limit)
+        String reasonSuffix = (reason != null && !reason.isBlank())
+            ? ":" + MiscUtils.maybeEllipsis(58, reason.trim())
+            : "";
+        String confirmId = "discord-kick-confirm:" + discordUser.getId() + reasonSuffix;
+
+        String reasonLine = reason != null && !reason.isBlank()
+            ? "\n**Reason:** " + MarkdownSanitizer.escape(reason.trim())
+            : "";
+        hook.sendMessageFormat(
+            "Kick **%s** (`%s`) from the server?%s",
+            MarkdownSanitizer.escape(discordUser.getEffectiveName()),
+            discordUser.getUser().getName(),
+            reasonLine)
+            .setComponents(ActionRow.of(
+                Button.danger(confirmId, "Kick"),
+                Button.secondary("discord-kick-cancel", "Cancel")))
+            .queue();
     }
 
 }

@@ -440,7 +440,9 @@ public class Scarlet implements Closeable
     final ScarletSettings.FileValued<Boolean> confirmGroupInvite = this.settings.new FileValuedBoolean("ui_confirm_group_invite", "Confirmation dialog for group invites", false),
                                      alertForUpdates = this.settings.new FileValuedBoolean("ui_alert_update", "Notify for updates", true),
                                      alertForPreviewUpdates = this.settings.new FileValuedBoolean("ui_alert_update_preview", "Notify for preview updates", true),
-                                     showUiDuringLoad = this.settings.new FileValuedBoolean("ui_show_during_load", "Show UI during load", false);
+                                     showUiDuringLoad = this.settings.new FileValuedBoolean("ui_show_during_load", "Show UI during load", false),
+                                     discordKickBanEnabled = this.settings.new FileValuedBoolean("discord_kick_ban_enabled", "Enable built-in Discord kick/ban commands", false),
+                                     discordKickBanPrompted = this.settings.new FileValuedBoolean("discord_kick_ban_prompted", "Discord kick/ban prompt shown", false);
     final ScarletSettings.FileValued<EnforcementAgeState> enforceInstances18plus = this.settings.new FileValuedEnum<>("enforce_instances_18_plus", "Instances: enforce 18+", EnforcementAgeState.DISABLED);
     final ScarletSettings.FileValued<EnforcementListState> enforceInstancesWorlds = this.settings.new FileValuedEnum<>("enforce_instances_worlds", "Instances: enforce worlds", EnforcementListState.DISABLED);
     final ScarletSettings.FileValued<String[]> enforceInstancesWorldList = this.settings.new FileValuedStringArrayPattern("enforce_instances_world_list", "Instances: enforce world list", new String[0], VrcIds.P_ID_WORLD, true);
@@ -477,6 +479,14 @@ public class Scarlet implements Closeable
                                       this.splash.queueFeedbackPopup(null, 3_000L,
                                           "Pronoun lists reloaded",
                                           pronounLists.goodSet.size() + " good, " + pronounLists.badSet.size() + " bad entries");
+                                  }),
+                                  runCliCommand = this.settings.new FileValuedVoid("Run CLI command", "Run", () ->
+                                  {
+                                      this.settings.requireInputAsync("CLI command (type 'help' to list all commands)", false, cmd ->
+                                      {
+                                          if (cmd != null && !cmd.isBlank())
+                                              this.exec.execute(() -> this.rawCommand(cmd.trim()));
+                                      });
                                   });
 
     /**
@@ -530,6 +540,10 @@ public class Scarlet implements Closeable
 
     public void run()
     {
+        System.out.println("===========================================");
+        System.out.println("  Scarlet " + VERSION);
+        System.out.println("  Type 'help' for available CLI commands.");
+        System.out.println("===========================================");
         this.ui.loadSettings();
         this.eventListener.settingsLoaded();
         // Initialize TTS after UI is ready (for dialog parent component)
@@ -557,6 +571,24 @@ public class Scarlet implements Closeable
         }
         this.splash.splashSubtext("Checking for updates");
         this.checkUpdate();
+        // One-time opt-in for built-in Discord kick/ban commands
+        if (!this.discordKickBanPrompted.get())
+        {
+            this.settings.requireConfirmYesNoAsync(
+                "Scarlet includes built-in Discord slash commands for kicking and banning server members\n" +
+                "(/discord-kick and /discord-ban).\n\n" +
+                "Many users prefer to use a dedicated moderation bot for this instead.\n\n" +
+                "Would you like to enable Scarlet's built-in kick/ban commands?",
+                "Discord Moderation Commands",
+                () -> {
+                    this.discordKickBanEnabled.set(true, "user-prompt");
+                    this.discordKickBanPrompted.set(true, "user-prompt");
+                },
+                () -> {
+                    this.discordKickBanPrompted.set(true, "user-prompt");
+                }
+            );
+        }
         this.logs.start();
         this.execIPC.execute(this::runIPC);
         try
@@ -828,6 +860,11 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
 
     void rawCommand(String line)
     {
+        rawCommand(line, null);
+    }
+
+    void rawCommand(String line, java.util.function.Consumer<String> out)
+    {
         if (line == null || line.isEmpty())
             return;
         Scanner ls = new Scanner(new StringReader(line));
@@ -837,32 +874,42 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             switch (op)
             {
             default: {
-                LOG.info("Unknown CLI command: "+op);
+                String msg = "Unknown CLI command: " + op;
+                LOG.info(msg);
+                if (out != null) out.accept(msg);
             } break;
             case "info":
             case "help": {
-                StringBuilder sb = new StringBuilder("CLI commands:");
-                sb.append("\n\thelp (alternate: info)");
-                sb.append("\n\tlogout");
-                sb.append("\n\texit (alternate: halt, quit, stop)");
-                sb.append("\n\texplore");
-                sb.append("\n\ttts <text to speak>");
-                sb.append("\n\tlink <VRChat UserID> <Discord UserSF>");
-                sb.append("\n\timportgroups <file | URL>");
-                sb.append("\n\timportgroupsjson <file | URL>");
+                StringBuilder sb = new StringBuilder("Scarlet CLI commands:");
+                sb.append("\n  help               — show this list (alternate: info)");
+                sb.append("\n  logout             — log out of VRChat");
+                sb.append("\n  exit               — stop Scarlet (alternate: halt, quit, stop)");
+                sb.append("\n  explore            — open the Scarlet data folder");
+                sb.append("\n  tts <text>         — submit text to the TTS service");
+                sb.append("\n  link <usr_id> <sf> — link a VRChat user to a Discord snowflake");
+                sb.append("\n  importgroups <file|URL>     — import watched groups (legacy CSV)");
+                sb.append("\n  importgroupsjson <file|URL> — import watched groups (JSON)");
+                String msg = sb.toString();
+                System.out.println(msg);
+                if (out != null) out.accept(msg);
             } break;
             case "logout": {
-                LOG.info("Logout success: "+this.vrc.logout());
+                String msg = "Logout success: " + this.vrc.logout();
+                LOG.info(msg);
+                if (out != null) out.accept(msg);
             } // fallthrough
             case "exit":
             case "halt":
             case "quit":
             case "stop": {
                 this.running = false;
-                LOG.info("Stopping");
+                String msg = "Stopping Scarlet...";
+                LOG.info(msg);
+                if (out != null) out.accept(msg);
             } break;
             case "explore": {
                 MiscUtils.AWTDesktop.browse(dir.toURI());
+                if (out != null) out.accept("Opening data folder: " + dir.getAbsolutePath());
             } break;
             case "tts": {
                 String text = ls.nextLine().trim();
@@ -871,69 +918,96 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
                     TtsService tts = this.getTtsService();
                     if (tts != null)
                     {
-                        LOG.info("Submitting TTS: `"+text+"`, success: "+tts.submit("cli-"+Long.toUnsignedString(System.nanoTime()), text));
+                        Object result = tts.submit("cli-"+Long.toUnsignedString(System.nanoTime()), text);
+                        String msg = "Submitting TTS: `" + text + "`, result: " + result;
+                        LOG.info(msg);
+                        if (out != null) out.accept(msg);
                     }
                     else
                     {
-                        LOG.warn("TTS service not available");
+                        String msg = "TTS service not available";
+                        LOG.warn(msg);
+                        if (out != null) out.accept("[warn] " + msg);
                     }
                 }
             } break;
             case "link": {
                 String userId = ls.next();
                 String userSnowflake = ls.next();
-                
+
                 User user = this.vrc.getUser(userId);
                 if (user == null)
                 {
-                    LOG.warn("Unknown VRChat user: "+userId);
+                    String msg = "Unknown VRChat user: " + userId;
+                    LOG.warn(msg);
+                    if (out != null) out.accept("[warn] " + msg);
                 }
                 else
                 {
                     this.data.linkIdToSnowflake(userId, userSnowflake);
-                    LOG.info("Linking VRChat user "+user.getDisplayName()+" ("+userId+") to Discord user <@"+userSnowflake+">");
+                    String msg = "Linking VRChat user " + user.getDisplayName() + " (" + userId + ") to Discord user <@" + userSnowflake + ">";
+                    LOG.info(msg);
+                    if (out != null) out.accept(msg);
                 }
             } break;
             case "importgroups": {
                 String from = ls.nextLine().trim();
                 boolean isUrl = from.startsWith("http://") || from.startsWith("https://");
-                
-                LOG.info("Importing watched groups legacy CSV from "+(isUrl ? "URL: " : "file: ")+from);
+
+                String srcLabel = (isUrl ? "URL: " : "file: ") + from;
+                String startMsg = "Importing watched groups legacy CSV from " + srcLabel;
+                LOG.info(startMsg);
+                if (out != null) out.accept(startMsg);
                 try (Reader reader = isUrl ? new InputStreamReader(HttpURLInputStream.get(from), StandardCharsets.UTF_8) : MiscUtils.reader(new File(from)))
                 {
                     if (this.watchedGroups.importLegacyCSV(reader, true))
                     {
-                        LOG.info("Successfully imported watched groups legacy CSV");
+                        String msg = "Successfully imported watched groups legacy CSV";
+                        LOG.info(msg);
+                        if (out != null) out.accept(msg);
                     }
                     else
                     {
-                        LOG.warn("Failed to import watched groups legacy CSV with unknown reason");
+                        String msg = "Failed to import watched groups legacy CSV with unknown reason";
+                        LOG.warn(msg);
+                        if (out != null) out.accept("[warn] " + msg);
                     }
                 }
                 catch (Exception ex)
                 {
-                    LOG.error("Exception importing watched groups legacy CSV from "+(isUrl ? "URL: " : "file: ")+from, ex);
+                    String msg = "Exception importing watched groups legacy CSV from " + srcLabel;
+                    LOG.error(msg, ex);
+                    if (out != null) out.accept("[error] " + msg + ": " + ex.getMessage());
                 }
             } break;
             case "importgroupsjson": {
                 String from = ls.nextLine().trim();
                 boolean isUrl = from.startsWith("http://") || from.startsWith("https://");
-                
-                LOG.info("Importing watched groups JSON from "+(isUrl ? "URL: " : "file: ")+from);
+
+                String srcLabel = (isUrl ? "URL: " : "file: ") + from;
+                String startMsg = "Importing watched groups JSON from " + srcLabel;
+                LOG.info(startMsg);
+                if (out != null) out.accept(startMsg);
                 try (Reader reader = isUrl ? new InputStreamReader(HttpURLInputStream.get(from), StandardCharsets.UTF_8) : MiscUtils.reader(new File(from)))
                 {
                     if (this.watchedGroups.importJson(reader, true))
                     {
-                        LOG.info("Successfully imported watched groups JSON");
+                        String msg = "Successfully imported watched groups JSON";
+                        LOG.info(msg);
+                        if (out != null) out.accept(msg);
                     }
                     else
                     {
-                        LOG.warn("Failed to import watched groups JSON with unknown reason");
+                        String msg = "Failed to import watched groups JSON with unknown reason";
+                        LOG.warn(msg);
+                        if (out != null) out.accept("[warn] " + msg);
                     }
                 }
                 catch (Exception ex)
                 {
-                    LOG.error("Exception importing watched groups JSON from "+(isUrl ? "URL: " : "file: ")+from, ex);
+                    String msg = "Exception importing watched groups JSON from " + srcLabel;
+                    LOG.error(msg, ex);
+                    if (out != null) out.accept("[error] " + msg + ": " + ex.getMessage());
                 }
             } break;
             }
@@ -941,6 +1015,7 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
         catch (Exception ex)
         {
             LOG.error("Exception handling CLI command: "+line, ex);
+            if (out != null) out.accept("[error] Exception handling command: " + ex.getMessage());
         }
     }
 

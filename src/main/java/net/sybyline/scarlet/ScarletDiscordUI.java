@@ -1371,6 +1371,284 @@ public class ScarletDiscordUI
         }
     }
 
+    // ── discord-kick interactions ─────────────────────────────────────────────
+
+    @ButtonClk("discord-kick-confirm")
+    @Ephemeral
+    public void discordKickConfirm(ButtonInteractionEvent event, InteractionHook hook)
+    {
+        // Split with limit 3 so a colon inside the reason is preserved intact
+        String[] parts = event.getButton().getCustomId().split(":", 3);
+        String targetId = parts[1];
+        String reason = parts.length > 2 ? parts[2] : null;
+
+        net.dv8tion.jda.api.entities.Guild guild =
+            this.discord.jda.getGuildById(this.discord.guildSf);
+        if (guild == null)
+        {
+            hook.sendMessage("Could not find the configured Discord server.").queue();
+            return;
+        }
+
+        net.dv8tion.jda.api.entities.Member self = guild.getSelfMember();
+
+        // Verify the bot has permission to kick at all
+        if (!self.hasPermission(net.dv8tion.jda.api.Permission.KICK_MEMBERS))
+        {
+            hook.sendMessage("The bot does not have the **Kick Members** permission in this server.").queue();
+            return;
+        }
+
+        net.dv8tion.jda.api.entities.Member target;
+        try
+        {
+            target = guild.retrieveMemberById(targetId).complete();
+        }
+        catch (Exception ex)
+        {
+            hook.sendMessage("Could not retrieve that member — they may have already left.").queue();
+            return;
+        }
+
+        if (target == null)
+        {
+            hook.sendMessage("Member not found — they may have already left.").queue();
+            return;
+        }
+
+        if (target.isOwner())
+        {
+            hook.sendMessageFormat("Cannot kick **%s** — they are the server owner.",
+                MarkdownSanitizer.escape(target.getEffectiveName())).queue();
+            return;
+        }
+
+        if (!self.canInteract(target))
+        {
+            hook.sendMessageFormat("Cannot kick **%s** — their highest role is equal to or above mine.",
+                MarkdownSanitizer.escape(target.getEffectiveName())).queue();
+            return;
+        }
+
+        String name = target.getEffectiveName();
+        String actor = event.getMember() != null
+            ? event.getMember().getEffectiveName()
+            : event.getUser().getName();
+
+        // Build audit log reason
+        String auditReason = reason != null && !reason.isBlank()
+            ? String.format("Kicked via Scarlet by %s. Reason: %s", actor, reason)
+            : "Kicked via Scarlet by " + actor;
+
+        // Build DM message
+        String dmMessage = reason != null && !reason.isBlank()
+            ? String.format("You have been kicked from **%s** by %s.\n**Reason:** %s",
+                guild.getName(), actor, reason)
+            : String.format("You have been kicked from **%s** by %s.",
+                guild.getName(), actor);
+
+        // Capture finals for use inside lambdas
+        final net.dv8tion.jda.api.entities.Member finalTarget = target;
+        final String finalName = name;
+        final String finalAuditReason = auditReason;
+        final String finalTargetId = targetId;
+
+        final String finalGuildName = guild.getName();
+        final String finalGuildId = guild.getId();
+
+        // Helper runnable that performs the actual kick
+        Runnable doKick = () -> guild.kick(finalTarget)
+            .reason(finalAuditReason)
+            .queue(
+                success -> {
+                    LOG.info("Discord kick: {} ({}) kicked from {} ({}) by {}. Reason: {}",
+                        finalName, finalTargetId, finalGuildName, finalGuildId, actor, finalAuditReason);
+                    hook.sendMessageFormat("**%s** has been kicked from the server.",
+                        MarkdownSanitizer.escape(finalName)).queue();
+                },
+                error -> {
+                    LOG.error("Failed to kick member {} ({}) from {} ({}): {}",
+                        finalName, finalTargetId, finalGuildName, finalGuildId, error.getMessage());
+                    hook.sendMessageFormat("Failed to kick **%s**: %s",
+                        MarkdownSanitizer.escape(finalName), error.getMessage()).queue();
+                });
+
+        // DM the user FIRST; the kick only fires after the DM attempt has fully
+        // settled (success or failure). This ensures the user still shares a mutual
+        // guild with the bot at the moment the DM is sent.
+        target.getUser().openPrivateChannel().queue(
+            channel -> channel.sendMessage(dmMessage).queue(
+                sent -> {
+                    LOG.debug("Sent kick DM to {} ({})", finalName, finalTargetId);
+                    doKick.run();
+                },
+                error -> {
+                    LOG.warn("Failed to send kick DM to {} ({}): {} — kicking anyway",
+                        finalName, finalTargetId, error.getMessage());
+                    doKick.run();
+                }
+            ),
+            error -> {
+                LOG.warn("Could not open DM channel for {} ({}): {} — kicking anyway",
+                    finalName, finalTargetId, error.getMessage());
+                doKick.run();
+            }
+        );
+    }
+
+    @ButtonClk("discord-kick-cancel")
+    @Ephemeral
+    public void discordKickCancel(ButtonInteractionEvent event, InteractionHook hook)
+    {
+        hook.sendMessage("Kick cancelled.").queue();
+        hook.deleteOriginal().queue();
+    }
+
+    // ── discord-ban interactions ──────────────────────────────────────────────
+
+    @ButtonClk("discord-ban-confirm")
+    @Ephemeral
+    public void discordBanConfirm(ButtonInteractionEvent event, InteractionHook hook)
+    {
+        // Split with limit 3 so a colon inside the reason is preserved intact
+        String[] parts = event.getButton().getCustomId().split(":", 3);
+        String targetId = parts[1];
+        String reason = parts.length > 2 ? parts[2] : null;
+
+        net.dv8tion.jda.api.entities.Guild guild =
+            this.discord.jda.getGuildById(this.discord.guildSf);
+        if (guild == null)
+        {
+            hook.sendMessage("Could not find the configured Discord server.").queue();
+            return;
+        }
+
+        net.dv8tion.jda.api.entities.Member self = guild.getSelfMember();
+
+        if (!self.hasPermission(net.dv8tion.jda.api.Permission.BAN_MEMBERS))
+        {
+            hook.sendMessage("The bot does not have the **Ban Members** permission in this server.").queue();
+            return;
+        }
+
+        net.dv8tion.jda.api.entities.Member target;
+        try
+        {
+            target = guild.retrieveMemberById(targetId).complete();
+        }
+        catch (Exception ex)
+        {
+            // Member may have already left — we can still ban by ID
+            target = null;
+        }
+
+        String name;
+        if (target != null)
+        {
+            if (target.isOwner())
+            {
+                hook.sendMessageFormat("Cannot ban **%s** — they are the server owner.",
+                    MarkdownSanitizer.escape(target.getEffectiveName())).queue();
+                return;
+            }
+            if (!self.canInteract(target))
+            {
+                hook.sendMessageFormat("Cannot ban **%s** — their highest role is equal to or above mine.",
+                    MarkdownSanitizer.escape(target.getEffectiveName())).queue();
+                return;
+            }
+            name = target.getEffectiveName();
+        }
+        else
+        {
+            // User left — ban by raw ID (Discord allows banning non-members)
+            name = targetId;
+        }
+
+        String actor = event.getMember() != null
+            ? event.getMember().getEffectiveName()
+            : event.getUser().getName();
+
+        // Build audit log reason
+        String auditReason = reason != null && !reason.isBlank()
+            ? String.format("Banned via Scarlet by %s. Reason: %s", actor, reason)
+            : "Banned via Scarlet by " + actor;
+
+        // Build DM message
+        String dmMessage = reason != null && !reason.isBlank()
+            ? String.format("You have been banned from **%s**.\n**Reason:** %s",
+                guild.getName(), reason)
+            : String.format("You have been banned from **%s**.",
+                guild.getName());
+
+        final net.dv8tion.jda.api.entities.Member finalTarget = target;
+        final String finalName = name;
+        final String finalAuditReason = auditReason;
+        final String finalTargetId = targetId;
+        final String finalGuildName = guild.getName();
+        final String finalGuildId = guild.getId();
+
+        net.dv8tion.jda.api.entities.UserSnowflake snowflake =
+            target != null ? target : net.dv8tion.jda.api.entities.UserSnowflake.fromId(targetId);
+
+        Runnable doBan = () -> guild.ban(snowflake, 0, java.util.concurrent.TimeUnit.DAYS)
+            .reason(finalAuditReason)
+            .queue(
+                success -> {
+                    LOG.info("Discord ban: {} ({}) banned from {} ({}) by {}. Reason: {}",
+                        finalName, finalTargetId, finalGuildName, finalGuildId, actor, finalAuditReason);
+                    hook.sendMessageFormat("**%s** has been banned from the server.",
+                        MarkdownSanitizer.escape(finalName)).queue();
+                },
+                error -> {
+                    LOG.error("Failed to ban member {} ({}) from {} ({}): {}",
+                        finalName, finalTargetId, finalGuildName, finalGuildId, error.getMessage());
+                    hook.sendMessageFormat("Failed to ban **%s**: %s",
+                        MarkdownSanitizer.escape(finalName), error.getMessage()).queue();
+                });
+
+        if (target != null)
+        {
+            // DM the user first — ban only fires after the attempt settles
+            target.getUser().openPrivateChannel().queue(
+                channel -> channel.sendMessage(dmMessage).queue(
+                    sent -> {
+                        LOG.debug("Sent ban DM to {} ({})", finalName, finalTargetId);
+                        doBan.run();
+                    },
+                    error -> {
+                        LOG.warn("Could not send ban DM to {} ({}): {} — banning anyway",
+                            finalName, finalTargetId, error.getMessage());
+                        doBan.run();
+                    }
+                ),
+                error -> {
+                    LOG.warn("Could not open DM channel for {} ({}): {} — banning anyway",
+                        finalName, finalTargetId, error.getMessage());
+                    doBan.run();
+                }
+            );
+        }
+        else
+        {
+            // Target already left — no DM possible, ban by ID
+            LOG.debug("Target {} left before ban — skipping DM, banning by ID", finalTargetId);
+            doBan.run();
+        }
+    }
+
+    @ButtonClk("discord-ban-cancel")
+    @Ephemeral
+    public void discordBanCancel(ButtonInteractionEvent event, InteractionHook hook)
+    {
+        hook.sendMessage("Ban cancelled.").queue();
+        hook.deleteOriginal().queue();
+    }
+
+    // ── end discord-ban interactions ──────────────────────────────────────────
+
+    // ── end discord-kick interactions ─────────────────────────────────────────
+
     @StringSel("set-audit-aux-webhooks")
     public void setAuditAuxWebhooks(StringSelectInteractionEvent event)
     {
@@ -1389,7 +1667,8 @@ public class ScarletDiscordUI
         }
         else
         {
-            event.replyFormat("Setting auxiliary webhooks for %s:\n%s", auditType0, event.getValues().stream().collect(Collectors.joining(", "))).setEphemeral(true).queue();
+            event.replyFormat("Setting auxiliary webhooks for %s:\n%s", auditType0,
+                event.getValues().stream().collect(Collectors.joining(", "))).setEphemeral(true).queue();
             this.discord.auditType2scarletAuxWh.put(auditType0, new UniqueStrings(event.getValues()));
         }
     }
