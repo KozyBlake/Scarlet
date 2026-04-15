@@ -336,6 +336,12 @@ public class ScarletUI implements IScarletUI
         this.propstable.sortEntries(COMPARE);
     }
 
+    @Override
+    public synchronized boolean hasActivePlayers()
+    {
+        return this.connectedPlayers.values().stream().anyMatch(p -> p.left == null);
+    }
+
     /** Updates the status-bar player count. Must be called from a synchronized context or after writes. */
     private void updateStatusBar()
     {
@@ -363,6 +369,10 @@ public class ScarletUI implements IScarletUI
     private boolean propstableColumsDirty;
     private final Map<String, ConnectedPlayer> connectedPlayers;
     private final Map<String, List<Func.V1.NE<ConnectedPlayer>>> pendingUpdates;
+    // ── Settings search ───────────────────────────────────────────────────────
+    private JTextField jfield_settingsSearch;
+    private final List<JPanel>  settingsCardPanels     = new ArrayList<>();
+    private final List<String>  settingsCardSearchText = new ArrayList<>();
     
     class ConnectedPlayer
     {
@@ -829,7 +839,23 @@ public class ScarletUI implements IScarletUI
                 settingsScroll.getViewport().setBackground(new Color(22, 22, 30));
                 settingsScroll.getVerticalScrollBar().setUnitIncrement(20);
                 settingsScroll.getHorizontalScrollBar().setUnitIncrement(20);
-                this.jtabs.addTab("  Settings  ", settingsScroll);
+                // ── Outer wrapper: search field at top, card list below ────────
+                JPanel settingsOuter = new JPanel(new BorderLayout());
+                settingsOuter.setBackground(new Color(22, 22, 30));
+                this.jfield_settingsSearch = new JTextField();
+                this.jfield_settingsSearch.putClientProperty("JTextField.placeholderText", "Search settings\u2026");
+                this.jfield_settingsSearch.setBorder(BorderFactory.createCompoundBorder(
+                    BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(55, 55, 72)),
+                    BorderFactory.createEmptyBorder(6, 12, 6, 12)));
+                this.jfield_settingsSearch.setBackground(new Color(22, 22, 30));
+                this.jfield_settingsSearch.getDocument().addDocumentListener(new DocumentListener() {
+                    @Override public void insertUpdate(DocumentEvent e) { ScarletUI.this.filterSettings(); }
+                    @Override public void removeUpdate(DocumentEvent e) { ScarletUI.this.filterSettings(); }
+                    @Override public void changedUpdate(DocumentEvent e) { ScarletUI.this.filterSettings(); }
+                });
+                settingsOuter.add(this.jfield_settingsSearch, BorderLayout.NORTH);
+                settingsOuter.add(settingsScroll, BorderLayout.CENTER);
+                this.jtabs.addTab("  Settings  ", settingsOuter);
             }
             this.jframe.add(this.jtabs, BorderLayout.CENTER);
         }
@@ -929,6 +955,32 @@ public class ScarletUI implements IScarletUI
                 this.jframe.setBounds(100, 100, 600, 400);
         }
         this.scarlet.exec.scheduleAtFixedRate(this::saveIfDirty, 10_000L, 10_000L, TimeUnit.MILLISECONDS);
+
+        // ── Ctrl+F: jump to Settings tab and focus the search field ───────────
+        javax.swing.KeyStroke ctrlF = javax.swing.KeyStroke.getKeyStroke(
+            java.awt.event.KeyEvent.VK_F,
+            java.awt.event.InputEvent.CTRL_DOWN_MASK);
+        this.jframe.getRootPane().getInputMap(javax.swing.JComponent.WHEN_IN_FOCUSED_WINDOW)
+            .put(ctrlF, "focusSettingsSearch");
+        this.jframe.getRootPane().getActionMap()
+            .put("focusSettingsSearch", new AbstractAction()
+            {
+                @Override
+                public void actionPerformed(ActionEvent e)
+                {
+                    // Switch to the Settings tab if not already there
+                    for (int i = 0; i < ScarletUI.this.jtabs.getTabCount(); i++)
+                    {
+                        if (ScarletUI.this.jtabs.getTitleAt(i).contains("Settings"))
+                        {
+                            ScarletUI.this.jtabs.setSelectedIndex(i);
+                            break;
+                        }
+                    }
+                    if (ScarletUI.this.jfield_settingsSearch != null)
+                        ScarletUI.this.jfield_settingsSearch.requestFocusInWindow();
+                }
+            });
     }
 
     private void loadInstanceColumns()
@@ -1448,7 +1500,7 @@ public class ScarletUI implements IScarletUI
         // Section label, then setting IDs that belong to it
 
         { "Appearance",
-          "Accent colour", "UI scale" },
+          "Theme preset", "Accent colour", "UI scale" },
 
         { "Interface",
           "ui_confirm_group_invite", "ui_alert_update", "ui_alert_update_preview",
@@ -1511,6 +1563,8 @@ public class ScarletUI implements IScarletUI
 
         this.jpanel_settings.removeAll();
         this.jpanel_settings.setBackground(new Color(22, 22, 30));
+        this.settingsCardPanels.clear();
+        this.settingsCardSearchText.clear();
 
         Map<String, GUISetting<?>> byId = new java.util.LinkedHashMap<>();
         for (GUISetting<?> s : this.ssettings)
@@ -1607,6 +1661,12 @@ public class ScarletUI implements IScarletUI
             gbc.insets = new Insets(10, 12, 0, 12);
             this.jpanel_settings.add(card, gbc);
             gbc.gridy++;
+            // Track for search filtering
+            StringBuilder searchText = new StringBuilder(sectionLabel.toLowerCase());
+            for (GUISetting<?> s : sectionSettings)
+                searchText.append(' ').append(s.name().toLowerCase());
+            this.settingsCardPanels.add(card);
+            this.settingsCardSearchText.add(searchText.toString());
         }
 
         // Ungrouped settings
@@ -1670,6 +1730,12 @@ public class ScarletUI implements IScarletUI
             gbc.insets = new Insets(10, 12, 0, 12);
             this.jpanel_settings.add(card, gbc);
             gbc.gridy++;
+            // Track ungrouped card for search filtering
+            StringBuilder ungroupedSearch = new StringBuilder("other");
+            for (GUISetting<?> s : ungrouped)
+                ungroupedSearch.append(' ').append(s.name().toLowerCase());
+            this.settingsCardPanels.add(card);
+            this.settingsCardSearchText.add(ungroupedSearch.toString());
         }
 
         // Spacer
@@ -1700,6 +1766,24 @@ public class ScarletUI implements IScarletUI
 
         this.jpanel_settings.revalidate();
         this.jpanel_settings.repaint();
+        // Re-apply current search text (relevant when readSettingUI is called
+        // mid-session, e.g. after a theme preset change rebuilds the cards).
+        this.filterSettings();
+    }
+
+    private void filterSettings()
+    {
+        String query = this.jfield_settingsSearch != null
+            ? this.jfield_settingsSearch.getText().trim().toLowerCase()
+            : "";
+        for (int i = 0; i < this.settingsCardPanels.size(); i++)
+        {
+            boolean visible = query.isEmpty()
+                || this.settingsCardSearchText.get(i).contains(query);
+            this.settingsCardPanels.get(i).setVisible(visible);
+        }
+        this.jpanel_settings.revalidate();
+        this.jpanel_settings.repaint();
     }
 
     public void loadSettings()
@@ -1714,6 +1798,8 @@ public class ScarletUI implements IScarletUI
             {
                 fileValued.visit(settingui);
             }
+            // Inject the theme-preset combo (not backed by a FileValued setting)
+            new ThemePresetSetting();
             this.readSettingUI();
             if (this.scarlet.showUiDuringLoad.get())
             {
@@ -2327,6 +2413,109 @@ public class ScarletUI implements IScarletUI
         {
             return this.render;
         }
+    }
+
+    /**
+     * A combo-box setting that applies a named colour preset to the accent
+     * theme instantly, without requiring the user to open the colour picker.
+     * Selecting "Custom" is a no-op (the user's manually chosen colour stays).
+     */
+    private class ThemePresetSetting implements GUISetting<String>
+    {
+        // { display name, R, G, B }
+        private final String[][] PRESETS = {
+            { "Crimson (default)", "200", "55",  "65"  },
+            { "Cobalt",            "59",  "125", "216" },
+            { "Forest",            "46",  "158", "91"  },
+            { "Amber",             "212", "130", "26"  },
+            { "Slate",             "91",  "110", "173" },
+            { "Violet",            "124", "77",  "184" },
+            { "Rose",              "212", "68",  "128" },
+        };
+
+        private final JComboBox<String> combo;
+
+        ThemePresetSetting()
+        {
+            String[] names = new String[PRESETS.length + 1];
+            names[0] = "Custom";
+            for (int i = 0; i < PRESETS.length; i++)
+                names[i + 1] = PRESETS[i][0];
+            this.combo = new JComboBox<>(names);
+
+            // Pre-select whichever preset matches the current accent (if any)
+            Color current = Swing.ACCENT;
+            if (current != null)
+            {
+                for (int i = 0; i < PRESETS.length; i++)
+                {
+                    int r = Integer.parseInt(PRESETS[i][1]);
+                    int g = Integer.parseInt(PRESETS[i][2]);
+                    int b = Integer.parseInt(PRESETS[i][3]);
+                    if (current.getRed() == r && current.getGreen() == g && current.getBlue() == b)
+                    {
+                        this.combo.setSelectedIndex(i + 1);
+                        break;
+                    }
+                }
+            }
+
+            // When the user picks a custom colour via the colour-picker dialog,
+            // reset the combo to "Custom" so it doesn't falsely show a preset name.
+            Swing.addAccentChangeListener(this::syncComboToCurrentAccent);
+
+            this.combo.addActionListener($ ->
+            {
+                int idx = this.combo.getSelectedIndex();
+                if (idx <= 0) return; // "Custom" — leave user's colour alone
+                String[] preset = PRESETS[idx - 1];
+                int r = Integer.parseInt(preset[1]);
+                int g = Integer.parseInt(preset[2]);
+                int b = Integer.parseInt(preset[3]);
+                ScarletUI.this.scarlet.saveAccentColor(r, g, b);
+                Swing.applyTheme(new Color(r, g, b));
+                for (java.awt.Window w : java.awt.Window.getWindows())
+                {
+                    com.formdev.flatlaf.FlatLaf.updateUI();
+                    w.repaint();
+                }
+                // Rebuild the settings cards so accent-coloured elements refresh.
+                // Deferred via invokeLater so the combo's action event finishes
+                // before its parent panel is torn down and rebuilt.
+                Swing.invokeLater(ScarletUI.this::readSettingUI);
+            });
+
+            ScarletUI.this.ssettings.add(this);
+        }
+
+        /** Resets the combo to "Custom" if the current accent doesn't match any preset. */
+        private void syncComboToCurrentAccent()
+        {
+            Color current = Swing.ACCENT;
+            if (current != null)
+            {
+                for (int i = 0; i < PRESETS.length; i++)
+                {
+                    int r = Integer.parseInt(PRESETS[i][1]);
+                    int g = Integer.parseInt(PRESETS[i][2]);
+                    int b = Integer.parseInt(PRESETS[i][3]);
+                    if (current.getRed() == r && current.getGreen() == g && current.getBlue() == b)
+                    {
+                        this.combo.setSelectedIndex(i + 1);
+                        return;
+                    }
+                }
+            }
+            // No preset matched — the user chose a custom colour
+            this.combo.setSelectedIndex(0);
+        }
+
+        @Override public String id()           { return "Theme preset"; }
+        @Override public String name()         { return "Theme preset"; }
+        @Override public String get()          { return (String) this.combo.getSelectedItem(); }
+        @Override public String getDefault()   { return "Custom"; }
+        @Override public void   set(String v)  { this.combo.setSelectedItem(v); }
+        @Override public Component render()    { return this.combo; }
     }
 
 }

@@ -37,6 +37,9 @@ public interface IScarletUI extends Closeable
     void playerUpdate(boolean initialPreamble, String id, Func.V1.NE<ConnectedPlayer> update);
     void playerLeave(boolean initialPreamble, String id, String name, LocalDateTime left);
 
+    /** Returns true if at least one player is currently present in the instance table. */
+    boolean hasActivePlayers();
+
 }
 
 class ScarletUIHeadless implements IScarletUI
@@ -51,4 +54,5 @@ class ScarletUIHeadless implements IScarletUI
     public void playerJoin(boolean initialPreamble, String id, String name, LocalDateTime joined, String advisory, Color text_color, int priority, boolean isRejoinFromPrev) {}
     public void playerUpdate(boolean initialPreamble, String id, NE<ConnectedPlayer> update) {}
     public void playerLeave(boolean initialPreamble, String id, String name, LocalDateTime left) {}
+    public boolean hasActivePlayers() { return false; }
 }

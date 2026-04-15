@@ -91,6 +91,24 @@ public class Swing
     public static volatile Color ACCENT_GLOW;
     public static volatile Color SEL_BG;
 
+    // ── Accent-change listeners ───────────────────────────────────────────────
+    // Fired by pickAccentColor() after the user confirms a new colour via the
+    // JColorChooser dialog. Components that mirror the accent (e.g. the theme
+    // preset combo) register here so they can reset their display state.
+    private static final java.util.List<Runnable> ACCENT_CHANGE_LISTENERS =
+        new java.util.concurrent.CopyOnWriteArrayList<>();
+
+    public static void addAccentChangeListener(Runnable listener)
+    {
+        if (listener != null)
+            ACCENT_CHANGE_LISTENERS.add(listener);
+    }
+
+    public static void removeAccentChangeListener(Runnable listener)
+    {
+        ACCENT_CHANGE_LISTENERS.remove(listener);
+    }
+
     // Settings key — must match what Scarlet uses for read/write
     public static final String ACCENT_SETTING_KEY = "ui_accent_color";
 
@@ -334,6 +352,10 @@ public class Swing
             com.formdev.flatlaf.FlatLaf.updateUI();
             w.repaint();
         }
+
+        // Notify listeners (e.g. the theme-preset combo) that the accent changed
+        for (Runnable listener : ACCENT_CHANGE_LISTENERS)
+            listener.run();
     }
 
     /**

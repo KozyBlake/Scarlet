@@ -47,6 +47,11 @@ public class ScarletCacheCleanup
      *  Prevents double-running if Scarlet is restarted quickly. */
     private static final long MIN_BETWEEN_CLEANUPS_MS = TimeUnit.HOURS.toMillis(1);
 
+    /** How long to wait before retrying a cleanup that was deferred because
+     *  Scarlet was actively in use (minutes). Much shorter than CHECK_INTERVAL_MS
+     *  so cleanup isn't silently skipped for hours during a long session. */
+    private static final long RETRY_DELAY_MINUTES = 15L;
+
     // ── Directories / file categories ─────────────────────────────────────────
 
     /** TTS output .wav files — safe to delete any time; regenerated on demand. */
@@ -58,6 +63,13 @@ public class ScarletCacheCleanup
 
     private final Scarlet scarlet;
 
+    /**
+     * True while a one-shot retry is already queued in the executor.
+     * Prevents stacking up multiple pending retries when cleanup is deferred
+     * repeatedly across a long session.
+     */
+    private volatile boolean retryPending = false;
+
     public ScarletCacheCleanup(Scarlet scarlet)
     {
         this.scarlet     = scarlet;
@@ -67,6 +79,54 @@ public class ScarletCacheCleanup
     }
 
     // ── Public API ─────────────────────────────────────────────────────────────
+
+    /**
+     * Invoked by the "Run cache cleanup now" button in Settings.
+     *
+     * <p>Unlike {@link #maybeCleanup()}, this method:
+     * <ul>
+     *   <li>Always runs regardless of the last-cleanup timestamp or active-use state
+     *       (the user explicitly requested it, so we honour that).</li>
+     *   <li>Shows a confirmation dialog listing how many files will be deleted and
+     *       how much disk space will be freed <em>before</em> touching anything.</li>
+     * </ul>
+     *
+     * <p>Must be called from the modal executor thread ({@code execModal}), not the EDT.
+     */
+    public void promptAndCleanup()
+    {
+        int days = this.scarlet.settings.cacheCleanupDays.get();
+        long cutoffMs = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(days);
+
+        List<File> eligible = this.collectEligible(cutoffMs);
+        if (eligible.isEmpty())
+        {
+            this.scarlet.splash.queueFeedbackPopup(
+                null,
+                4_000L,
+                "Nothing to clean",
+                "No files older than " + days + " day(s) were found.",
+                new java.awt.Color(100, 180, 255),
+                new java.awt.Color(60, 130, 200));
+            return;
+        }
+
+        long totalBytes = 0;
+        for (File f : eligible)
+            totalBytes += f.length();
+        long kb = totalBytes / 1024;
+
+        String message = eligible.size() + " file(s) older than " + days + " day(s) will be\n"
+            + "permanently deleted  (" + kb + " KB).\n\nContinue?";
+
+        boolean confirmed = this.scarlet.settings.requireConfirmYesNo(message, "Confirm cache cleanup");
+        if (confirmed)
+        {
+            // Reset the throttle timestamp so deleteFiles records this run correctly.
+            this.scarlet.settings.lastCacheCleanup.clear();
+            this.deleteFiles(eligible, days);
+        }
+    }
 
     /**
      * Called once after startup completes and on the periodic 6-hour schedule.
@@ -103,7 +163,8 @@ public class ScarletCacheCleanup
         if (this.isActivelyInUse())
         {
             // Show a non-blocking popup warning — don't delete while active
-            LOG.info("Cache cleanup deferred: {} file(s) eligible but Scarlet is actively in use.", eligible.size());
+            LOG.info("Cache cleanup deferred: {} file(s) eligible but Scarlet is actively in use. "
+                + "Will retry in {} minutes.", eligible.size(), RETRY_DELAY_MINUTES);
             this.scarlet.splash.queueFeedbackPopup(
                 null,
                 8_000L,
@@ -112,7 +173,17 @@ public class ScarletCacheCleanup
                 new java.awt.Color(255, 200, 60),  // amber — informational
                 new java.awt.Color(200, 160, 40)
             );
-            // Do NOT update lastCacheCleanup — we want to try again next check
+            // Schedule a short retry rather than waiting for the next 6-hour tick.
+            // Guard with retryPending so repeated deferrals don't stack up tasks.
+            if (!this.retryPending)
+            {
+                this.retryPending = true;
+                this.scarlet.exec.schedule(
+                    this::maybeCleanupSafe,
+                    RETRY_DELAY_MINUTES,
+                    TimeUnit.MINUTES);
+            }
+            // Do NOT update lastCacheCleanup — we want the retry to proceed
             return;
         }
 
@@ -139,6 +210,9 @@ public class ScarletCacheCleanup
     /** Wrapper that catches and logs any unexpected exception so the scheduler survives. */
     private void maybeCleanupSafe()
     {
+        // Clear the flag before running so a fresh retry can be scheduled if
+        // this attempt also defers (i.e. Scarlet is still active).
+        this.retryPending = false;
         try
         {
             this.maybeCleanup();
@@ -165,9 +239,10 @@ public class ScarletCacheCleanup
         if (this.scarlet.logs.currentTarget() != null)
             return true;
 
-        // An instance is loaded (players in the table)
-        // connectedPlayers is internal to ScarletUI; proxy via the public status
-        // we maintain in the run loop instead
+        // At least one player is present in the instance table
+        if (this.scarlet.ui.hasActivePlayers())
+            return true;
+
         return false;
     }
 

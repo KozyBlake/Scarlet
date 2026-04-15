@@ -458,10 +458,10 @@ public class Scarlet implements Closeable
                                   }),
                                   runCacheCleanupNow = this.settings.new FileValuedVoid("Run cache cleanup now", "Run now", () ->
                                   {
-                                      // Force a cleanup immediately regardless of the last-run timestamp,
-                                      // bypassing the throttle by clearing lastCacheCleanup first.
-                                      this.settings.lastCacheCleanup.clear();
-                                      this.exec.execute(this.cacheCleanup::maybeCleanup);
+                                      // Show a confirmation dialog listing eligible files before
+                                      // deleting anything. Bypasses the active-use guard so it
+                                      // works even while Scarlet is running with logs active.
+                                      this.execModal.execute(this.cacheCleanup::promptAndCleanup);
                                   }),
                                   editGoodPronouns = this.settings.new FileValuedVoid("Edit good_pronoun.json", "Edit", () ->
                                   {
@@ -535,6 +535,10 @@ public class Scarlet implements Closeable
         // Initialize TTS after UI is ready (for dialog parent component)
         this.splash.splashSubtext("Initializing Text-to-Speech");
         this.initTtsService();
+        // Run cache cleanup before any network login so neither VRChat nor Discord
+        // are connected yet and no log file is being tailed — nothing is "active".
+        this.exec.execute(this.cacheCleanup::maybeCleanup);
+        this.cacheCleanup.schedulePeriodicCleanup();
         this.splash.splashSubtext("Logging in to VRChat Api");
         try
         {
@@ -555,10 +559,6 @@ public class Scarlet implements Closeable
         this.checkUpdate();
         this.logs.start();
         this.execIPC.execute(this::runIPC);
-        // Run cache cleanup once at startup (after login, so TTS dir etc. are initialised)
-        // and then schedule a periodic check every 6 hours for long-running sessions.
-        this.exec.execute(this.cacheCleanup::maybeCleanup);
-        this.cacheCleanup.schedulePeriodicCleanup();
         try
         {
             long filecheck = 3;
