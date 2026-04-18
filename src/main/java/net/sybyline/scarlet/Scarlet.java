@@ -351,6 +351,14 @@ public class Scarlet implements Closeable
     volatile boolean running = true;
     volatile int exitCode = 0;
     boolean staffMode = false;
+    // Whether System.in is a usable, readable handle.  Set to false the first
+    // time FileInputStream.available() throws IOException — happens on Windows
+    // when Scarlet is launched without an attached console (javaw.exe, double-
+    // clicked JAR, Windows shortcut to javaw, Task Scheduler without an
+    // interactive session, any "start /b" or detached launch).  Once flipped,
+    // spin() skips the CLI reader entirely so the 100ms polling loop doesn't
+    // spam "The handle is invalid" into the log ten times a second.
+    private volatile boolean stdinUsable = true;
     final Runnable explicitGC = MiscUtils.withMinimumInterval(3600_000L, System::gc);
     final AtomicInteger threadidx = new AtomicInteger();
     public final ScheduledExecutorService exec = Executors.newScheduledThreadPool(4, runnable -> new Thread(runnable, "Scarlet Worker Thread "+this.threadidx.incrementAndGet())),
@@ -714,6 +722,11 @@ public class Scarlet implements Closeable
     void spin()
     {
         MiscUtils.sleep(100L);
+        // Short-circuit once we've learned stdin has no valid handle (e.g.
+        // launched via javaw.exe / double-clicked JAR on Windows).  No point
+        // calling available() again — it will throw on every tick.
+        if (!this.stdinUsable)
+            return;
         try
         {
             while (System.in.available() > 0)
@@ -723,6 +736,19 @@ public class Scarlet implements Closeable
                 String line = s.nextLine().trim();
                 this.rawCommand(line);
             }
+        }
+        catch (IOException ioex)
+        {
+            // Windows without a console: FileInputStream.available0() throws
+            // "The handle is invalid" (Win32 ERROR_INVALID_HANDLE).  POSIX
+            // equivalents surface as "Bad file descriptor" when stdin has been
+            // closed or redirected from a dead source.  In all of these cases
+            // there is no interactive console to read commands from, so we
+            // permanently disable the CLI reader for this session and log it
+            // once at INFO — not ERROR — because this is expected behaviour
+            // for a detached launch, not a fault.
+            this.stdinUsable = false;
+            LOG.info("Console stdin unavailable ("+ioex.getMessage()+"); CLI commands disabled for this session");
         }
         catch (Exception ex)
         {

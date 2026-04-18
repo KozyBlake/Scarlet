@@ -8,6 +8,7 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InterruptedIOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
@@ -107,6 +108,7 @@ import net.dv8tion.jda.api.managers.AudioManager;
 import net.dv8tion.jda.api.requests.CloseCode;
 import net.dv8tion.jda.api.requests.FluentRestAction;
 import net.dv8tion.jda.api.requests.GatewayIntent;
+import net.dv8tion.jda.api.requests.RestAction;
 import net.dv8tion.jda.api.requests.restaction.AbstractWebhookMessageAction;
 import net.dv8tion.jda.api.requests.restaction.MessageCreateAction;
 import net.dv8tion.jda.api.utils.AttachedFile;
@@ -166,6 +168,11 @@ public class ScarletDiscordJDA implements ScarletDiscord
         this.resetAvatarSearchProviders = scarlet.settings.new FileValuedVoid("Reset avatar search providers to default", "Reset", this::resetAvatarSearchProviders);
         this.load();
         Dave.INSTANCE.daveSetLogSinkCallbackDefault();
+        // Install our shutdown-aware failure handler before any RestAction can fire.
+        // See handleRestFailure() for the rationale.  Set once, globally — JDA's
+        // default is static and applies to every RestAction that doesn't pass its
+        // own failure callback to .queue().
+        RestAction.setDefaultFailure(ScarletDiscordJDA::handleRestFailure);
         JDA jda = null;
         String token0 = this.token.getOrNull();
         if (token0 != null && !token0.isEmpty()) try
@@ -207,8 +214,12 @@ public class ScarletDiscordJDA implements ScarletDiscord
         this.jda.shutdown();
         try
         {
-            if (this.jda.awaitShutdown(10_000L, TimeUnit.MILLISECONDS))
+            // awaitShutdown returns TRUE when shutdown completed, FALSE on timeout.
+            // We only want to force shutdownNow() when the graceful shutdown didn't
+            // finish within the timeout — i.e. the negated branch.
+            if (!this.jda.awaitShutdown(10_000L, TimeUnit.MILLISECONDS))
             {
+                LOG.warn("JDA did not shut down gracefully within 10s; forcing shutdownNow()");
                 this.jda.shutdownNow();
                 this.jda.awaitShutdown();
             }
@@ -217,6 +228,49 @@ public class ScarletDiscordJDA implements ScarletDiscord
         {
             LOG.error("Interrupted awaiting JDA shutdown");
             this.jda.shutdownNow();
+            // Preserve the interrupt status for callers further up the stack.
+            Thread.currentThread().interrupt();
+        }
+    }
+
+    // Snapshot of JDA's shipped default failure handler — we delegate to it for
+    // anything that isn't a shutdown-interrupt, so normal error handling (log at
+    // ERROR with the stack trace) is preserved for real failures.  Captured once
+    // at class-load time, before we overwrite the default via setDefaultFailure.
+    private static final Consumer<? super Throwable> DEFAULT_REST_FAILURE_DELEGATE = RestAction.getDefaultFailure();
+
+    /**
+     * Custom default failure handler installed via {@link RestAction#setDefaultFailure}.
+     * <p>
+     * Filters out the noisy shutdown-time race where JDA's OkHttp client
+     * interrupts in-flight HTTP/2 streams during {@code jda.shutdown()}, which
+     * surfaces as {@code ErrorResponseException(-1, InterruptedIOException)}.
+     * That's expected behaviour, not an error — but the shipped default handler
+     * logs it at ERROR with a full stack trace, which users interpret as a bug.
+     * <p>
+     * Any throwable whose cause chain contains {@link InterruptedIOException}
+     * is logged at DEBUG instead.  Everything else is forwarded unchanged to
+     * JDA's original default handler so real failures are still surfaced.
+     */
+    private static void handleRestFailure(Throwable err)
+    {
+        for (Throwable t = err; t != null; t = t.getCause())
+        {
+            if (t instanceof InterruptedIOException)
+            {
+                LOG.debug("JDA REST call interrupted (likely during shutdown): "+err);
+                return;
+            }
+            // Guard against pathological cause-chain cycles.
+            if (t.getCause() == t) break;
+        }
+        if (DEFAULT_REST_FAILURE_DELEGATE != null)
+        {
+            DEFAULT_REST_FAILURE_DELEGATE.accept(err);
+        }
+        else
+        {
+            LOG.error("JDA REST call failed", err);
         }
     }
 

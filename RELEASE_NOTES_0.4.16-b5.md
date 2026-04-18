@@ -98,6 +98,65 @@ com.google.gson.JsonSyntaxException: Expected a JsonObject but was JsonPrimitive
 
 Stale bridge scripts in AppData were being preferred over a fresh classpath copy, so bridge fixes shipped in a new JAR wouldn't take effect until users manually deleted their AppData copy. `RvcService.getResourcePath()` now extracts from the classpath first and only falls through to the AppData fallback when no classpath resource exists — so upgrades work automatically.
 
+### `java.io.IOException: The handle is invalid` on Windows launches without a console
+
+A long-standing bug that only reproduced on some users' machines:
+
+```
+[ERROR] [Scarlet] Exception in spin
+java.io.IOException: The handle is invalid
+    at java.base/java.io.FileInputStream.available0(Native Method)
+    at java.base/java.io.FileInputStream.available(FileInputStream.java:415)
+    at java.base/java.io.BufferedInputStream.available(BufferedInputStream.java:408)
+    at net.sybyline.scarlet.Scarlet.spin(Scarlet.java:...)
+```
+
+`Scarlet.spin()` polled `System.in.available()` every 100 ms to pick up console commands. On Windows this call is backed by the Win32 API, and if the process has no attached console the underlying handle is invalid and `available0()` throws `ERROR_INVALID_HANDLE` (Win32 error 6). The polling loop then re-threw and logged the same stack trace ten times a second, flooding `scarlet.log`.
+
+Conditions that trigger this:
+
+- **Double-clicking the JAR.** Windows' default `.jar` association is `javaw.exe`, which allocates no console.
+- **Windows shortcuts** pointing at `javaw -jar scarlet.jar`.
+- **Task Scheduler** entries running Scarlet without an interactive session.
+- **Detached launches** — `start /b java -jar`, `cmd /c start javaw`, service wrappers, etc.
+
+The reason this only affected "some people" is that anyone who launched Scarlet from `cmd`, PowerShell, Git Bash, or Windows Terminal got a real `java.exe` console and never saw it.
+
+Fixed by detecting the condition on the first failure: `spin()` now catches `IOException` from `available()`, flips a `stdinUsable` flag to `false`, and logs a single INFO-level line ("Console stdin unavailable (...); CLI commands disabled for this session"). Subsequent ticks short-circuit on the flag, so there's no more per-tick native call and no more ERROR spam.
+
+The in-app CLI panel (added in 0.4.16-b4) continues to work on all launch styles — only the `System.in` reader is disabled, and only when there's genuinely no console to read from.
+
+### `ErrorResponseException: -1: java.io.InterruptedIOException` on shutdown
+
+Another bug that reproduced only for some users:
+
+```
+[ERROR] [JDA-I/requests/Requester] There was an I/O error while executing a REST request: null
+[ERROR] [JDA/requests/RestAction] RestAction queue returned failure
+net.dv8tion.jda.api.exceptions.ErrorResponseException: -1: java.io.InterruptedIOException
+    ...
+    at net.sybyline.scarlet.ScarletDiscordJDA.lambda$updateCommandList$0(ScarletDiscordJDA.java:352)
+    ...
+Caused by: java.io.InterruptedIOException
+    at okhttp3.internal.http2.Http2Stream.waitForIo$okhttp(Http2Stream.kt:716)
+    ...
+[INFO] [Scarlet] Finished shutdown flow
+```
+
+On startup, when Scarlet detects that the version has changed since the last run, it calls `updateCommandList()` to push every slash command to Discord (one REST call per upsert/delete/edit). If the user closes Scarlet **before that REST queue has drained**, JDA's shutdown interrupts the in-flight OkHttp HTTP/2 streams, `Http2Stream.waitForIo` throws `InterruptedIOException`, and JDA wraps it as `ErrorResponseException(-1, …)` — the `-1` response code means "IO-layer error, no HTTP response". JDA's shipped default failure handler logs everything at ERROR with a stack trace, which users understandably read as a bug.
+
+Why "some users" saw it:
+
+- **Only after an update.** `updateCommandList()` is gated on `checkHasVersionChangedSinceLastRun()`; cold-starts on an unchanged version never enter this code path.
+- **Only if shutdown happens mid-sync.** Fast connections drain ~30 commands in a second or two; users who left Scarlet running for a while never saw it. Users who started Scarlet right after an update and closed it quickly caught the race window.
+
+Fixed in two places:
+
+1. **Custom default-failure handler** (`ScarletDiscordJDA.handleRestFailure`). Installed via `RestAction.setDefaultFailure` before any REST call fires. It walks the throwable's cause chain; if it finds an `InterruptedIOException`, it logs at DEBUG and returns. Anything else is forwarded unchanged to JDA's original default handler (captured at class-load time into `DEFAULT_REST_FAILURE_DELEGATE`) so real failures are still surfaced with full context.
+2. **Inverted `awaitShutdown` check in `close()`.** `awaitShutdown(timeout)` returns `true` on completion and `false` on timeout, so the previous code was force-shutting-down JDA only when graceful shutdown had already finished (no-op) and doing nothing when it actually timed out (requests in the rate-limit queue hung indefinitely). Now correctly force-shuts-down on timeout, and preserves the interrupt status via `Thread.currentThread().interrupt()` if the close thread itself is interrupted.
+
+Net effect: a clean shutdown during command sync no longer produces any ERROR logs, and force-shutdown actually runs when graceful shutdown stalls.
+
 ## Upgrade notes
 
 - **No config migration required.** The new `tts_rvc_pitch` setting defaults to 0 on first run, which matches the previous hardcoded behaviour.
