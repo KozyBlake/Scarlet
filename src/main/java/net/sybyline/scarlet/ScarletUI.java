@@ -1606,6 +1606,8 @@ public class ScarletUI implements IScarletUI
 
         { "Text-to-Speech",
           "tts_voice_name", "tts_use_default_audio_device",
+          "rvc_manage_models",
+          "tts_rvc_enabled", "tts_rvc_model_name", "tts_rvc_index_name", "tts_rvc_pitch",
           "tts_announce_watched_users", "tts_announce_watched_groups", "tts_announce_watched_avatars",
           "tts_announce_new_players", "tts_announce_players_newer_than_days",
           "tts_announce_votes_to_kick" },
@@ -1648,6 +1650,20 @@ public class ScarletUI implements IScarletUI
           "Run CLI command" },
     };
 
+    /**
+     * True iff {@code id} names a setting owned by the RVC subsystem.
+     * Used by {@link #readSettingUI()} to filter RVC settings out of
+     * the rendered sections when the feature flag is off.  Keep in
+     * sync with the {@code tts_rvc_*} / {@code rvc_*} identifiers
+     * declared in {@link ScarletEventListener}.
+     */
+    private static boolean isRvcSettingId(String id)
+    {
+        if (id == null)
+            return false;
+        return id.startsWith("tts_rvc_") || id.startsWith("rvc_");
+    }
+
     private void readSettingUI()
     {
         final Color CARD_BG     = new Color(30, 30, 42);
@@ -1676,8 +1692,16 @@ public class ScarletUI implements IScarletUI
             List<GUISetting<?>> sectionSettings = new ArrayList<>();
             for (int i = 1; i < section.length; i++)
             {
-                GUISetting<?> s = byId.get(section[i]);
-                if (s != null) { sectionSettings.add(s); placed.add(section[i]); }
+                String id = section[i];
+                // Hide RVC-related settings in the lite edition.  The
+                // identifiers "rvc_*" and "tts_rvc_*" are reserved for
+                // the RVC subsystem; the flag is compile-time-constant
+                // so the JIT drops both this branch and the disabled
+                // UI code above it when the feature is off.
+                if (!Features.RVC_ENABLED && isRvcSettingId(id))
+                    continue;
+                GUISetting<?> s = byId.get(id);
+                if (s != null) { sectionSettings.add(s); placed.add(id); }
             }
             if (sectionSettings.isEmpty())
                 continue;
@@ -2613,3 +2637,5 @@ public class ScarletUI implements IScarletUI
     }
 
 }
+
+      

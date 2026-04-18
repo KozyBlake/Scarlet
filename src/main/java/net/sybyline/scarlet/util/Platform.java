@@ -2,6 +2,13 @@ package net.sybyline.scarlet.util;
 
 import java.util.Locale;
 
+/**
+ * Current operating system and CPU architecture.
+ *
+ * <p>{@link #CURRENT} is the detected OS family (Windows, Linux, macOS,
+ * Solaris, or OTHER).  {@link #ARCH} is the detected CPU architecture.
+ * Both are set once at class load from {@link System#getProperty}.</p>
+ */
 public enum Platform
 {
     NT(),
@@ -10,13 +17,20 @@ public enum Platform
     SUN(),
     OTHER(),
     ;
+
     Platform()
     {
     }
+
+    // =======================================================================
+    // OS family
+    // =======================================================================
+
     public static final Platform CURRENT;
+
     static
     {
-        String s = System.getProperty("os.name").toLowerCase(Locale.ROOT);
+        String s = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
         if (s.contains("win"))
             CURRENT = NT;
         else if (s.contains("linux") || s.contains("unix"))
@@ -28,24 +42,109 @@ public enum Platform
         else
             CURRENT = OTHER;
     }
-    public boolean isNT()
+
+    public boolean isNT()    { return this == NT; }
+    public boolean is$nix() { return this == $NIX; }
+    public boolean isXNU()   { return this == XNU; }
+    public boolean isSun()   { return this == SUN; }
+    public boolean isOther() { return this == OTHER; }
+
+    // =======================================================================
+    // CPU architecture
+    // =======================================================================
+
+    /**
+     * Normalised CPU architecture classification.  Mirrors the small set
+     * returned by the Python bridge so the two sides can compare cleanly.
+     */
+    public enum Arch
     {
-        return this == NT;
+        /** 64-bit Intel / AMD. */
+        X86_64("x86_64"),
+        /** 64-bit ARM (Apple Silicon, ARM servers, most modern phones). */
+        ARM64("arm64"),
+        /** 32-bit Intel.  Rare today but still shows up on embedded systems. */
+        I386("i386"),
+        /** 32-bit ARM.  Raspberry Pi (older), ARM embedded, etc. */
+        ARM32("arm"),
+        /** Unknown or exotic arch — PowerPC, RISC-V, etc. */
+        OTHER("other"),
+        ;
+
+        public final String canonicalName;
+
+        Arch(String canonicalName)
+        {
+            this.canonicalName = canonicalName;
+        }
+
+        @Override
+        public String toString()
+        {
+            return canonicalName;
+        }
     }
-    public boolean is$nix()
+
+    /** Current CPU architecture, determined from {@code os.arch}. */
+    public static final Arch ARCH;
+
+    /** Raw value of {@code System.getProperty("os.arch")} for diagnostics. */
+    public static final String ARCH_RAW;
+
+    static
     {
-        return this == $NIX;
+        String raw = System.getProperty("os.arch", "").toLowerCase(Locale.ROOT);
+        ARCH_RAW = raw;
+
+        // JVMs report AMD64 / x86_64 / x64 for 64-bit Intel.  Normalise.
+        if (raw.equals("amd64") || raw.equals("x86_64") || raw.equals("x64"))
+            ARCH = Arch.X86_64;
+        // aarch64 (Linux/JDK) and arm64 (macOS) both mean 64-bit ARM.
+        else if (raw.equals("aarch64") || raw.equals("arm64"))
+            ARCH = Arch.ARM64;
+        // 32-bit x86 appears as i386, i486, i586, i686, or "x86".
+        else if (raw.matches("i[3-6]86") || raw.equals("x86"))
+            ARCH = Arch.I386;
+        // 32-bit ARM variants.
+        else if (raw.startsWith("arm"))
+            ARCH = Arch.ARM32;
+        else
+            ARCH = Arch.OTHER;
     }
-    public boolean isXNU()
+
+    /** @return {@code true} if the JVM is running on 64-bit ARM. */
+    public static boolean isArm64()
     {
-        return this == XNU;
+        return ARCH == Arch.ARM64;
     }
-    public boolean isSun()
+
+    /** @return {@code true} if the JVM is running on 64-bit Intel/AMD. */
+    public static boolean isX86_64()
     {
-        return this == SUN;
+        return ARCH == Arch.X86_64;
     }
-    public boolean isOther()
+
+    /** @return {@code true} if the JVM is running on any 32-bit arch. */
+    public static boolean is32Bit()
     {
-        return this == OTHER;
+        return ARCH == Arch.I386 || ARCH == Arch.ARM32;
+    }
+
+    /**
+     * @return a short description suitable for logs, e.g.
+     *         {@code "Windows / x86_64"} or {@code "Mac / arm64"}.
+     */
+    public static String describe()
+    {
+        String os;
+        switch (CURRENT)
+        {
+            case NT:    os = "Windows";  break;
+            case $NIX:  os = "Linux";    break;
+            case XNU:   os = "macOS";    break;
+            case SUN:   os = "Solaris";  break;
+            default:    os = "Unknown";  break;
+        }
+        return os + " / " + ARCH.canonicalName;
     }
 }

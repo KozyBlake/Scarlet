@@ -2,6 +2,9 @@ package net.sybyline.scarlet;
 
 import java.awt.Color;
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
@@ -33,10 +36,12 @@ import io.github.vrchatapi.model.User;
 import net.sybyline.scarlet.ext.AvatarBundleInfo;
 import net.sybyline.scarlet.ext.AvatarSearch;
 import net.sybyline.scarlet.util.CollectionMap;
+import net.sybyline.scarlet.util.ChangeListener;
 import net.sybyline.scarlet.util.MiscUtils;
 import net.sybyline.scarlet.util.Pacer;
 import net.sybyline.scarlet.util.VersionedFile;
 import net.sybyline.scarlet.util.VrcIds;
+import net.sybyline.scarlet.util.rvc.RvcConfig;
 import net.sybyline.scarlet.util.tts.TtsProvider;
 import net.sybyline.scarlet.util.tts.TtsService;
 
@@ -67,6 +72,59 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
 
         this.ttsVoiceName = scarlet.settings.new FileValuedStringChoice("tts_voice_name", "TTS: Voice name", "", () -> scarlet.getTtsService().getInstalledVoices());
         this.ttsUseDefaultAudioDevice = scarlet.settings.new FileValuedBoolean("tts_use_default_audio_device", "TTS: Use default system audio device", false);
+        this.ttsRvcEnabled = scarlet.settings.new FileValuedBoolean("tts_rvc_enabled", "TTS: Apply RVC post-processing", false);
+        this.ttsRvcModelName = scarlet.settings.new FileValuedStringChoice("tts_rvc_model_name", "TTS: RVC model", "", this::getRvcModelChoices);
+        this.ttsRvcIndexName = scarlet.settings.new FileValuedStringChoice("tts_rvc_index_name", "TTS: RVC index", "", this::getRvcIndexChoices);
+        // Pitch offset (semitones) applied by the RVC model on top of the TTS
+        // voice.  Some models are trained on voices that sit at a different
+        // fundamental than the TTS voice feeding them — raising the pitch can
+        // make an otherwise-broken pairing sound correct.  Range mirrors
+        // RvcConfig.validate(): -24..+24 semitones (±2 octaves).
+        this.ttsRvcPitch = scarlet.settings.new FileValuedIntRange("tts_rvc_pitch", "TTS: RVC pitch (semitones)", 0, -24, 24);
+        // Opens the RVC model manager dialog. Declared here (rather than in
+        // Scarlet.java) so it sits alongside the other TTS settings in the
+        // SETTINGS_SECTIONS table. The lambda is deferred, so it's fine that
+        // the TTS service isn't initialised yet at construction time.
+        this.manageRvcModels = scarlet.settings.new FileValuedVoid(
+            "rvc_manage_models",
+            "RVC: Manage models…",
+            () ->
+            {
+                try
+                {
+                    net.sybyline.scarlet.util.tts.TtsService tts = scarlet.getTtsService();
+                    if (tts == null)
+                    {
+                        javax.swing.JOptionPane.showMessageDialog(
+                            scarlet.ui.getParentComponent(),
+                            "TTS service is not available.",
+                            "Manage RVC models",
+                            javax.swing.JOptionPane.WARNING_MESSAGE);
+                        return;
+                    }
+                    net.sybyline.scarlet.util.rvc.RvcService rvc = tts.getRvcService();
+                    if (rvc == null)
+                    {
+                        javax.swing.JOptionPane.showMessageDialog(
+                            scarlet.ui.getParentComponent(),
+                            "RVC service is not available.",
+                            "Manage RVC models",
+                            javax.swing.JOptionPane.WARNING_MESSAGE);
+                        return;
+                    }
+                    net.sybyline.scarlet.util.rvc.RvcModelManagerDialog.show(
+                        scarlet.ui.getParentComponent(), rvc);
+                }
+                catch (Exception ex)
+                {
+                    Scarlet.LOG.error("Exception opening RVC model manager", ex);
+                    javax.swing.JOptionPane.showMessageDialog(
+                        scarlet.ui.getParentComponent(),
+                        "Failed to open RVC model manager:\n" + ex.getMessage(),
+                        "Manage RVC models",
+                        javax.swing.JOptionPane.ERROR_MESSAGE);
+                }
+            });
         this.announceWatchedUsers = scarlet.settings.new FileValuedBoolean("tts_announce_watched_users", "TTS: Announce watched users", true);
         this.announceWatchedGroups = scarlet.settings.new FileValuedBoolean("tts_announce_watched_groups", "TTS: Announce watched groups", true);
         this.announceWatchedAvatars = scarlet.settings.new FileValuedBoolean("tts_announce_watched_avatars", "TTS: Announce watched avatars", true);
@@ -104,24 +162,69 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
             isSameAsPreviousInstance;
     final ScarletSettings.FileValued<String> ttsVoiceName;
     final ScarletSettings.FileValued<Boolean> ttsUseDefaultAudioDevice,
+                                     ttsRvcEnabled,
                                      announceWatchedUsers,
                                      announceWatchedGroups,
                                      announceWatchedAvatars,
                                      announceNewPlayers,
                                      announceVotesToKick,
                                      attemptAvatarImageMatch;
-    final ScarletSettings.FileValued<Integer> announcePlayersNewerThan;
+    final ScarletSettings.FileValued<String> ttsRvcModelName,
+                                    ttsRvcIndexName;
+    final ScarletSettings.FileValued<Integer> announcePlayersNewerThan,
+                                     ttsRvcPitch;
+    final ScarletSettings.FileValued<Void> manageRvcModels;
 
     void settingsLoaded()
     {
+        // RVC change listeners are only useful when the RVC subsystem
+        // itself is active.  In the lite edition TtsService never
+        // creates an RvcService, so pushing config updates into it
+        // would be a no-op at best and (before the null-guards) an NPE
+        // at worst.
+        if (Features.RVC_ENABLED)
+        {
+            ChangeListener<Boolean> applyRvcBool = (previous, next, valid, source) ->
+            {
+                if (valid)
+                    this.applyRvcSettings();
+            };
+            ChangeListener<String> applyRvcString = (previous, next, valid, source) ->
+            {
+                if (valid)
+                    this.applyRvcSettings();
+            };
+            ChangeListener<Integer> applyRvcInt = (previous, next, valid, source) ->
+            {
+                if (valid)
+                    this.applyRvcSettings();
+            };
+            this.ttsRvcEnabled.listeners.register("tts-rvc-enabled", 0, true, applyRvcBool);
+            this.ttsRvcModelName.listeners.register("tts-rvc-model", 0, true, applyRvcString);
+            this.ttsRvcIndexName.listeners.register("tts-rvc-index", 0, true, applyRvcString);
+            this.ttsRvcPitch.listeners.register("tts-rvc-pitch", 0, true, applyRvcInt);
+        }
+
         this.scarlet.exec.scheduleAtFixedRate(() ->
         {
             String voiceName = this.ttsVoiceName.get();
             if (voiceName.trim().isEmpty())
             {
-                this.scarlet.getTtsService().getInstalledVoices().stream().findFirst().ifPresent($ -> this.ttsVoiceName.set($, "default"));
+                // Default to a real (non-RVC-virtual) voice so first-run users get
+                // audible TTS even if the RVC bridge happens to have populated its
+                // virtual voices first.
+                this.scarlet.getTtsService().getInstalledVoices().stream()
+                    .filter(v -> !net.sybyline.scarlet.util.tts.TtsService.isRvcVirtualVoice(v))
+                    .findFirst()
+                    .ifPresent($ -> this.ttsVoiceName.set($, "default"));
             }
         }, 0_000L, 60_000L, TimeUnit.MILLISECONDS);
+    }
+
+    void onTtsServiceInitialized()
+    {
+        if (Features.RVC_ENABLED)
+            this.applyRvcSettings();
     }
 
     public OffsetDateTime getJoinedOrNull(String userId)
@@ -138,6 +241,183 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         return this.ttsUseDefaultAudioDevice.get().booleanValue();
     }
 
+    private void applyRvcSettings()
+    {
+        // Short-circuit in the lite edition — there is no RvcService to
+        // push the config into, and getRvcModelsDir() returns null so
+        // validatedModelsPath() below would also bail out.  Guarding
+        // here keeps the log quiet and the method a clear no-op.
+        if (!Features.RVC_ENABLED)
+            return;
+
+        TtsService tts = this.scarlet.getTtsServiceIfInitialized();
+        if (tts == null)
+            return;
+
+        RvcConfig config = tts.getRvcConfig();
+        if (config == null)
+            config = new RvcConfig();
+        else
+            config = config.copy();
+
+        File modelsDir = tts.getRvcModelsDir();
+        String modelPath = validatedModelsPath(modelsDir, this.ttsRvcModelName.get(), ".pth");
+        String indexPath = validatedModelsPath(modelsDir, this.ttsRvcIndexName.get(), ".index");
+
+        config.enabled = this.ttsRvcEnabled.get().booleanValue();
+        config.modelPath = modelPath != null ? modelPath : "";
+        config.indexPath = indexPath != null ? indexPath : "";
+        // FileValuedIntRange already clamps to [-24, 24] on set, but guard
+        // again here in case an older config file persisted an out-of-range
+        // value before the setting existed.
+        Integer pitchValue = this.ttsRvcPitch.get();
+        int pitch = pitchValue != null ? pitchValue.intValue() : 0;
+        if (pitch < -24) pitch = -24;
+        else if (pitch > 24) pitch = 24;
+        config.pitch = pitch;
+        tts.setRvcConfig(config);
+    }
+
+    private List<String> getRvcModelChoices()
+    {
+        List<String> choices = new ArrayList<>();
+        choices.add("");
+        TtsService tts = this.scarlet.getTtsServiceIfInitialized();
+        if (tts == null)
+            return choices;
+
+        List<String> models = tts.getRvcModels();
+        if (models != null)
+            for (String model : models)
+                if (!choices.contains(model))
+                    choices.add(model);
+
+        File modelsDir = tts.getRvcModelsDir();
+        if (modelsDir == null || !modelsDir.isDirectory())
+            return choices;
+
+        try (java.util.stream.Stream<Path> paths = Files.walk(modelsDir.toPath()))
+        {
+            paths.filter(Files::isRegularFile)
+                 .map(Path::toFile)
+                 .filter(file -> file.getName().toLowerCase().endsWith(".pth"))
+                 .map(file -> toRelativeModelsPath(modelsDir, file))
+                 .filter(Objects::nonNull)
+                 .sorted(String.CASE_INSENSITIVE_ORDER)
+                 .forEach(path ->
+                 {
+                     if (!choices.contains(path))
+                         choices.add(path);
+                 });
+        }
+        catch (IOException ex)
+        {
+            Scarlet.LOG.debug("Could not enumerate RVC models: {}", ex.getMessage());
+        }
+        return choices;
+    }
+
+    private List<String> getRvcIndexChoices()
+    {
+        List<String> choices = new ArrayList<>();
+        choices.add("");
+
+        TtsService tts = this.scarlet.getTtsServiceIfInitialized();
+        if (tts == null)
+            return choices;
+
+        File modelsDir = tts.getRvcModelsDir();
+        if (modelsDir == null || !modelsDir.isDirectory())
+            return choices;
+
+        String selectedModel = blankToNull(this.ttsRvcModelName.get());
+        if (selectedModel != null)
+        {
+            File modelFile = new File(modelsDir, selectedModel);
+            File paired = new File(modelFile.getParentFile(), stripExt(modelFile.getName()) + ".index");
+            String pairedRelative = toRelativeModelsPath(modelsDir, paired);
+            if (paired.isFile() && pairedRelative != null)
+                choices.add(pairedRelative);
+        }
+
+        try (java.util.stream.Stream<Path> paths = Files.walk(modelsDir.toPath()))
+        {
+            paths.filter(Files::isRegularFile)
+                 .map(Path::toFile)
+                 .filter(file -> file.getName().toLowerCase().endsWith(".index"))
+                 .map(file -> toRelativeModelsPath(modelsDir, file))
+                 .filter(Objects::nonNull)
+                 .sorted(String.CASE_INSENSITIVE_ORDER)
+                 .forEach(path ->
+                 {
+                     if (!choices.contains(path))
+                         choices.add(path);
+                 });
+        }
+        catch (IOException ex)
+        {
+            Scarlet.LOG.debug("Could not enumerate RVC indexes: {}", ex.getMessage());
+        }
+        return choices;
+    }
+
+    private static String blankToEmpty(String value)
+    {
+        return value == null ? "" : value.trim();
+    }
+
+    private static String blankToNull(String value)
+    {
+        if (value == null)
+            return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
+    private static String stripExt(String name)
+    {
+        int dot = name.lastIndexOf('.');
+        return dot > 0 ? name.substring(0, dot) : name;
+    }
+
+    private static String toRelativeModelsPath(File modelsDir, File file)
+    {
+        try
+        {
+            return modelsDir.toPath().toAbsolutePath().normalize()
+                .relativize(file.toPath().toAbsolutePath().normalize())
+                .toString();
+        }
+        catch (Exception ex)
+        {
+            return null;
+        }
+    }
+
+    private static String validatedModelsPath(File modelsDir, String value, String requiredExt)
+    {
+        String relative = blankToNull(value);
+        if (relative == null || modelsDir == null || !modelsDir.isDirectory())
+            return null;
+        if (requiredExt != null && !relative.toLowerCase().endsWith(requiredExt))
+            return null;
+
+        try
+        {
+            Path base = modelsDir.toPath().toAbsolutePath().normalize();
+            Path resolved = base.resolve(relative).normalize();
+            if (!resolved.startsWith(base))
+                return null;
+            if (!Files.isRegularFile(resolved))
+                return null;
+            return base.relativize(resolved).toString();
+        }
+        catch (Exception ex)
+        {
+            return null;
+        }
+    }
+
     /**
      * Called when a TTS voice fails to produce audio (e.g. an Online/Natural
      * voice that cannot write to a file stream). Finds the first available
@@ -147,11 +427,19 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
      */
     public String fallbackTtsVoice(String failedVoice)
     {
-        String fallback = this.scarlet.getTtsService().getInstalledVoices()
-            .stream()
+        // Prefer a real (non-RVC-virtual) voice as the fallback — falling back
+        // to another RVC voice would just re-run the synthesis-plus-conversion
+        // dance, which tends to fail for the same underlying reason the original
+        // voice did (missing audio device, broken sink, etc.).
+        java.util.List<String> all = this.scarlet.getTtsService().getInstalledVoices();
+        String fallback = all.stream()
             .filter(v -> !v.equals(failedVoice))
+            .filter(v -> !net.sybyline.scarlet.util.tts.TtsService.isRvcVirtualVoice(v))
             .findFirst()
-            .orElse(null);
+            .orElseGet(() -> all.stream()
+                .filter(v -> !v.equals(failedVoice))
+                .findFirst()
+                .orElse(null));
 
         if (fallback == null)
         {

@@ -4,7 +4,7 @@
   <groupId>net.sybyline</groupId>
   <artifactId>scarlet</artifactId>
   <name>Scarlet</name>
-  <version>0.4.16-b4</version>
+  <version>0.4.16-b5</version>
   <build>
     <plugins>
       <plugin>
@@ -32,6 +32,7 @@
         <version>3.2.4</version>
         <executions>
           <execution>
+            <id>shade-full</id>
             <phase>package</phase>
             <goals>
               <goal>shade</goal>
@@ -42,6 +43,31 @@
                   <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
                 </transformer>
               </transformers>
+            </configuration>
+          </execution>
+          <execution>
+            <id>shade-lite</id>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <shadedArtifactAttached>true</shadedArtifactAttached>
+              <shadedClassifierName>lite</shadedClassifierName>
+              <transformers>
+                <transformer>
+                  <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
+                </transformer>
+              </transformers>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>scarlet-features.properties</exclude>
+                    <exclude>rvc/**</exclude>
+                  </excludes>
+                </filter>
+              </filters>
             </configuration>
           </execution>
         </executions>

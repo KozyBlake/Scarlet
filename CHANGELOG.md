@@ -7,6 +7,37 @@
   - Pending: Limited Google Drive interoperability
   - Pending: Distinct Server and Client modes
 
+## 0.4.16-b5
+  - Added "lite" edition built alongside the full edition — `mvn package` now produces both `scarlet-0.4.16-b5.jar` and `scarlet-0.4.16-b5-lite.jar`; the lite JAR has no RVC UI, no Python bridge, and skips the torch/rvc-python dependency install flow
+  - Added compile-time feature flag `net.sybyline.scarlet.Features.RVC_ENABLED`, driven by the bundled `scarlet-features.properties` resource (stripped by the lite shade execution)
+  - Added `tts_rvc_pitch` setting (range -24..+24 semitones) under Settings → Text-to-Speech for tuning the RVC model's pitch offset when the TTS voice's fundamental doesn't match what the model was trained on
+  - Added `--models-dir` flag to the RVC Python bridge so it finds models even when the bridge is extracted to a different subtree than the user's models directory
+  - Added stem-contains matching for `.index` files so a model and its retrieval index are paired even when the filenames don't match exactly
+  - Added automatic refresh of classpath-extracted bridge assets on startup so upgraded Python bridges take effect without requiring users to delete the AppData copy
+  - Fixed RVC conversion failing with `_pickle.UnpicklingError: Weights only load failed` on PyTorch 2.6+ by transparently restoring `torch.load`'s `weights_only=False` default and allowlisting `fairseq.data.dictionary.Dictionary` via `torch.serialization.add_safe_globals`
+  - Fixed RVC conversion failing with `Expected a JsonObject but was JsonPrimitive` when rvc-python progress prints leaked onto stdout — the bridge now routes library stdout to stderr during inference, and Java parses the last balanced JSON object rather than the whole buffer as a defence-in-depth measure
+  - Fixed dependency-install wheel picker falling back to CPU on CUDA 13.0 because of a broken version comparison; now uses tuple comparison and correctly selects `cu124` for CUDA ≥ 12.4
+  - Fixed unnecessary torch reinstall causing `WinError 5 — Access is denied` on Windows when the DLLs were already loaded; the install step is now skipped entirely when both `torch` and `torchaudio` are already present
+  - Fixed post-install `_try_import` checks reporting packages as missing due to stale `importlib` finder / metadata caches; caches are now invalidated after every pip run
+  - Fixed `torchcodec` incorrectly gating `rvc_compatible` in `--status` output; it is now in the optional package set (rvc-python 0.1.5 does not import it)
+  - Fixed RVC-related settings appearing in the UI of the lite edition — they are now filtered out when `Features.RVC_ENABLED` is false
+  - Changed `TtsService` RVC accessors (`isRvcAvailable`, `getRvcStatus`, `getRvcModelsDir`, `getRvcModels`, `setRvcConfig`) to null-safe so a null `RvcService` in the lite edition is handled gracefully
+  - Changed `RvcService.getResourcePath()` to prefer a fresh classpath extraction over the AppData cache, so bundled bridge upgrades take effect on the next launch
+
+## 0.4.16-b4
+  - Added built-in `/discord-kick` and `/discord-ban` Discord slash commands using the native Discord member picker
+  - Added optional reason parameter to `/discord-kick` and `/discord-ban`
+  - Added DM notification sent to the target user before a kick or ban is carried out
+  - Added one-time opt-in prompt on first startup asking whether to enable the built-in Discord kick/ban commands
+  - Added `discord_kick_ban_enabled` toggle under Settings → Discord
+  - Added ephemeral response when `/discord-kick` or `/discord-ban` is used while the feature is disabled, directing the user to Settings
+  - Added in-app CLI panel as a dedicated "CLI" tab in the Scarlet UI, with a terminal-style read-only output area and a command input field
+  - Added `rawCommand` output routing so CLI results appear in the in-app panel as well as the system log
+  - Added "Run CLI command" entry under Settings → CLI for running commands via a popup dialog
+  - Added startup banner to the console showing the Scarlet version and a hint to type `help`
+  - Fixed CLI `help` command output not being printed to the console
+  - Improved logging for Discord kick and ban actions (actor, target, guild, reason all recorded at INFO level)
+
 ## 0.4.12
   - Added User Spawn Prop extended event
   - Added notes field for watched entities and groups

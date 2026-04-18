@@ -102,7 +102,7 @@ public class Scarlet implements Closeable
     public static final String
         GROUP = "SybylineNetwork",
         NAME = "Scarlet",
-        VERSION = "0.4.16-b4",
+        VERSION = "0.4.16-b5",
         FORK_NOTE = "Fork by KozyBlake \u2014 Windows & Linux",
         DEV_DISCORD = "Discord:@vinyarion/Vinyarion#0292/393412191547555841",
         SCARLET_DISCORD_URL = "https://discord.gg/CP3AyhypBF",
@@ -503,11 +503,13 @@ public class Scarlet implements Closeable
             // Get the parent component for dialogs
             java.awt.Component parentComponent = this.ui.getParentComponent();
             this.ttsService = new TtsService(new File(dir, "tts"), this.eventListener, this.discord, parentComponent);
+            this.eventListener.onTtsServiceInitialized();
         }
         catch (Exception ex)
         {
             LOG.error("Failed to initialize TTS service", ex);
             this.ttsService = new TtsService(new File(dir, "tts"), this.eventListener, this.discord, null);
+            this.eventListener.onTtsServiceInitialized();
         }
     }
 
@@ -535,6 +537,11 @@ public class Scarlet implements Closeable
         {
             this.initTtsService();
         }
+        return this.ttsService;
+    }
+
+    public TtsService getTtsServiceIfInitialized()
+    {
         return this.ttsService;
     }
 
