@@ -403,7 +403,12 @@ public class RvcInstallDialogs
 
         return net.sybyline.scarlet.ui.Swing.getWait(() ->
             JOptionPane.showConfirmDialog(
-                parentComponent, panel,
+                parentComponent,
+                // Wrap in a screen-aware scroll pane so the Yes/No button row
+                // stays on screen at 125%/150%/200% Windows DPI scale.  On
+                // normal-DPI displays the panel still fits and fitToScreen()
+                // returns it unchanged.
+                net.sybyline.scarlet.ui.Swing.fitToScreen(panel),
                 "RVC Dependency Installation",
                 JOptionPane.YES_NO_OPTION,
                 JOptionPane.WARNING_MESSAGE
@@ -718,7 +723,9 @@ public class RvcInstallDialogs
                 manualCmd
             ));
             JButton ok = new JButton("I understand");
-            JOptionPane pane = new JOptionPane(msg, JOptionPane.WARNING_MESSAGE,
+            JOptionPane pane = new JOptionPane(
+                net.sybyline.scarlet.ui.Swing.fitToScreen(msg),
+                JOptionPane.WARNING_MESSAGE,
                 JOptionPane.DEFAULT_OPTION, null, new Object[]{ ok });
             JDialog dialog = pane.createDialog(parentComponent, "RVC Installation Declined");
             ok.addActionListener(e -> dialog.dispose());
@@ -733,12 +740,14 @@ public class RvcInstallDialogs
         return net.sybyline.scarlet.ui.Swing.getWait(() ->
             JOptionPane.showConfirmDialog(
                 parentComponent,
-                "<html><div style='width:420px;'>" +
-                "<h3 style='color:#F44336;'>&#10007; Installation Failed (GPU)</h3>" +
-                "<p style='margin-top:8px;'>The CUDA/GPU installation of PyTorch failed.</p>" +
-                "<p style='margin-top:8px;'>Would you like to retry with CPU-only PyTorch?<br>" +
-                "<small style='color:#888;'>(Voice conversion will still work, just slower.)</small></p>" +
-                "</div></html>",
+                net.sybyline.scarlet.ui.Swing.fitToScreen(new JLabel(
+                    "<html><div style='width:420px;'>" +
+                    "<h3 style='color:#F44336;'>&#10007; Installation Failed (GPU)</h3>" +
+                    "<p style='margin-top:8px;'>The CUDA/GPU installation of PyTorch failed.</p>" +
+                    "<p style='margin-top:8px;'>Would you like to retry with CPU-only PyTorch?<br>" +
+                    "<small style='color:#888;'>(Voice conversion will still work, just slower.)</small></p>" +
+                    "</div></html>"
+                )),
                 "Retry with CPU?",
                 JOptionPane.YES_NO_OPTION,
                 JOptionPane.WARNING_MESSAGE
@@ -821,7 +830,8 @@ public class RvcInstallDialogs
         }
         net.sybyline.scarlet.ui.Swing.invokeWait(() ->
             JOptionPane.showMessageDialog(
-                parentComponent, body,
+                parentComponent,
+                net.sybyline.scarlet.ui.Swing.fitToScreen(new JLabel(body)),
                 "RVC \u2014 Python Version Incompatible",
                 JOptionPane.ERROR_MESSAGE
             )
@@ -857,7 +867,9 @@ public class RvcInstallDialogs
         net.sybyline.scarlet.ui.Swing.invokeWait(() ->
             JOptionPane.showMessageDialog(
                 parentComponent,
-                "<html><div style='width:380px;padding:5px;'>" + bodyHtml + "</div></html>",
+                net.sybyline.scarlet.ui.Swing.fitToScreen(new JLabel(
+                    "<html><div style='width:380px;padding:5px;'>" + bodyHtml + "</div></html>"
+                )),
                 title, JOptionPane.INFORMATION_MESSAGE
             )
         );
@@ -873,7 +885,9 @@ public class RvcInstallDialogs
         net.sybyline.scarlet.ui.Swing.invokeWait(() ->
             JOptionPane.showMessageDialog(
                 parentComponent,
-                "<html><div style='width:380px;padding:5px;'>" + bodyHtml + "</div></html>",
+                net.sybyline.scarlet.ui.Swing.fitToScreen(new JLabel(
+                    "<html><div style='width:380px;padding:5px;'>" + bodyHtml + "</div></html>"
+                )),
                 title, JOptionPane.ERROR_MESSAGE
             )
         );

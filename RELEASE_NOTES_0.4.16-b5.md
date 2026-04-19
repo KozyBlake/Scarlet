@@ -157,6 +157,28 @@ Fixed in two places:
 
 Net effect: a clean shutdown during command sync no longer produces any ERROR logs, and force-shutdown actually runs when graceful shutdown stalls.
 
+### Installer dialog buttons unreachable at high Windows DPI scale
+
+Users on Windows with display scaling set above 100% (125%, 150%, 200% — common on laptops and 4K monitors) reported that the RVC dependency-installation dialog's Yes/No buttons were rendered below the bottom edge of the screen, making it impossible to consent to or decline the install without keyboard fallbacks.
+
+The cause is that `JOptionPane.showConfirmDialog` produces a non-resizable dialog whose height is determined by its content's preferred size plus a button row. When the content is a wide HTML `<html><div style='width: …px;'>…</div></html>` label — as the RVC, TTS, and xdg-utils installers all use — the preferred height can comfortably exceed the screen's logical height at elevated scale factors (`Toolkit.getScreenSize()` returns logical pixels, so at 200% scale a 1080p monitor reports 960 × 540). The button row then gets placed past the screen edge and the user can't click it.
+
+Fixed by adding a shared helper in `net.sybyline.scarlet.ui.Swing`:
+
+```java
+public static JComponent fitToScreen(JComponent content);
+```
+
+It measures the component's preferred size against the screen; if either dimension exceeds 70% screen height / 85% screen width, it wraps the component in a non-bordered `JScrollPane` capped at those limits. Otherwise the component is returned unchanged, so small dialogs still look exactly as before.
+
+Applied across every installer dialog:
+
+- `RvcInstallDialogs` — consent, decline, CPU-retry, Python-incompatible, info, error.
+- `TtsPackageInstallDialogs` — consent, decline, retry, package-manager selection, info, error.
+- `XdgOpenInstallDialogs` — install consent, decline acknowledgment, install-success, install-failed.
+
+Net effect: on any Windows DPI scaling preset the Yes/No (and OK) buttons are now always visible and clickable, because the HTML-body height is bounded before the dialog packs.
+
 ## Upgrade notes
 
 - **No config migration required.** The new `tts_rvc_pitch` setting defaults to 0 on first run, which matches the previous hardcoded behaviour.

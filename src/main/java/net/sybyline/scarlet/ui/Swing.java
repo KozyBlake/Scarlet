@@ -1,13 +1,18 @@
 package net.sybyline.scarlet.ui;
 
 import java.awt.Color;
+import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.Toolkit;
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Enumeration;
 import java.util.function.Supplier;
 
 import javax.swing.BorderFactory;
+import javax.swing.JComponent;
+import javax.swing.JScrollPane;
+import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingUtilities;
 import javax.swing.UIDefaults;
 import javax.swing.UIManager;
@@ -519,6 +524,90 @@ public class Swing
     public static <T> T getWait_x(Supplier<T> func)
     {
         return func.get();
+    }
+
+    // ── High-DPI dialog sizing ─────────────────────────────────────────────────
+
+    /**
+     * Cap a dialog content component so that {@link javax.swing.JOptionPane}-
+     * produced dialogs fit on the user's screen, wrapping the component in a
+     * {@link JScrollPane} when its preferred height exceeds a safe fraction of
+     * the screen.
+     *
+     * <p><b>Why this exists:</b>
+     * {@code JOptionPane.showConfirmDialog} / {@code showMessageDialog} produce
+     * non-resizable dialogs sized to the preferred height of the content.  On
+     * Windows at 125%/150%/200% display scale, tall HTML-label panels (e.g. the
+     * RVC / eSpeak / xdg-open installer consent dialogs) end up taller than the
+     * usable screen height.  The JOptionPane's auto-generated Yes/No button
+     * row is rendered BELOW the content, so it ends up below the bottom edge of
+     * the screen — invisible and un-clickable.  This helper wraps tall content
+     * in a scroll pane whose preferred size is capped, so the dialog fits on
+     * screen and the buttons stay visible.</p>
+     *
+     * <p><b>No-op when content fits.</b>
+     * If {@code content}'s preferred size is already within the screen
+     * threshold, it is returned unchanged — ordinary short dialogs keep their
+     * original appearance with no scrollbars.</p>
+     *
+     * <p><b>Caller usage:</b>
+     * <pre>{@code
+     * JPanel panel = ...;
+     * JOptionPane.showConfirmDialog(parent,
+     *     Swing.fitToScreen(panel),
+     *     title, JOptionPane.YES_NO_OPTION);
+     * }</pre>
+     * </p>
+     *
+     * @param content the dialog content; may be {@code null}
+     * @return {@code content} unchanged if it already fits, otherwise a
+     *         {@code JScrollPane} wrapping it with a screen-aware preferred
+     *         size.  Returns {@code null} when {@code content} is {@code null}.
+     */
+    public static JComponent fitToScreen(JComponent content)
+    {
+        if (content == null)
+            return null;
+        // getPreferredSize() forces a layout pass for the component, which is
+        // what drives HTML JLabel sizing off the style='width:…px' in the source.
+        Dimension pref = content.getPreferredSize();
+        Dimension screen;
+        try
+        {
+            screen = Toolkit.getDefaultToolkit().getScreenSize();
+        }
+        catch (java.awt.HeadlessException hex)
+        {
+            // Shouldn't happen — callers already checked GraphicsEnvironment.isHeadless().
+            return content;
+        }
+        // Leave room for:
+        //   • the title bar at the top of the dialog,
+        //   • the button row added BELOW the content by JOptionPane,
+        //   • the Windows/GNOME/KDE task bar.
+        // 70% height / 85% width is a comfortable target on 720p-and-up displays.
+        int maxH = Math.max(300, (int) (screen.height * 0.70));
+        int maxW = Math.max(400, (int) (screen.width  * 0.85));
+
+        if (pref.height <= maxH && pref.width <= maxW)
+            return content;
+
+        JScrollPane scroll = new JScrollPane(content,
+            ScrollPaneConstants.VERTICAL_SCROLLBAR_AS_NEEDED,
+            ScrollPaneConstants.HORIZONTAL_SCROLLBAR_AS_NEEDED);
+        // A borderless, transparent scroll pane — so the wrapped content still
+        // blends into the JOptionPane's own background and doesn't grow a
+        // chrome line between content and dialog frame.
+        scroll.setBorder(null);
+        scroll.setOpaque(false);
+        scroll.getViewport().setOpaque(false);
+        // Make the mouse wheel feel normal on HTML-heavy content (default is 1px).
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+        scroll.setPreferredSize(new Dimension(
+            Math.min(pref.width,  maxW),
+            Math.min(pref.height, maxH)
+        ));
+        return scroll;
     }
 
     // ── Unicode-aware font fallback ────────────────────────────────────────────

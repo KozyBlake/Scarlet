@@ -26,6 +26,7 @@
   - Fixed `java.io.IOException: The handle is invalid` being thrown ten times a second from `Scarlet.spin()` on Windows when the user launched Scarlet without an attached console (double-clicked JAR via `javaw.exe`, Windows shortcut, Task Scheduler, detached launch) — the CLI reader now detects the invalid stdin handle on first failure, logs it once at INFO, and skips further `System.in.available()` polling for the session
   - Fixed `ErrorResponseException: -1: java.io.InterruptedIOException` being logged at ERROR when closing Scarlet while JDA still had in-flight command-registration REST calls (triggered by `updateCommandList()` after a version change) — installed a custom `RestAction.setDefaultFailure` handler in `ScarletDiscordJDA` that routes `InterruptedIOException` down to DEBUG and delegates all other failures to JDA's original default handler
   - Fixed inverted `awaitShutdown` condition in `ScarletDiscordJDA.close()` — the code was force-shutting-down JDA only after graceful shutdown had already succeeded (no-op) and doing nothing when the 10s timeout elapsed (leaving pending requests hanging); now correctly force-shuts-down on timeout and preserves the thread interrupt status on `InterruptedException`
+  - Fixed RVC, TTS, and xdg-utils dependency-installer dialogs having their Yes/No buttons clipped off the bottom of the screen on Windows at elevated display scale (125%/150%/200%) — `JOptionPane` dialogs are non-resizable and sized to their content's preferred height, so tall HTML bodies pushed the button row past the screen edge; added a new `Swing.fitToScreen` helper that wraps over-tall content in a screen-aware `JScrollPane` (capped at 70% screen height / 85% width), and applied it to every installer dialog in `RvcInstallDialogs`, `TtsPackageInstallDialogs`, and `XdgOpenInstallDialogs`
   - Changed `TtsService` RVC accessors (`isRvcAvailable`, `getRvcStatus`, `getRvcModelsDir`, `getRvcModels`, `setRvcConfig`) to null-safe so a null `RvcService` in the lite edition is handled gracefully
   - Changed `RvcService.getResourcePath()` to prefer a fresh classpath extraction over the AppData cache, so bundled bridge upgrades take effect on the next launch
 
@@ -358,13 +359,4 @@
 
 ## 0.3.3
   - Fixed escaping for VRChat Help Desk autofill link generation
-  - Added role-associated permission system for interactions
-  - Added archiver for evidence submission
-
-## 0.3.2
-  - Added button to autofill VRChat Help Desk report form
-  - Added autodownloader for dependencies
-  - Added builder for Windows
-
-## 0.3.1
-  - Initial public commit
+  - Added role-associated permission system for interacti

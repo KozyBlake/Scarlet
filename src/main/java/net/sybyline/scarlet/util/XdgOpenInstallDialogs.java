@@ -3,6 +3,7 @@ package net.sybyline.scarlet.util;
 import java.awt.GraphicsEnvironment;
 import java.util.List;
 
+import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 
 import org.slf4j.Logger;
@@ -162,7 +163,8 @@ public class XdgOpenInstallDialogs
 
             int choice = JOptionPane.showConfirmDialog(
                 null,
-                message,
+                // High-DPI-safe wrap: see Swing.fitToScreen javadoc.
+                Swing.fitToScreen(new JLabel(message)),
                 "Install xdg-utils?",
                 JOptionPane.YES_NO_OPTION,
                 JOptionPane.QUESTION_MESSAGE
@@ -179,14 +181,16 @@ public class XdgOpenInstallDialogs
             String installCmd = getInstallCommand();
             JOptionPane.showMessageDialog(
                 null,
-                "<html><div style='width: 380px;'>" +
-                "<p>xdg-utils will not be installed.</p>" +
-                "<p style='margin-top:8px;'>Browsing folders and opening links from Scarlet will not work " +
-                "until <b>xdg-utils</b> is installed.</p>" +
-                "<p style='margin-top:8px;'>You can install it manually:</p>" +
-                "<pre style='background:#2d2d2d;padding:6px;border-radius:4px;font-family:monospace;'>" +
-                installCmd + "</pre>" +
-                "</div></html>",
+                Swing.fitToScreen(new JLabel(
+                    "<html><div style='width: 380px;'>" +
+                    "<p>xdg-utils will not be installed.</p>" +
+                    "<p style='margin-top:8px;'>Browsing folders and opening links from Scarlet will not work " +
+                    "until <b>xdg-utils</b> is installed.</p>" +
+                    "<p style='margin-top:8px;'>You can install it manually:</p>" +
+                    "<pre style='background:#2d2d2d;padding:6px;border-radius:4px;font-family:monospace;'>" +
+                    installCmd + "</pre>" +
+                    "</div></html>"
+                )),
                 "xdg-utils Not Installed",
                 JOptionPane.WARNING_MESSAGE
             );
@@ -198,10 +202,12 @@ public class XdgOpenInstallDialogs
         Swing.invokeWait(() ->
             JOptionPane.showMessageDialog(
                 null,
-                "<html><div style='width:320px;'>" +
-                "<h3 style='color:#4CAF50;'>&#10003; Installation Successful</h3>" +
-                "<p>xdg-utils has been installed. Folder and link browsing is now available.</p>" +
-                "</div></html>",
+                Swing.fitToScreen(new JLabel(
+                    "<html><div style='width:320px;'>" +
+                    "<h3 style='color:#4CAF50;'>&#10003; Installation Successful</h3>" +
+                    "<p>xdg-utils has been installed. Folder and link browsing is now available.</p>" +
+                    "</div></html>"
+                )),
                 "xdg-utils Installed",
                 JOptionPane.INFORMATION_MESSAGE
             )
@@ -214,13 +220,15 @@ public class XdgOpenInstallDialogs
         Swing.invokeWait(() ->
             JOptionPane.showMessageDialog(
                 null,
-                "<html><div style='width:400px;'>" +
-                "<h3 style='color:#F44336;'>&#10007; Installation Failed</h3>" +
-                "<p>Could not install xdg-utils automatically.</p>" +
-                "<p style='margin-top:8px;'>Please install it manually:</p>" +
-                "<pre style='background:#2d2d2d;padding:6px;border-radius:4px;font-family:monospace;'>" +
-                installCmd + "</pre>" +
-                "</div></html>",
+                Swing.fitToScreen(new JLabel(
+                    "<html><div style='width:400px;'>" +
+                    "<h3 style='color:#F44336;'>&#10007; Installation Failed</h3>" +
+                    "<p>Could not install xdg-utils automatically.</p>" +
+                    "<p style='margin-top:8px;'>Please install it manually:</p>" +
+                    "<pre style='background:#2d2d2d;padding:6px;border-radius:4px;font-family:monospace;'>" +
+                    installCmd + "</pre>" +
+                    "</div></html>"
+                )),
                 "xdg-utils Installation Failed",
                 JOptionPane.ERROR_MESSAGE
             )

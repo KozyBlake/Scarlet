@@ -156,7 +156,11 @@ public class TtsPackageInstallDialogs
             "<b>No</b> - Skip installation (TTS features will be disabled)</div></html>"), BorderLayout.SOUTH);
 
         return Swing.getWait(() -> JOptionPane.showConfirmDialog(
-            this.parentComponent, panel, "TTS Package Installation",
+            this.parentComponent,
+            // High-DPI-safe wrap: keeps the Yes/No buttons on screen when
+            // Windows display scale is above 100% (see Swing.fitToScreen).
+            Swing.fitToScreen(panel),
+            "TTS Package Installation",
             JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE
         ) == JOptionPane.YES_OPTION);
     }
@@ -195,7 +199,9 @@ public class TtsPackageInstallDialogs
                 getPackageDisplayName(), cmdsHtml
             ));
             JButton ok = new JButton("I understand");
-            JOptionPane pane = new JOptionPane(msg, JOptionPane.WARNING_MESSAGE,
+            JOptionPane pane = new JOptionPane(
+                Swing.fitToScreen(msg),
+                JOptionPane.WARNING_MESSAGE,
                 JOptionPane.DEFAULT_OPTION, null, new Object[]{ok});
             JDialog dialog = pane.createDialog(this.parentComponent, "TTS Installation Declined");
             ok.addActionListener(e -> dialog.dispose());
@@ -290,7 +296,9 @@ public class TtsPackageInstallDialogs
 
             JButton install = new JButton("Install with Selected");
             JButton cancel  = new JButton("Cancel");
-            JOptionPane pane = new JOptionPane(panel, JOptionPane.WARNING_MESSAGE,
+            JOptionPane pane = new JOptionPane(
+                Swing.fitToScreen(panel),
+                JOptionPane.WARNING_MESSAGE,
                 JOptionPane.DEFAULT_OPTION, null, new Object[]{install, cancel});
             JDialog dialog = pane.createDialog(this.parentComponent, "Package Manager Selection");
             install.addActionListener(e -> {
@@ -317,9 +325,11 @@ public class TtsPackageInstallDialogs
         if (GraphicsEnvironment.isHeadless()) return false;
         return Swing.getWait(() -> JOptionPane.showConfirmDialog(
             this.parentComponent,
-            "<html><div style='width:400px;'><h3 style='color:#F44336;'>&#10007; Installation Failed</h3>" +
-            "<p style='margin-top:10px;'>The installation did not complete successfully.</p>" +
-            "<p style='margin-top:10px;'>Would you like to try a different package manager?</p></div></html>",
+            Swing.fitToScreen(new JLabel(
+                "<html><div style='width:400px;'><h3 style='color:#F44336;'>&#10007; Installation Failed</h3>" +
+                "<p style='margin-top:10px;'>The installation did not complete successfully.</p>" +
+                "<p style='margin-top:10px;'>Would you like to try a different package manager?</p></div></html>"
+            )),
             "Installation Failed", JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE
         ) == JOptionPane.YES_OPTION);
     }
@@ -480,7 +490,9 @@ public class TtsPackageInstallDialogs
         }
         Swing.invokeWait(() -> JOptionPane.showMessageDialog(
             this.parentComponent,
-            "<html><div style='width:350px;padding:5px;'>" + bodyHtml + "</div></html>",
+            Swing.fitToScreen(new JLabel(
+                "<html><div style='width:350px;padding:5px;'>" + bodyHtml + "</div></html>"
+            )),
             title, JOptionPane.INFORMATION_MESSAGE));
     }
 
@@ -494,7 +506,9 @@ public class TtsPackageInstallDialogs
         }
         Swing.invokeWait(() -> JOptionPane.showMessageDialog(
             this.parentComponent,
-            "<html><div style='width:350px;padding:5px;'>" + bodyHtml + "</div></html>",
+            Swing.fitToScreen(new JLabel(
+                "<html><div style='width:350px;padding:5px;'>" + bodyHtml + "</div></html>"
+            )),
             title, JOptionPane.ERROR_MESSAGE));
     }
 

@@ -92,6 +92,6 @@
     <JDA.version>6.3.0</JDA.version>
     <libdave.version>0.1.2</libdave.version>
     <jna.version>5.18.1</jna.version>
-    <vrchatapi.version>1.20.8-nightly.12</vrchatapi.version>
+    <vrchatapi.version>1.20.8-nightly.14</vrchatapi.version>
   </properties>
 </project>
