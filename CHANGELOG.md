@@ -2,6 +2,8 @@
 # Changelog
 
 ## Unreleased
+  - Updated `vrchatapi-java` to `1.20.8-nightly.14`
+  - Fixed the Settings UI occasionally painting card contents outside the scroll viewport during rapid resize/scroll, which could draw controls over the tab strip, search row, or footer
   - Indefinitely postponed: Support for multiple groups
   - Pending: Staff & Instance Analysis, (live infographic?)
   - Pending: Limited Google Drive interoperability

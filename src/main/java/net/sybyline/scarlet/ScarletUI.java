@@ -507,6 +507,16 @@ public class ScarletUI implements IScarletUI
         public int index;
         public int width;
     }
+    private static void stabilizeScrollPane(JScrollPane scrollPane, Color background)
+    {
+        scrollPane.setOpaque(true);
+        scrollPane.setBackground(background);
+        scrollPane.getViewport().setOpaque(true);
+        scrollPane.getViewport().setBackground(background);
+        // BLIT scrolling can leave stale pixels behind custom-painted cards
+        // during aggressive scroll/resize bursts near the viewport edges.
+        scrollPane.getViewport().setScrollMode(javax.swing.JViewport.SIMPLE_SCROLL_MODE);
+    }
     private void initUI()
     {
         // Properties
@@ -835,8 +845,7 @@ public class ScarletUI implements IScarletUI
                 // Table card — solid opaque viewport so rows paint cleanly
                 JScrollPane instanceScroll = new JScrollPane(this.propstable);
                 instanceScroll.setBorder(BorderFactory.createEmptyBorder());
-                instanceScroll.setBackground(TAB_BG);
-                instanceScroll.getViewport().setBackground(TAB_BG);
+                stabilizeScrollPane(instanceScroll, TAB_BG);
                 instancePanel.add(instanceScroll, "table");
 
                 instanceCards.show(instancePanel, "empty");
@@ -849,15 +858,16 @@ public class ScarletUI implements IScarletUI
             {
                 this.jpanel_settings.setLayout(new GridBagLayout());
                 this.jpanel_settings.setBackground(new Color(22, 22, 30));
+                this.jpanel_settings.setOpaque(true);
                 JScrollPane settingsScroll = new JScrollPane(jpanel_settings);
                 settingsScroll.setBorder(BorderFactory.createEmptyBorder());
-                settingsScroll.setBackground(new Color(22, 22, 30));
-                settingsScroll.getViewport().setBackground(new Color(22, 22, 30));
+                stabilizeScrollPane(settingsScroll, new Color(22, 22, 30));
                 settingsScroll.getVerticalScrollBar().setUnitIncrement(20);
                 settingsScroll.getHorizontalScrollBar().setUnitIncrement(20);
                 // ── Outer wrapper: search field at top, card list below ────────
                 JPanel settingsOuter = new JPanel(new BorderLayout());
                 settingsOuter.setBackground(new Color(22, 22, 30));
+                settingsOuter.setOpaque(true);
                 this.jfield_settingsSearch = new JTextField();
                 this.jfield_settingsSearch.putClientProperty("JTextField.placeholderText", "Search settings\u2026");
                 this.jfield_settingsSearch.setBorder(BorderFactory.createCompoundBorder(
@@ -897,8 +907,7 @@ public class ScarletUI implements IScarletUI
 
                 JScrollPane cliScroll = new JScrollPane(this.jtext_cli);
                 cliScroll.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, CLI_BORD));
-                cliScroll.setBackground(CLI_BG);
-                cliScroll.getViewport().setBackground(CLI_BG);
+                stabilizeScrollPane(cliScroll, CLI_BG);
                 cliScroll.getVerticalScrollBar().setUnitIncrement(20);
                 cliPanel.add(cliScroll, BorderLayout.CENTER);
 
@@ -1713,23 +1722,39 @@ public class ScarletUI implements IScarletUI
                 @Override
                 protected void paintComponent(java.awt.Graphics g)
                 {
-                    java.awt.Graphics2D g2 = (java.awt.Graphics2D) g;
-                    g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
-                                        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
-                    java.awt.Shape cardShape = new java.awt.geom.RoundRectangle2D.Float(
-                        0, 0, getWidth(), getHeight(), 10, 10);
-                    // Fill card background clipped to rounded shape
-                    g2.setClip(cardShape);
-                    g2.setColor(CARD_BG);
-                    g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
-                    // Accent left bar — stays inside rounded clip
-                    g2.setColor(Swing.ACCENT);
-                    g2.fillRect(0, 0, 4, getHeight());
-                    g2.setClip(null);
-                    // Card border on top
-                    g2.setColor(CARD_BORDER);
-                    g2.setStroke(new java.awt.BasicStroke(1f));
-                    g2.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 10, 10);
+                    java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+                    try
+                    {
+                        g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                                            java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                        java.awt.Shape viewportClip = g2.getClip();
+                        java.awt.Shape cardShape = new java.awt.geom.RoundRectangle2D.Float(
+                            0, 0, getWidth(), getHeight(), 10, 10);
+                        // Preserve Swing's viewport clip so partially visible cards
+                        // cannot paint their children into the tab/search area.
+                        if (viewportClip == null)
+                        {
+                            g2.setClip(cardShape);
+                        }
+                        else
+                        {
+                            java.awt.geom.Area clipped = new java.awt.geom.Area(viewportClip);
+                            clipped.intersect(new java.awt.geom.Area(cardShape));
+                            g2.setClip(clipped);
+                        }
+                        g2.setColor(CARD_BG);
+                        g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
+                        g2.setColor(Swing.ACCENT);
+                        g2.fillRect(0, 0, 4, getHeight());
+                        g2.setClip(viewportClip);
+                        g2.setColor(CARD_BORDER);
+                        g2.setStroke(new java.awt.BasicStroke(1f));
+                        g2.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 10, 10);
+                    }
+                    finally
+                    {
+                        g2.dispose();
+                    }
                 }
             };
             card.setOpaque(false);
@@ -1800,20 +1825,37 @@ public class ScarletUI implements IScarletUI
                 @Override
                 protected void paintComponent(java.awt.Graphics g)
                 {
-                    java.awt.Graphics2D g2 = (java.awt.Graphics2D) g;
-                    g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
-                                        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
-                    g2.setColor(CARD_BG);
-                    java.awt.Shape cardShape2 = new java.awt.geom.RoundRectangle2D.Float(
-                        0, 0, getWidth(), getHeight(), 10, 10);
-                    g2.setClip(cardShape2);
-                    g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
-                    g2.setColor(Swing.ACCENT);
-                    g2.fillRect(0, 0, 4, getHeight());
-                    g2.setClip(null);
-                    g2.setColor(CARD_BORDER);
-                    g2.setStroke(new java.awt.BasicStroke(1f));
-                    g2.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 10, 10);
+                    java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+                    try
+                    {
+                        g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                                            java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                        java.awt.Shape viewportClip = g2.getClip();
+                        java.awt.Shape cardShape2 = new java.awt.geom.RoundRectangle2D.Float(
+                            0, 0, getWidth(), getHeight(), 10, 10);
+                        if (viewportClip == null)
+                        {
+                            g2.setClip(cardShape2);
+                        }
+                        else
+                        {
+                            java.awt.geom.Area clipped = new java.awt.geom.Area(viewportClip);
+                            clipped.intersect(new java.awt.geom.Area(cardShape2));
+                            g2.setClip(clipped);
+                        }
+                        g2.setColor(CARD_BG);
+                        g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
+                        g2.setColor(Swing.ACCENT);
+                        g2.fillRect(0, 0, 4, getHeight());
+                        g2.setClip(viewportClip);
+                        g2.setColor(CARD_BORDER);
+                        g2.setStroke(new java.awt.BasicStroke(1f));
+                        g2.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 10, 10);
+                    }
+                    finally
+                    {
+                        g2.dispose();
+                    }
                 }
             };
             card.setOpaque(false);
