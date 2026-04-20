@@ -103,6 +103,7 @@ import net.dv8tion.jda.api.interactions.modals.ModalMapping;
 import net.dv8tion.jda.api.modals.Modal;
 import net.dv8tion.jda.api.requests.restaction.WebhookMessageEditAction;
 import net.dv8tion.jda.api.requests.restaction.interactions.ModalCallbackAction;
+import net.sybyline.scarlet.Features;
 import net.sybyline.scarlet.util.Func;
 import net.sybyline.scarlet.util.MiscUtils;
 
@@ -144,6 +145,9 @@ public class DInteractions
     @Target({ElementType.TYPE,ElementType.METHOD})
     @Retention(RetentionPolicy.RUNTIME)
     public static @interface Desc { String value(); }
+    @Target({ElementType.TYPE,ElementType.METHOD})
+    @Retention(RetentionPolicy.RUNTIME)
+    public static @interface FeatureGate { String value(); }
     @Target({ElementType.TYPE,ElementType.METHOD})
     @Retention(RetentionPolicy.RUNTIME)
     public static @interface DefaultPerms { Permission[] value() default {}; }
@@ -225,11 +229,18 @@ public class DInteractions
         Desc d = e.getDeclaredAnnotation(Desc.class);
         return d == null ? "description" : d.value();
     }
+    static boolean featureEnabled(AnnotatedElement e)
+    {
+        FeatureGate fg = e.getDeclaredAnnotation(FeatureGate.class);
+        return fg == null || Features.isEnabled(fg.value());
+    }
     public boolean registerSlashCmd(Class<?> outer, Object receiver, Class<?> cclass)
     {
         SlashCmd sc = cclass.getDeclaredAnnotation(SlashCmd.class);
         if (sc == null)
             return false;
+        if (!featureEnabled(cclass))
+            return true;
         Object sub = this.ctxNew(outer, receiver, cclass);
         return this.registerSlashCmd(cclass, sub);
     }
@@ -238,6 +249,8 @@ public class DInteractions
         SlashCmd sc = cclass.getDeclaredAnnotation(SlashCmd.class);
         if (sc == null)
             return false;
+        if (!featureEnabled(cclass))
+            return true;
         LOG.trace(String.format("Registering slash command: %s", sc.value()));
         Slash slash = this.slash(sc.value(), description(cclass));
         Permission[] defaultPerms = defaultPerms(cclass);
@@ -265,6 +278,8 @@ public class DInteractions
         SlashCmd sc = gclass.getDeclaredAnnotation(SlashCmd.class);
         if (sc == null)
             return false;
+        if (!featureEnabled(gclass))
+            return true;
         LOG.trace(String.format("Registering slash command group: %s %s", slash.data.getName(), sc.value()));
         Object sub = this.ctxNew(cclass, receiver, gclass);
         Slash.Group group = slash.group(sc.value(), description(gclass));
@@ -288,6 +303,8 @@ public class DInteractions
         SlashCmd sc = method.getDeclaredAnnotation(SlashCmd.class);
         if (sc == null)
             return false;
+        if (!featureEnabled(method))
+            return true;
         LOG.trace(String.format("Registering slash command handler: %s%s%s", slash==null?"":(slash.data.getName()+" "), group==null?"":(group.data.getName()+" "), sc.value()));
         Permission[] defaultPerms = defaultPerms(method);
         String description = description(method);
@@ -392,6 +409,8 @@ public class DInteractions
         MsgCmd mc = method.getDeclaredAnnotation(MsgCmd.class);
         if (mc == null)
             return false;
+        if (!featureEnabled(method))
+            return true;
         LOG.trace(String.format("Registering message command: %s", mc.value()));
         Permission[] defaultPerms = defaultPerms(method);
         this.message(mc.value(), this.tryHandle(receiver, method, MessageContextInteractionEvent.class)::invoke).setDefaultPermissions(defaultPerms.length == 0 ? DEFAULT_PERMISSIONS : DefaultMemberPermissions.enabledFor(defaultPerms));
@@ -402,6 +421,8 @@ public class DInteractions
         UserCmd uc = method.getDeclaredAnnotation(UserCmd.class);
         if (uc == null)
             return false;
+        if (!featureEnabled(method))
+            return true;
         LOG.trace(String.format("Registering user command: %s", uc.value()));
         Permission[] defaultPerms = defaultPerms(method);
         this.user(uc.value(), this.tryHandle(receiver, method, UserContextInteractionEvent.class)::invoke).setDefaultPermissions(defaultPerms.length == 0 ? DEFAULT_PERMISSIONS : DefaultMemberPermissions.enabledFor(defaultPerms));
@@ -412,6 +433,8 @@ public class DInteractions
         ButtonClk bc = method.getDeclaredAnnotation(ButtonClk.class);
         if (bc == null)
             return false;
+        if (!featureEnabled(method))
+            return true;
         LOG.trace(String.format("Registering button click: %s", bc.value()));
         return this.button(bc.value(), this.tryHandle(receiver, method, ButtonInteractionEvent.class)::invoke);
     }
@@ -420,6 +443,8 @@ public class DInteractions
         StringSel ss = method.getDeclaredAnnotation(StringSel.class);
         if (ss == null)
             return false;
+        if (!featureEnabled(method))
+            return true;
         LOG.trace(String.format("Registering string select: %s", ss.value()));
         return this.string(ss.value(), this.tryHandle(receiver, method, StringSelectInteractionEvent.class)::invoke);
     }
@@ -428,6 +453,8 @@ public class DInteractions
         EntitySel es = method.getDeclaredAnnotation(EntitySel.class);
         if (es == null)
             return false;
+        if (!featureEnabled(method))
+            return true;
         LOG.trace(String.format("Registering entity select: %s", es.value()));
         return this.entity(es.value(), this.tryHandle(receiver, method, EntitySelectInteractionEvent.class)::invoke);
     }
@@ -436,6 +463,8 @@ public class DInteractions
         ModalSub ms = method.getDeclaredAnnotation(ModalSub.class);
         if (ms == null)
             return false;
+        if (!featureEnabled(method))
+            return true;
         LOG.trace(String.format("Registering modal submit: %s", ms.value()));
         return this.modal(ms.value(), this.tryHandle(receiver, method, ModalInteractionEvent.class)::invoke);
     }
@@ -446,6 +475,8 @@ public class DInteractions
         ModalSub ms = cclass.getDeclaredAnnotation(ModalSub.class);
         if (ms == null)
             return false;
+        if (!featureEnabled(cclass))
+            return true;
         LOG.trace(String.format("Registering modal flow: %s", ms.value()));
         for (Field field : cclass.getFields())
             this.registerModalFlowOption(receiver, field, slash, group);

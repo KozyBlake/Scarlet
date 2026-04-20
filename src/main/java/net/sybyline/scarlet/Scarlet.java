@@ -395,11 +395,15 @@ public class Scarlet implements Closeable
     public static ScarletPronounLists pronounLists;
     {
         // Initialise the static reference so PronounValidator can reach it without
-        // needing a Scarlet instance passed through the call chain.
-        Scarlet.pronounLists = new ScarletPronounLists(
-            new File(dir, "good_pronoun.json"),
-            new File(dir, "bad_pronoun.json")
-        );
+        // needing a Scarlet instance passed through the call chain. Skipped in
+        // minimal builds where the pronoun-validation subsystem is compiled out.
+        if (Features.PRONOUNS_ENABLED)
+        {
+            Scarlet.pronounLists = new ScarletPronounLists(
+                new File(dir, "good_pronoun.json"),
+                new File(dir, "bad_pronoun.json")
+            );
+        }
     }
     final ScarletWatchedEntities<User> watchedUsers = new ScarletWatchedEntities<>(new File(dir, "watched_users.json"), VrcIds.id_user, (user, id, embed) ->
     {
@@ -587,7 +591,7 @@ public class Scarlet implements Closeable
         this.splash.splashSubtext("Checking for updates");
         this.checkUpdate();
         // One-time opt-in for built-in Discord kick/ban commands
-        if (!this.discordKickBanPrompted.get())
+        if (Features.DISCORD_KICK_BAN_ENABLED && !this.discordKickBanPrompted.get())
         {
             this.settings.requireConfirmYesNoAsync(
                 "Scarlet includes built-in Discord slash commands for kicking and banning server members\n" +
@@ -722,6 +726,11 @@ public class Scarlet implements Closeable
     void spin()
     {
         MiscUtils.sleep(100L);
+        // Minimal builds compile out the interactive CLI entirely. The JIT
+        // folds this branch away when CLI_COMMANDS_ENABLED is a false
+        // compile-time constant, so the rest of this method becomes dead code.
+        if (!Features.CLI_COMMANDS_ENABLED)
+            return;
         // Short-circuit once we've learned stdin has no valid handle (e.g.
         // launched via javaw.exe / double-clicked JAR on Windows).  No point
         // calling available() again — it will throw on every tick.
@@ -1136,6 +1145,8 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
     OffsetDateTime lastCalendarUpdate = OffsetDateTime.now(ZoneOffset.UTC);
     void maybeUpdateCalendar()
     {
+        if (!Features.CALENDAR_ENABLED)
+            return;
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
         if (now.isAfter(this.lastCalendarUpdate.plusMinutes(1L)))
         {
@@ -1269,6 +1280,8 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
 
     void maybeModSummary()
     {
+        if (!Features.CALENDAR_ENABLED)
+            return;
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC),
                        next = this.settings.nextModSummary.getOrNull();
         if (next == null)

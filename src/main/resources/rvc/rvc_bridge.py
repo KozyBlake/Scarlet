@@ -45,6 +45,187 @@ from pathlib import Path
 
 
 # ===========================================================================
+# Python 3.10+ stdlib-compat shim — MUST run before any `import rvc_python`
+# or `import fairseq` anywhere in this process.
+#
+# rvc-python 0.1.5 transitively depends on fairseq 0.12.2, which in turn
+# imports hydra.core, which imports the pinned `antlr4-python3-runtime==4.8`
+# (pinned via `omegaconf==2.0.6`).  ANTLR 4.8 was released in 2020 and uses
+# bare `from collections import Callable` (and friends), but those ABCs were
+# moved into `collections.abc` in Python 3.3, deprecated aliases were kept
+# for backwards compatibility, and the aliases were **removed in Python
+# 3.10**.  The result on Python 3.10/3.11 is an ImportError deep inside
+# rvc_python/__init__.py that the installer currently swallows — pip reports
+# success, but `import rvc_python` raises and the Java side sees "package
+# still not importable".
+#
+# Re-installing the aliases here is safe:
+#   - On 3.9 both names exist; the hasattr guard short-circuits (no-op).
+#   - On 3.10+ the aliases were removed; we re-bind them to their
+#     `collections.abc` originals, which is exactly what the old CPython
+#     aliases pointed at anyway.
+# This is the standard community workaround for fairseq 0.12.2 on newer
+# Python; see e.g. https://github.com/facebookresearch/fairseq/issues/4951.
+# ===========================================================================
+import collections
+import collections.abc as _collections_abc
+import warnings as _warnings
+# On 3.9 merely accessing `collections.Callable` emits a DeprecationWarning.
+# Suppress it for the duration of the shim so users running with
+# `-W error::DeprecationWarning` or `PYTHONWARNINGS=error` don't crash on a
+# probe that is itself the fix for the deprecation.
+with _warnings.catch_warnings():
+    _warnings.simplefilter("ignore", DeprecationWarning)
+    for _abc_name in ("Callable", "Iterable", "Iterator", "Generator",
+                      "Reversible", "Container", "Collection", "Hashable",
+                      "Sized", "Mapping", "MutableMapping", "MappingView",
+                      "KeysView", "ItemsView", "ValuesView",
+                      "Set", "MutableSet",
+                      "Sequence", "MutableSequence",
+                      "ByteString", "Awaitable", "Coroutine",
+                      "AsyncIterable", "AsyncIterator", "AsyncGenerator"):
+        _abc = getattr(_collections_abc, _abc_name, None)
+        if _abc is not None and getattr(collections, _abc_name, None) is None:
+            setattr(collections, _abc_name, _abc)
+del _abc, _abc_name, _collections_abc, _warnings
+
+
+# ===========================================================================
+# Python 3.11+ @dataclass-compat shim — MUST run before any `import fairseq`
+# / `import rvc_python` anywhere in this process.
+#
+# Starting with Python 3.11, `@dataclass` refuses to let you use an instance
+# of an unhashable type (including any plain @dataclass-decorated class) as
+# a bare default value:
+#
+#     ValueError: mutable default <class 'fairseq.dataclass.configs.CommonConfig'>
+#     for field common is not allowed: use default_factory
+#
+# fairseq 0.12.2 is from 2022 and predates that check — its dataclass config
+# modules are full of patterns like:
+#
+#     @dataclass
+#     class FairseqConfig(FairseqDataclass):
+#         common: CommonConfig = CommonConfig()
+#         checkpoint: CheckpointConfig = CheckpointConfig()
+#         distributed_training: DistributedTrainingConfig = \
+#             DistributedTrainingConfig()
+#         ...
+#
+# On 3.11+ these raise at class-definition time, so `import fairseq` (and
+# therefore `import rvc_python`) is impossible.  fairseq 0.12.2 is pinned by
+# rvc-python 0.1.5, there is no newer fairseq wheel for Python 3.11, and we
+# can't rewrite a third-party package.
+#
+# The fix: wrap `dataclasses.dataclass` so that, BEFORE the real decorator
+# runs, we walk the class body and auto-convert any mutable-typed default
+# (bare value or field(default=...)) into a `default_factory=` that
+# deep-copies a frozen snapshot per instance.  This is precisely what
+# `default_factory` is for — each instance gets its own copy, avoiding the
+# shared-mutable-state footgun the 3.11 check was designed to prevent.
+#
+# Semantics:
+#   - Hashable defaults (int, str, tuple, frozen dataclasses, None, etc.)
+#     pass through unchanged — __hash__ is not None, no rewrite needed.
+#   - Unhashable defaults (list, dict, set, plain @dataclass instances) get
+#     auto-wrapped in default_factory via a per-field deep-copy closure.
+#   - `field(default_factory=...)` callers are untouched (they never have
+#     a `.default` to rewrite).
+#   - The patch is installed PROCESS-WIDE for the lifetime of the bridge,
+#     which is a short-lived child process.  Leaving it active is safe
+#     because it's strictly a superset of stock behaviour (anything stock
+#     accepts, the patch also accepts; anything stock rejects with this
+#     specific ValueError is what we're trying to accept).
+#
+# The shim is effectively a no-op on Python < 3.11 (the underlying check
+# doesn't exist there), but we install the wrapper uniformly so behaviour
+# is consistent across the supported range 3.9 / 3.10 / 3.11.
+# ===========================================================================
+import dataclasses as _dc
+import copy as _copy
+
+_orig_dataclass = _dc.dataclass
+
+
+def _is_mutable_default(value):
+    """Return True if `value`'s class has __hash__ is None.
+
+    That's the exact condition Python 3.11's @dataclass uses to reject a
+    default.  Includes: list, dict, set, plain @dataclass() instances,
+    bytearray, and anything else that opted out of hashing.
+    """
+    try:
+        return type(value).__hash__ is None
+    except Exception:
+        return False
+
+
+def _wrap_mutable_as_factory(value):
+    """Return a Field with default_factory=<deepcopy of a frozen snapshot>.
+
+    Deep-copying per-instance matches what a programmer writing this
+    correctly would have done with `field(default_factory=lambda: X())`;
+    it specifically avoids every instance sharing one aliased mutable.
+    """
+    _frozen = _copy.deepcopy(value)
+    return _dc.field(default_factory=(lambda f=_frozen: _copy.deepcopy(f)))
+
+
+def _rewrite_field_default(field_obj):
+    """Return a new Field that replaces .default with default_factory.
+
+    Preserves every other knob (init/repr/hash/compare/metadata/kw_only)
+    so decorator-level customisation survives the rewrite.
+    """
+    _frozen = _copy.deepcopy(field_obj.default)
+    factory = (lambda f=_frozen: _copy.deepcopy(f))
+    kwargs = dict(
+        default_factory=factory,
+        init=field_obj.init,
+        repr=field_obj.repr,
+        hash=field_obj.hash,
+        compare=field_obj.compare,
+        metadata=field_obj.metadata,
+    )
+    # kw_only was added in 3.10 — guard so the shim works on 3.9 too.
+    if hasattr(field_obj, "kw_only"):
+        kwargs["kw_only"] = field_obj.kw_only
+    return _dc.field(**kwargs)
+
+
+def _patched_dataclass(cls=None, /, **kwargs):
+    """Drop-in replacement for @dataclass that tolerates mutable defaults."""
+    def _wrap(c):
+        hints = getattr(c, "__annotations__", None) or {}
+        for name in list(hints):
+            if name not in c.__dict__:
+                continue
+            val = c.__dict__[name]
+            if isinstance(val, _dc.Field):
+                # Field(...) wrapper — only rewrite if a mutable `default=`
+                # was supplied; `default_factory=` cases are already safe.
+                if (val.default is not _dc.MISSING
+                        and _is_mutable_default(val.default)):
+                    setattr(c, name, _rewrite_field_default(val))
+                continue
+            # Bare class-level default, e.g. `common: CommonConfig = CommonConfig()`
+            if _is_mutable_default(val):
+                setattr(c, name, _wrap_mutable_as_factory(val))
+        return _orig_dataclass(c, **kwargs)
+    if cls is None:
+        # Called as @dataclass(...) — return the real decorator.
+        return _wrap
+    # Called as @dataclass without parens.
+    return _wrap(cls)
+
+
+_dc.dataclass = _patched_dataclass
+# NB: we keep _dc and _copy bound at module scope — the helper functions
+# above close over them at call time, so deleting would break the shim.
+# They're underscore-prefixed so they don't pollute the public surface.
+
+
+# ===========================================================================
 # Status schema version — bumped when the top-level JSON shape changes.
 # Old consumers that only read {gpu, dependencies_missing, rvc_compatible,
 # models_available, models_dir} continue to work because those fields are
@@ -77,15 +258,54 @@ def _print_stderr(msg):
     print(msg, file=sys.stderr, flush=True)
 
 
+_IMPORT_ERRORS = {}
+"""
+Process-wide map of module-name -> most-recent import failure reason.
+Populated by `_try_import` on every failed import attempt, read by the
+install flow so that "installed but broken at import time" can be
+distinguished from "not installed" and reported to the user with the
+actual exception.
+"""
+
+
 def _try_import(module_name):
-    """Return the module if importable, else None."""
+    """Return the module if importable, else None.
+
+    On failure, the exception string is stashed in `_IMPORT_ERRORS`
+    keyed by module name, so callers can surface the real cause instead
+    of just reporting the package as missing.  A successful import
+    clears any previously-stashed error.
+    """
     import importlib
     try:
-        return importlib.import_module(module_name)
-    except Exception:
+        mod = importlib.import_module(module_name)
+        _IMPORT_ERRORS.pop(module_name, None)
+        return mod
+    except Exception as exc:
         # Use broad Exception here — a broken install can raise things
         # other than ImportError (DLL errors, SyntaxError from py2 wheels…).
+        _IMPORT_ERRORS[module_name] = f"{type(exc).__name__}: {exc}"
         return None
+
+
+def _installed_but_not_importable(module_name):
+    """
+    Return the import-error string if `module_name` is on disk (i.e.
+    importlib.metadata can see its distribution) but `import module_name`
+    fails; otherwise return None.  Used to distinguish broken installs
+    from genuinely-missing packages.
+    """
+    err = _IMPORT_ERRORS.get(module_name)
+    if not err:
+        return None
+    try:
+        from importlib import metadata
+        dist = CORE_PACKAGES.get(module_name, module_name)
+        # Will raise PackageNotFoundError if the distribution is truly absent.
+        metadata.version(dist)
+    except Exception:
+        return None
+    return err
 
 
 def _run(cmd, timeout=10):
@@ -1153,6 +1373,22 @@ def install_dependencies(device_hint="auto"):
         if not ok:
             return False, f"Failed to install rvc-python:\n{out}"
         if _package_version("rvc_python") is None:
+            # Distinguish "pip never actually installed it" (missing from
+            # disk) from "pip installed it, but `import rvc_python` raises"
+            # (installed but broken).  The latter is almost always a
+            # transitive-dep problem, not a Scarlet issue — tell the user
+            # what actually failed so they don't chase the wrong fix.
+            broken = _installed_but_not_importable("rvc_python")
+            if broken:
+                return False, (
+                    "rvc-python is installed on disk but fails to import:\n"
+                    f"    {broken}\n\n"
+                    "This is almost always a transitive dependency problem "
+                    "(often fairseq 0.12.2's old pins clashing with the installed "
+                    "Python version).  The compat shim at the top of rvc_bridge.py "
+                    "should have prevented this — if you're seeing this, please "
+                    "capture the full Scarlet log and report it."
+                )
             return False, (
                 "pip reported success installing rvc-python but the package "
                 "is still not importable. Check the pip log above for the "
@@ -1233,6 +1469,18 @@ def get_rvc_status():
     # conversion.  FFmpeg is similarly not required for the WAV-only flow.
     rvc_compatible = (len(missing) == 0) and py_info["is_compatible"]
 
+    # For any required package whose import failed, record the actual
+    # exception string (not just "missing").  This is what lets users and
+    # maintainers see "rvc-python is installed but raises ImportError: …"
+    # instead of chasing a phantom pip failure.  Only surface errors for
+    # packages that importlib.metadata can still see on disk; genuinely-
+    # missing packages belong in `dependencies_missing`, not here.
+    broken_imports = {}
+    for import_name in CORE_PACKAGES.keys():
+        err = _installed_but_not_importable(import_name)
+        if err:
+            broken_imports[import_name] = err
+
     return {
         # --- v2 fields -----------------------------------------------------
         "schema_version":       STATUS_SCHEMA_VERSION,
@@ -1244,6 +1492,7 @@ def get_rvc_status():
         "recommended_install":  wheel,
         "external_installs":    external,
         "optional_missing":     optional_missing,
+        "broken_imports":       broken_imports,
 
         # --- legacy fields (unchanged shape for old Java consumers) --------
         "dependencies_missing": missing,

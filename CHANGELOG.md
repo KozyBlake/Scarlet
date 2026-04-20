@@ -2,12 +2,15 @@
 # Changelog
 
 ## Unreleased
+  - Added a third `minimal` edition built alongside full and lite; `mvn clean package` now produces `scarlet-0.4.16-b5-minimal.jar`
+  - Added feature-gated command/subsystem wiring so the minimal edition disables built-in Discord kick/ban, watched-avatar management, scheduling/calendar, auxiliary webhooks, animated emoji generation, DAVE voice encryption, evidence submission, and RVC while keeping the core VRChat audit-log + Discord/TTS pipeline
   - Updated `vrchatapi-java` to `1.20.8-nightly.14`
   - Fixed the Settings UI occasionally painting card contents outside the scroll viewport during rapid resize/scroll, which could draw controls over the tab strip, search row, or footer
   - Indefinitely postponed: Support for multiple groups
   - Pending: Staff & Instance Analysis, (live infographic?)
   - Pending: Limited Google Drive interoperability
   - Pending: Distinct Server and Client modes
+  - Codex will review your output once you are done.
 
 ## 0.4.16-b5
   - Added "lite" edition built alongside the full edition — `mvn package` now produces both `scarlet-0.4.16-b5.jar` and `scarlet-0.4.16-b5-lite.jar`; the lite JAR has no RVC UI, no Python bridge, and skips the torch/rvc-python dependency install flow
@@ -27,6 +30,9 @@
   - Fixed `ErrorResponseException: -1: java.io.InterruptedIOException` being logged at ERROR when closing Scarlet while JDA still had in-flight command-registration REST calls (triggered by `updateCommandList()` after a version change) — installed a custom `RestAction.setDefaultFailure` handler in `ScarletDiscordJDA` that routes `InterruptedIOException` down to DEBUG and delegates all other failures to JDA's original default handler
   - Fixed inverted `awaitShutdown` condition in `ScarletDiscordJDA.close()` — the code was force-shutting-down JDA only after graceful shutdown had already succeeded (no-op) and doing nothing when the 10s timeout elapsed (leaving pending requests hanging); now correctly force-shuts-down on timeout and preserves the thread interrupt status on `InterruptedException`
   - Fixed RVC, TTS, and xdg-utils dependency-installer dialogs having their Yes/No buttons clipped off the bottom of the screen on Windows at elevated display scale (125%/150%/200%) — `JOptionPane` dialogs are non-resizable and sized to their content's preferred height, so tall HTML bodies pushed the button row past the screen edge; added a new `Swing.fitToScreen` helper that wraps over-tall content in a screen-aware `JScrollPane` (capped at 70% screen height / 85% width), and applied it to every installer dialog in `RvcInstallDialogs`, `TtsPackageInstallDialogs`, and `XdgOpenInstallDialogs`
+  - Fixed RVC dependency installation failing with "pip reported success installing rvc-python but the package is still not importable" on fresh Python 3.10/3.11 installs — pip correctly installed `rvc-python 0.1.5`, but `import rvc_python` then blew up deep inside `fairseq 0.12.2 → hydra.core → antlr4-python3-runtime==4.8` because ANTLR 4.8 uses `from collections import Callable`, an alias removed in Python 3.10; the bridge's `_try_import` was silently swallowing the `ImportError` and reporting the package as missing. Added a `collections.abc` compat shim at the top of `rvc_bridge.py` that re-binds the removed ABC aliases (`Callable`, `Iterable`, `Mapping`, …) on Python 3.10+ before any `fairseq`/`rvc_python` import can fire, guarded with `hasattr` so it's a no-op on 3.9
+  - Fixed RVC dependency installation still failing on Python 3.11 after the `collections.abc` shim with `ValueError: mutable default <class 'fairseq.dataclass.configs.CommonConfig'> for field common is not allowed: use default_factory` — Python 3.11's `@dataclass` rejects any default whose class has `__hash__ is None` (every plain `@dataclass` class qualifies), which fairseq 0.12.2 relies on in patterns like `common: CommonConfig = CommonConfig()` throughout `fairseq.dataclass.configs`. Added a second compat shim at the top of `rvc_bridge.py` that replaces `dataclasses.dataclass` with a wrapper which pre-walks the class body and auto-converts mutable instance defaults (bare values or `field(default=…)`) into `field(default_factory=<deepcopy of a frozen snapshot>)` — strictly a superset of stock behaviour, so all existing valid dataclasses are unaffected, and every instance still gets its own copy (which is what a correctly-written `default_factory=lambda: X()` would have produced)
+  - Fixed `_try_import` silently discarding exception details — the bridge now records the actual exception into a process-wide `_IMPORT_ERRORS` map, exposes it as `broken_imports` in the `--status` JSON, and `--install` distinguishes "package absent from disk" (retry install) from "package installed but broken at import time" (surface the real exception in the failure message so the user and maintainers see why, instead of being pointed at an unhelpful manual `pip install …` command that won't change anything)
   - Changed `TtsService` RVC accessors (`isRvcAvailable`, `getRvcStatus`, `getRvcModelsDir`, `getRvcModels`, `setRvcConfig`) to null-safe so a null `RvcService` in the lite edition is handled gracefully
   - Changed `RvcService.getResourcePath()` to prefer a fresh classpath extraction over the AppData cache, so bundled bridge upgrades take effect on the next launch
 
@@ -359,4 +365,4 @@
 
 ## 0.3.3
   - Fixed escaping for VRChat Help Desk autofill link generation
-  - Added role-associated permission system for interacti
+  -

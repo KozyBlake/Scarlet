@@ -99,6 +99,7 @@ import net.sybyline.scarlet.server.discord.DInteractions;
 import net.sybyline.scarlet.server.discord.DInteractions.DefaultPerms;
 import net.sybyline.scarlet.server.discord.DInteractions.Desc;
 import net.sybyline.scarlet.server.discord.DInteractions.Ephemeral;
+import net.sybyline.scarlet.server.discord.DInteractions.FeatureGate;
 import net.sybyline.scarlet.server.discord.DInteractions.ModalFlowOption;
 import net.sybyline.scarlet.server.discord.DInteractions.ModalSub;
 import net.sybyline.scarlet.server.discord.DInteractions.MsgCmd;
@@ -287,6 +288,7 @@ public class ScarletDiscordCommands
         }
         @SlashCmd("avatar")
         @Desc("Searches for avatars")
+        @FeatureGate("avatar_search.enabled")
         public void avatar(SlashCommandInteractionEvent event, InteractionHook hook, @SlashOpt("search-query") String searchQuery, @SlashOpt("entries-per-page") int entriesPerPage) throws Exception
         {
             MessageEmbed[] embeds = AvatarSearch.vrcxSearchAllCached(ScarletDiscordCommands.this.discord.getAvatarSearchProviders(), searchQuery)
@@ -1465,6 +1467,7 @@ public class ScarletDiscordCommands
 
     // watched-avatar
 
+    @FeatureGate("watched.avatars.enabled")
     @SlashCmd("watched-avatar")
     @Desc("Configures watched avatars")
     @DefaultPerms(Permission.USE_APPLICATION_COMMANDS)
@@ -2457,12 +2460,14 @@ public class ScarletDiscordCommands
     public void submitAttachments(MessageContextInteractionEvent event)
     {
         Message message = event.getTarget();
-        
+
+        List<Button> buttons = new ArrayList<>();
+        if (Features.EVIDENCE_ENABLED)
+            buttons.add(Button.primary("submit-evidence:"+message.getId(), "Submit moderation evidence"));
+        buttons.add(Button.primary("import-watched-groups:"+message.getId(), "Import watched groups"));
+
         event.reply("Select submission type")
-            .addComponents(ActionRow.of(
-                Button.primary("submit-evidence:"+message.getId(), "Submit moderation evidence"),
-                Button.primary("import-watched-groups:"+message.getId(), "Import watched groups")
-            ))
+            .addComponents(ActionRow.of(buttons))
             .setEphemeral(true)
             .queue();
     }
@@ -2473,6 +2478,7 @@ public class ScarletDiscordCommands
         _evidenceSubmission3 = SlashOption.ofAttachment("evidence-submission-3", "Another submitted file", false),
         _evidenceSubmission4 = SlashOption.ofAttachment("evidence-submission-4", "Another submitted file", false),
         _evidenceSubmission5 = SlashOption.ofAttachment("evidence-submission-5", "Another submitted file", false);
+    @FeatureGate("evidence.enabled")
     @SlashCmd("submit-evidence")
     @Desc("Submit attachments for evidence")
     @DefaultPerms(Permission.USE_APPLICATION_COMMANDS)
@@ -3058,6 +3064,7 @@ public class ScarletDiscordCommands
         }
         @SlashCmd("report-template")
         @Desc("Report template settings")
+        @FeatureGate("vrchat_reports.enabled")
         public class ReportTemplate
         {
             @SlashCmd("view-report-template")
@@ -3260,6 +3267,7 @@ public class ScarletDiscordCommands
 
     // set-audit-aux-webhooks
 
+    @FeatureGate("aux_webhooks.enabled")
     @SlashCmd("set-audit-aux-webhooks")
     @Desc("Sets the given webhooks as the webhooks certain audit event types use")
     @DefaultPerms(Permission.USE_APPLICATION_COMMANDS)
@@ -3286,6 +3294,7 @@ public class ScarletDiscordCommands
 
     // aux-webhooks
 
+    @FeatureGate("aux_webhooks.enabled")
     @SlashCmd("aux-webhooks")
     @Desc("Configures auxiliary webhooks")
     @DefaultPerms(Permission.USE_APPLICATION_COMMANDS)
@@ -3466,6 +3475,7 @@ public class ScarletDiscordCommands
 
     // vrchat-animated-emoji
 
+    @FeatureGate("animated_emoji.enabled")
     @SlashCmd("vrchat-animated-emoji")
     @Desc("Generates a VRChat animated emoji spritesheet from a gif")
     @DefaultPerms(Permission.USE_APPLICATION_COMMANDS)
@@ -3505,6 +3515,7 @@ public class ScarletDiscordCommands
         }
     }
 
+    @FeatureGate("animated_emoji.enabled")
     @MsgCmd("vrchat-animated-emoji")
     @DefaultPerms(Permission.USE_APPLICATION_COMMANDS)
     public void vrchatAnimatedEmoji(MessageContextInteractionEvent event) throws Exception
@@ -3532,6 +3543,7 @@ public class ScarletDiscordCommands
 
     // schedule
 
+    @FeatureGate("calendar.enabled")
     @SlashCmd("schedule")
     @Desc("Configures event schedules")
     @DefaultPerms(Permission.USE_APPLICATION_COMMANDS)
@@ -4146,6 +4158,7 @@ public class ScarletDiscordCommands
 
     // discord-ban
 
+    @FeatureGate("discord.kick_ban.enabled")
     @SlashCmd("discord-ban")
     @Desc("Ban a Discord server member")
     @DefaultPerms(Permission.BAN_MEMBERS)
@@ -4218,6 +4231,7 @@ public class ScarletDiscordCommands
 
     // discord-kick
 
+    @FeatureGate("discord.kick_ban.enabled")
     @SlashCmd("discord-kick")
     @Desc("Kick a Discord server member")
     @DefaultPerms(Permission.KICK_MEMBERS)

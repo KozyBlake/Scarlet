@@ -659,6 +659,8 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
 
     String[] searchAvatar(String avatarDisplayName)
     {
+        if (!Features.AVATAR_SEARCH_ENABLED)
+            return new String[0];
         return AvatarSearch
         .vrcxSearchAllCached(((ScarletDiscordJDA)this.scarlet.discord).getAvatarSearchProviders(), avatarDisplayName)
         .filter(Objects::nonNull)
@@ -674,14 +676,16 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         // We need to run avatar search if EITHER TTS or Discord emission is active.
         // Previously the entire method returned early when Discord wasn't emitting,
         // which silently killed the TTS callout even when announceWatchedAvatars was on.
-        boolean ttsWanted  = !preamble && this.announceWatchedAvatars.get();
+        boolean ttsWanted  = Features.WATCHED_AVATARS_ENABLED
+                          && !preamble
+                          && this.announceWatchedAvatars.get();
         boolean discordWanted = this.scarlet.discord.isEmitting(GroupAuditTypeEx.USER_AVATAR);
         if (!ttsWanted && !discordWanted)
             return;
 
         String[] potentialIds = null;
-        
-        if (this.attemptAvatarImageMatch.get())
+
+        if (Features.AVATAR_SEARCH_ENABLED && this.attemptAvatarImageMatch.get())
         {
             User user = this.scarlet.vrc.getUser(userId);
             if (user != null && user.getProfilePicOverride().isEmpty() && !user.getCurrentAvatarImageUrl().contains("file_0e8c4e32-7444-44ea-ade4-313c010d4bae"))
@@ -799,7 +803,7 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         }
 
         // check pronouns — flag if the field looks like a username, phrase, or troll content
-        if (user != null)
+        if (Features.PRONOUNS_ENABLED && user != null)
         {
             String pronouns = user.getPronouns();
             String flagReason = PronounValidator.flagReason(pronouns);

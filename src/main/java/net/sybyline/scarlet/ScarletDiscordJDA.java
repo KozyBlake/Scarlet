@@ -167,7 +167,8 @@ public class ScarletDiscordJDA implements ScarletDiscord
         this.avatarSearchProviders = scarlet.settings.new FileValuedStringArrayPattern("custom_avatar_search_providers", "VRCX-compatible avatar search providers", AvatarSearch.URL_ROOTS.clone(), "https?://.+", false);
         this.resetAvatarSearchProviders = scarlet.settings.new FileValuedVoid("Reset avatar search providers to default", "Reset", this::resetAvatarSearchProviders);
         this.load();
-        Dave.INSTANCE.daveSetLogSinkCallbackDefault();
+        if (Features.DAVE_ENABLED)
+            Dave.INSTANCE.daveSetLogSinkCallbackDefault();
         // Install our shutdown-aware failure handler before any RestAction can fire.
         // See handleRestFailure() for the rationale.  Set once, globally — JDA's
         // default is static and applies to every RestAction that doesn't pass its
@@ -177,16 +178,19 @@ public class ScarletDiscordJDA implements ScarletDiscord
         String token0 = this.token.getOrNull();
         if (token0 != null && !token0.isEmpty()) try
         {
+            AudioModuleConfig audioModuleConfig = new AudioModuleConfig();
+            if (Features.DAVE_ENABLED)
+                audioModuleConfig = audioModuleConfig.withDaveSessionFactory(
+                    LDaveSessionFactory.isAvailable()
+                        ? LDaveSessionFactory.getInstance()
+                        : null // Fallback to passthrough mode if DAVE is not available
+                );
             jda = JDABuilder
             .createDefault(token0)
             .enableIntents(GatewayIntent.MESSAGE_CONTENT)
             .addEventListeners(new JDAEvents())
             .enableCache(CacheFlag.VOICE_STATE)
-            .setAudioModuleConfig(new AudioModuleConfig().withDaveSessionFactory(
-                LDaveSessionFactory.isAvailable() 
-                    ? LDaveSessionFactory.getInstance() 
-                    : null // Fallback to passthrough mode if DAVE is not available
-            ))
+            .setAudioModuleConfig(audioModuleConfig)
             .build();
         }
         catch (InvalidTokenException|IllegalArgumentException ex)
@@ -1353,6 +1357,8 @@ public class ScarletDiscordJDA implements ScarletDiscord
     }
     <State> void emitAuxWh(String type, Supplier<State> state, BiFunction<IncomingWebhookClient, State, AbstractWebhookMessageAction<?, ?>> bifunction)
     {
+        if (!Features.AUX_WEBHOOKS_ENABLED)
+            return;
         UniqueStrings scarletAuxWhs = this.auditType2scarletAuxWh.get(type);
         if (scarletAuxWhs == null || scarletAuxWhs.isEmpty())
             return;

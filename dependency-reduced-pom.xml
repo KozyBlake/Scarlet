@@ -70,6 +70,45 @@
               </filters>
             </configuration>
           </execution>
+          <execution>
+            <id>shade-minimal</id>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <shadedArtifactAttached>true</shadedArtifactAttached>
+              <shadedClassifierName>minimal</shadedClassifierName>
+              <transformers>
+                <transformer>
+                  <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
+                </transformer>
+                <transformer>
+                  <resource>scarlet-features.properties</resource>
+                  <file>src/editions/minimal/scarlet-features.properties</file>
+                </transformer>
+              </transformers>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>scarlet-features.properties</exclude>
+                    <exclude>rvc/**</exclude>
+                    <exclude>linux-*/libdave.so</exclude>
+                    <exclude>win32-*/libdave.dll</exclude>
+                    <exclude>darwin-*/libdave.dylib</exclude>
+                    <exclude>natives/**/*dave-jvm.so</exclude>
+                    <exclude>natives/**/*dave-jvm.dll</exclude>
+                    <exclude>natives/**/*dave-jvm.dylib</exclude>
+                    <exclude>moe/kyokobot/libdave/**</exclude>
+                    <exclude>net/sybyline/scarlet/server/discord/dave/**</exclude>
+                    <exclude>net/sybyline/scarlet/server/discord/LDaveSessionFactory*.class</exclude>
+                    <exclude>net/sybyline/scarlet/server/discord/DAudioDaveSession*.class</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
     </plugins>

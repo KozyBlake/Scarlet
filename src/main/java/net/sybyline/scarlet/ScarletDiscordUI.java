@@ -57,6 +57,7 @@ import net.dv8tion.jda.api.utils.MarkdownUtil;
 import net.sybyline.scarlet.ScarletDiscordJDA.InstanceCreation;
 import net.sybyline.scarlet.server.discord.DInteractions.ButtonClk;
 import net.sybyline.scarlet.server.discord.DInteractions.Ephemeral;
+import net.sybyline.scarlet.server.discord.DInteractions.FeatureGate;
 import net.sybyline.scarlet.server.discord.DInteractions.ModalSub;
 import net.sybyline.scarlet.server.discord.DInteractions.StringSel;
 import net.sybyline.scarlet.util.HttpURLInputStream;
@@ -873,6 +874,7 @@ public class ScarletDiscordUI
 
     @ButtonClk("vrchat-report")
     @Ephemeral
+    @FeatureGate("vrchat_reports.enabled")
     public void vrchatReport(ButtonInteractionEvent event, InteractionHook hook)
     {
         String[] parts = event.getButton().getCustomId().split(":");
@@ -999,6 +1001,7 @@ public class ScarletDiscordUI
 
     @ButtonClk("view-potential-avatar-matches")
     @Ephemeral
+    @FeatureGate("avatar_search.enabled")
     public void viewPotentialAvatarMatches(ButtonInteractionEvent event, InteractionHook hook)
     {
         long withinOneHour = System.currentTimeMillis() - 3600_000L;

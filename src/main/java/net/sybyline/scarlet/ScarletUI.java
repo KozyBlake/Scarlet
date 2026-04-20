@@ -1673,6 +1673,46 @@ public class ScarletUI implements IScarletUI
         return id.startsWith("tts_rvc_") || id.startsWith("rvc_");
     }
 
+    private static boolean isFeatureHiddenSettingId(String id)
+    {
+        if (id == null)
+            return false;
+        if (!Features.DISCORD_KICK_BAN_ENABLED && "discord_kick_ban_enabled".equals(id))
+            return true;
+        if (!Features.WATCHED_AVATARS_ENABLED && "tts_announce_watched_avatars".equals(id))
+            return true;
+        if (!Features.EVIDENCE_ENABLED
+            && ("evidence_enabled".equals(id)
+                || "Evidence root folder".equals(id)
+                || "evidence_file_path_format".equals(id)))
+            return true;
+        if (!Features.AVATAR_SEARCH_ENABLED
+            && ("attempt_avatar_image_match".equals(id)
+                || "custom_avatar_search_providers_enabled".equals(id)
+                || "custom_avatar_search_providers".equals(id)
+                || "Reset avatar search providers to default".equals(id)))
+            return true;
+        if (!Features.PRONOUNS_ENABLED
+            && ("Edit good_pronoun.json".equals(id)
+                || "Edit bad_pronoun.json".equals(id)
+                || "Reload pronoun lists".equals(id)))
+            return true;
+        if (!Features.VRCHAT_REPORTS_ENABLED
+            && ("vrchat_report_email".equals(id)
+                || "vrchat_report_template_footer".equals(id)))
+            return true;
+        if (!Features.CLI_COMMANDS_ENABLED && "Run CLI command".equals(id))
+            return true;
+        return false;
+    }
+
+    private static boolean isSettingVisible(GUISetting<?> setting)
+    {
+        return setting != null
+            && !(!Features.RVC_ENABLED && isRvcSettingId(setting.id()))
+            && !isFeatureHiddenSettingId(setting.id());
+    }
+
     private void readSettingUI()
     {
         final Color CARD_BG     = new Color(30, 30, 42);
@@ -1685,8 +1725,13 @@ public class ScarletUI implements IScarletUI
         this.settingsCardPanels.clear();
         this.settingsCardSearchText.clear();
 
-        Map<String, GUISetting<?>> byId = new java.util.LinkedHashMap<>();
+        List<GUISetting<?>> visibleSettings = new ArrayList<>();
         for (GUISetting<?> s : this.ssettings)
+            if (isSettingVisible(s))
+                visibleSettings.add(s);
+
+        Map<String, GUISetting<?>> byId = new java.util.LinkedHashMap<>();
+        for (GUISetting<?> s : visibleSettings)
             byId.put(s.id(), s);
 
         GridBagConstraints gbc = new GridBagConstraints();
@@ -1707,7 +1752,7 @@ public class ScarletUI implements IScarletUI
                 // the RVC subsystem; the flag is compile-time-constant
                 // so the JIT drops both this branch and the disabled
                 // UI code above it when the feature is off.
-                if (!Features.RVC_ENABLED && isRvcSettingId(id))
+                if (isFeatureHiddenSettingId(id))
                     continue;
                 GUISetting<?> s = byId.get(id);
                 if (s != null) { sectionSettings.add(s); placed.add(id); }
@@ -1814,7 +1859,7 @@ public class ScarletUI implements IScarletUI
 
         // Ungrouped settings
         List<GUISetting<?>> ungrouped = new ArrayList<>();
-        for (GUISetting<?> s : this.ssettings)
+        for (GUISetting<?> s : visibleSettings)
             if (!placed.contains(s.id()))
                 ungrouped.add(s);
         if (!ungrouped.isEmpty())

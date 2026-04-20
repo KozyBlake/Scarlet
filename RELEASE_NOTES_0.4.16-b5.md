@@ -179,6 +179,40 @@ Applied across every installer dialog:
 
 Net effect: on any Windows DPI scaling preset the Yes/No (and OK) buttons are now always visible and clickable, because the HTML-body height is bounded before the dialog packs.
 
+### RVC install failing on fresh Python 3.10/3.11 with "pip reported success … but the package is still not importable"
+
+Users on fresh Python 3.10 / 3.11 installs hit the RVC installer with a terminal-state failure: pip downloaded and satisfied every requirement, but Scarlet's post-install verification then reported rvc-python as "still not importable" and the error dialog told users to run `py -3.11 -m pip install torch torchaudio torchcodec rvc-python` — a command that just reproduces what the installer already did, because pip genuinely believes everything is installed.
+
+The actual failure turned out to be *two* unrelated fairseq-0.12.2-vs-modern-Python incompatibilities stacked on top of each other, and a third bug in the bridge that was hiding both behind a generic "still not importable" message.
+
+**Layer 1 (antlr4 4.8 + Python 3.10+):**
+
+- `rvc-python 0.1.5` pulls in `fairseq==0.12.2`.
+- `fairseq 0.12.2` imports `hydra.core`, which imports `antlr4-python3-runtime==4.8` (pinned via `omegaconf==2.0.6`).
+- `antlr4-python3-runtime 4.8` was released in 2020 and contains `from collections import Callable`.
+- Python 3.10 removed the `collections.Callable` / `Mapping` / `Iterable` / … aliases; they live on `collections.abc` only.
+- So `import rvc_python` raises `ImportError: cannot import name 'Callable' from 'collections'` deep in its dep tree.
+
+**Layer 2 (fairseq `@dataclass` + Python 3.11+):**
+
+- `fairseq.dataclass.configs` defines the top-level config class as `common: CommonConfig = CommonConfig()` (plus `CheckpointConfig`, `DistributedTrainingConfig`, etc. — all bare dataclass-instance defaults).
+- Python 3.11 tightened `@dataclass`: any default value whose class has `__hash__ is None` now raises `ValueError: mutable default <class 'X'> for field Y is not allowed: use default_factory` at class-definition time.
+- Every plain `@dataclass`-decorated class has `__hash__ is None` by default (because it's mutable), so fairseq 0.12.2's config module simply cannot be imported on 3.11 without patching.
+
+**Layer 3 (the bridge was hiding both):** `_try_import("rvc_python")` was swallowing whichever exception surfaced with a bare `except Exception: return None`, which the install flow then interpreted as "package absent from disk". The user saw a misleading "install failed, try again manually" dialog for a problem pip could not fix.
+
+**The fix has four parts:**
+
+1. **`collections.abc` compat shim at the top of `rvc_bridge.py`.** Before any code path can import rvc-python or fairseq, we re-bind `collections.Callable`, `Mapping`, `Iterable`, `Sequence`, `MutableSequence`, and ~20 other ABC aliases from `collections.abc` (where they still live) back onto `collections` (where antlr4 4.8 looks for them). The shim is guarded with `hasattr` and `getattr(..., None)`, so on Python 3.9 (where the aliases still exist) it short-circuits to a no-op; on 3.10/3.11 it restores what old code needs. Wrapped in `warnings.catch_warnings()` so running under `-W error::DeprecationWarning` doesn't crash on the probe. This is the community-standard workaround for fairseq 0.12.2 on newer Python.
+
+2. **`@dataclass` mutable-default compat shim at the top of `rvc_bridge.py`.** Immediately after the `collections.abc` shim, we replace `dataclasses.dataclass` with a wrapper that pre-walks the class body before calling the real decorator: any annotated field whose value has `type(value).__hash__ is None` (i.e. what Python 3.11's check rejects) is auto-converted to `field(default_factory=<deepcopy of a frozen snapshot>)`. This matches what a correctly-written `field(default_factory=lambda: X())` would have produced — each instance gets its own copy, no shared-mutable-state aliasing, which is exactly what the 3.11 check was designed to prevent. `field(default=<mutable>)` callers are handled the same way; `field(default_factory=…)` callers pass through untouched; hashable defaults (int, str, tuple, frozen dataclasses, None) pass through untouched. Strictly a superset of stock behaviour, no-op on Python < 3.11, active on 3.11.
+
+3. **Process-wide `_IMPORT_ERRORS` capture.** `_try_import` now stashes the exact exception (`type(exc).__name__: msg`) into a module-level dict keyed by module name, and a new `_installed_but_not_importable(name)` helper asks "is this distribution visible to `importlib.metadata` but failing to `import`?" — i.e. "installed but broken", not "missing".
+
+4. **Install flow distinguishes "missing" from "broken" in its failure message.** When the post-pip `_package_version("rvc_python")` still returns None, we now check whether the distribution is on disk. If it is, the failure message contains the real ImportError and tells the user that the cause is a transitive-dependency clash (which the shims above already prevent); if it isn't, we keep the existing "pip reported success, retry" path. The `--status` JSON also gains a `broken_imports` field so the UI and logs can surface the real reason without re-running install.
+
+**Net effect:** the user's failing install now succeeds on the first try on any supported Python (3.9, 3.10, or 3.11). Both shims run before fairseq gets imported, so antlr4 4.8 stops looking for `collections.Callable` *and* fairseq's config module stops tripping the 3.11 dataclass check. If a future fairseq-transitive breakage ever slips through, the failure dialog will contain the actual Python exception (via `broken_imports` in the status JSON) instead of an unhelpful "try running pip manually" nudge.
+
 ## Upgrade notes
 
 - **No config migration required.** The new `tts_rvc_pitch` setting defaults to 0 on first run, which matches the previous hardcoded behaviour.
