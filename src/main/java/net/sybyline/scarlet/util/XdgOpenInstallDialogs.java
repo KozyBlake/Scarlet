@@ -9,6 +9,7 @@ import javax.swing.JOptionPane;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import net.sybyline.scarlet.util.Platform;
 import net.sybyline.scarlet.util.tts.LinuxPackageManagerDetector;
 import net.sybyline.scarlet.ui.Swing;
 
@@ -55,6 +56,12 @@ public class XdgOpenInstallDialogs
      */
     public static boolean isXdgOpenInstalled()
     {
+        if (Platform.isTermux())
+        {
+            return isCommandAvailable("termux-open")
+                || isCommandAvailable("termux-open-url")
+                || isCommandAvailable("xdg-open");
+        }
         try
         {
             Process proc = new ProcessBuilder("which", "xdg-open")
@@ -120,8 +127,8 @@ public class XdgOpenInstallDialogs
             return false;
         }
 
-        // Build the install command, substituting xdg-utils for the espeak placeholder
-        String cmd = pm.getFullInstallCommand().replace(pm.packageName, PACKAGE_NAME);
+        String packageName = Platform.isTermux() ? "termux-tools" : PACKAGE_NAME;
+        String cmd = pm.getFullInstallCommand().replace("{pkg}", packageName);
         LOG.info("Installing xdg-utils via: {}", cmd);
 
         try
@@ -261,7 +268,26 @@ public class XdgOpenInstallDialogs
         LinuxPackageManagerDetector.PackageManager pm =
             LinuxPackageManagerDetector.getPrimaryPackageManager();
         if (pm == null)
+        {
+            if (Platform.isTermux())
+                return "pkg install -y termux-tools";
             return "sudo apt-get install -y xdg-utils"; // safe default
-        return pm.getFullInstallCommand().replace(pm.packageName, PACKAGE_NAME);
+        }
+        return pm.getFullInstallCommand().replace("{pkg}", Platform.isTermux() ? "termux-tools" : PACKAGE_NAME);
+    }
+
+    private static boolean isCommandAvailable(String command)
+    {
+        try
+        {
+            return new ProcessBuilder("which", command)
+                .redirectErrorStream(true)
+                .start()
+                .waitFor() == 0;
+        }
+        catch (Exception ex)
+        {
+            return false;
+        }
     }
 }

@@ -337,7 +337,10 @@ public class TtsPackageInstallDialogs
     private boolean performInstallationWithManager(LinuxPackageManagerDetector.PackageManager pm)
     {
         String installCmd = pm.getFullInstallCommand().replace("{pkg}", pm.packageName);
-        LOG.info("Attempting to install {} using {} via terminal", LINUX_PACKAGE_DISPLAY_NAME, pm.displayName);
+        LOG.info("Attempting to install {} using {}", LINUX_PACKAGE_DISPLAY_NAME, pm.displayName);
+
+        if (Platform.isTermux())
+            return performTermuxInstallation(installCmd);
 
         String[] terminal = detectAvailableTerminals();
         if (terminal == null)
@@ -375,6 +378,39 @@ public class TtsPackageInstallDialogs
                 "<pre style='background-color:#2d2d2d;padding:8px;border-radius:5px;font-family:monospace;'>" + ex.getMessage() + "</pre>" +
                 "<p style='margin-top:10px;'>Please try installing manually:</p>" +
                 "<pre style='background-color:#2d2d2d;padding:8px;border-radius:5px;font-family:monospace;'>" + getLinuxInstallCommand() + "</pre>");
+            return false;
+        }
+    }
+
+    private boolean performTermuxInstallation(String installCmd)
+    {
+        LOG.info("Running Termux install command directly: {}", installCmd);
+        try
+        {
+            ProcessBuilder pb = new ProcessBuilder("sh", "-c", installCmd);
+            pb.inheritIO();
+            int exit = pb.start().waitFor();
+            LOG.info("Termux install command exited with code: {}", exit);
+            if (exit == 0 && isEspeakInstalled())
+            {
+                showInfo("Installation Complete",
+                    "<h2 style='color:#4CAF50;'>&#10003; Installation Successful</h2>" +
+                    "<p style='margin-top:10px;'>" + getPackageDisplayName() + " has been installed successfully!</p>" +
+                    "<p style='margin-top:10px;'>Scarlet's text-to-speech functionality is now ready to use.</p>");
+                return true;
+            }
+            showInstallationFailedDialog();
+            return false;
+        }
+        catch (Exception ex)
+        {
+            LOG.error("Exception during Termux installation", ex);
+            showError("Installation Error",
+                "<h3 style='color:#F44336;'>&#10007; Installation Error</h3>" +
+                "<p style='margin-top:10px;'>An error occurred during installation:</p>" +
+                "<pre style='background-color:#2d2d2d;padding:8px;border-radius:5px;font-family:monospace;'>" + ex.getMessage() + "</pre>" +
+                "<p style='margin-top:10px;'>Please try installing manually:</p>" +
+                "<pre style='background-color:#2d2d2d;padding:8px;border-radius:5px;font-family:monospace;'>" + installCmd + "</pre>");
             return false;
         }
     }

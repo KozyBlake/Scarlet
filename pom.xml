@@ -51,6 +51,14 @@
                   <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
                 </transformer>
               </transformers>
+              <filters>
+                <filter>
+                  <artifact>moe.kyokobot.libdave:libdave-jvm-impl</artifact>
+                  <excludes>
+                    <exclude>moe/kyokobot/libdave/natives/DaveNativeBindings.class</exclude>
+                  </excludes>
+                </filter>
+              </filters>
             </configuration>
           </execution>
           <!-- ================================================================
@@ -80,6 +88,23 @@
               </transformers>
               <filters>
                 <filter>
+                  <!-- The main/full jar is desktop-oriented. Keep Android DAVE
+                       natives exclusive to the dedicated -android artifact. -->
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>native/android/**</exclude>
+                    <exclude>android-aarch64/libdave-jvm.so</exclude>
+                    <exclude>natives/android-aarch64/libdave-jvm.so</exclude>
+                    <exclude>termux-aarch64/libdave-jvm.so</exclude>
+                  </excludes>
+                </filter>
+                <filter>
+                  <artifact>moe.kyokobot.libdave:libdave-jvm-impl</artifact>
+                  <excludes>
+                    <exclude>moe/kyokobot/libdave/natives/DaveNativeBindings.class</exclude>
+                  </excludes>
+                </filter>
+                <filter>
                   <!-- Match any artifact: we want to strip these paths
                        wherever they appear.  Our project owns them both
                        (see src/main/resources/scarlet-features.properties
@@ -93,6 +118,11 @@
                     <!-- Drop the ~100 KB Python bridge and any companion
                          resources under /rvc/ on the classpath. -->
                     <exclude>rvc/**</exclude>
+                    <!-- Keep Android DAVE natives exclusive to -android.jar. -->
+                    <exclude>native/android/**</exclude>
+                    <exclude>android-aarch64/libdave-jvm.so</exclude>
+                    <exclude>natives/android-aarch64/libdave-jvm.so</exclude>
+                    <exclude>termux-aarch64/libdave-jvm.so</exclude>
                   </excludes>
                 </filter>
               </filters>
@@ -173,6 +203,10 @@
                     <exclude>natives/**/*dave-jvm.so</exclude>
                     <exclude>natives/**/*dave-jvm.dll</exclude>
                     <exclude>natives/**/*dave-jvm.dylib</exclude>
+                    <exclude>android-*/libdave-jvm.so</exclude>
+                    <exclude>termux-*/libdave-jvm.so</exclude>
+                    <exclude>linux-*/libdave-jvm.so</exclude>
+                    <exclude>native/android/**</exclude>
 
                     <!-- DAVE adapter + wrapper classes.  Only reached via
                          gated branches in ScarletDiscordJDA, so removing
@@ -181,6 +215,65 @@
                     <exclude>net/sybyline/scarlet/server/discord/dave/**</exclude>
                     <exclude>net/sybyline/scarlet/server/discord/LDaveSessionFactory*.class</exclude>
                     <exclude>net/sybyline/scarlet/server/discord/DAudioDaveSession*.class</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+            </configuration>
+          </execution>
+          <!-- ================================================================
+               Android edition — attached as a classifier, always built.
+               Output: target/scarlet-${version}-android.jar
+               Keeps the full feature set, but trims desktop-only DAVE natives
+               so the artifact is explicitly aimed at Android / Termux.
+
+               The Android libdave-jvm payload is retained from:
+                 - libdave-jvm-natives-android (`native/android/<abi>/...`)
+                 - optional android/termux build profiles that copy
+                   `android-aarch64/` or `natives/android-aarch64/` resources
+
+               Desktop DAVE natives are removed:
+                 - JNA wrapper desktop libs (`linux-*/libdave.so`, etc.)
+                 - desktop JNI libs from impl-jni (`natives/linux-*/...`,
+                   `natives/win-*/...`, `natives/darwin*/...`)
+               ================================================================ -->
+          <execution>
+            <id>shade-android</id>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <shadedArtifactAttached>true</shadedArtifactAttached>
+              <shadedClassifierName>android</shadedClassifierName>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
+                </transformer>
+              </transformers>
+              <filters>
+                <filter>
+                  <artifact>moe.kyokobot.libdave:libdave-jvm-impl</artifact>
+                  <excludes>
+                    <exclude>moe/kyokobot/libdave/natives/DaveNativeBindings.class</exclude>
+                  </excludes>
+                </filter>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <!-- Desktop-only DAVE JNA natives. -->
+                    <exclude>linux-*/libdave.so</exclude>
+                    <exclude>win32-*/libdave.dll</exclude>
+                    <exclude>darwin-*/libdave.dylib</exclude>
+
+                    <!-- Desktop-only libdave-jvm JNI natives. -->
+                    <exclude>natives/linux-x86-64/libdave-jvm.so</exclude>
+                    <exclude>natives/linux-x86/libdave-jvm.so</exclude>
+                    <exclude>natives/linux-arm/libdave-jvm.so</exclude>
+                    <exclude>natives/linux-musl-x86-64/libdave-jvm.so</exclude>
+                    <exclude>natives/linux-musl-aarch64/libdave-jvm.so</exclude>
+                    <exclude>natives/win-*/dave-jvm.dll</exclude>
+                    <exclude>natives/darwin/libdave-jvm.dylib</exclude>
+                    <exclude>natives/darwin-*/libdave-jvm.dylib</exclude>
                   </excludes>
                 </filter>
               </filters>
@@ -205,9 +298,173 @@
   <properties>
     <vrchatapi.version>1.20.8-nightly.14</vrchatapi.version>
     <JDA.version>6.3.0</JDA.version>
+    <concentus.version>master-3885c4e465-1</concentus.version>
     <jna.version>5.18.1</jna.version>
-    <libdave.version>0.1.2</libdave.version>
+    <libdave.version>1.0.0</libdave.version>
+    <libdave.native.version>0.1.2</libdave.native.version>
+    <scarlet.androidDaveAbi>arm64-v8a</scarlet.androidDaveAbi>
+    <scarlet.androidDaveArch>aarch64</scarlet.androidDaveArch>
+    <scarlet.androidDavePlatform>android-24</scarlet.androidDavePlatform>
+    <scarlet.androidDaveNdk>${env.ANDROID_NDK_HOME}</scarlet.androidDaveNdk>
+    <scarlet.androidDaveSourceDir>${project.basedir}/libdave-jvm-master</scarlet.androidDaveSourceDir>
+    <scarlet.androidDaveBuildDir>${project.build.directory}/libdave-jvm-android-${scarlet.androidDaveArch}</scarlet.androidDaveBuildDir>
+    <scarlet.androidDaveToolchainFile>${scarlet.androidDaveNdk}/build/cmake/android.toolchain.cmake</scarlet.androidDaveToolchainFile>
+    <scarlet.androidDaveLibrary>${scarlet.androidDaveBuildDir}/libdave-jvm.so</scarlet.androidDaveLibrary>
   </properties>
+  <profiles>
+    <profile>
+      <id>bundled-android-dave</id>
+      <activation>
+        <property>
+          <name>scarlet.bundleAndroidDave</name>
+        </property>
+      </activation>
+      <dependencies>
+        <dependency>
+          <groupId>moe.kyokobot.libdave</groupId>
+          <artifactId>libdave-jvm-natives-android</artifactId>
+          <version>${libdave.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
+    <profile>
+      <id>android-dave-native</id>
+      <activation>
+        <property>
+          <name>scarlet.buildAndroidDaveNative</name>
+        </property>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>3.1.0</version>
+            <executions>
+              <execution>
+                <id>build-android-dave-native</id>
+                <phase>process-resources</phase>
+                <goals>
+                  <goal>run</goal>
+                </goals>
+                <configuration>
+                  <target>
+                    <!-- Build the vendored libdave-jvm sources with the Android NDK
+                         and package the resulting JNI library into Scarlet's jar. -->
+                    <fail message="Set -Dscarlet.androidDaveNdk=/path/to/android-ndk (or ANDROID_NDK_HOME) before using -Pandroid-dave-native">
+                      <condition>
+                        <or>
+                          <not>
+                            <isset property="scarlet.androidDaveNdk" />
+                          </not>
+                          <equals arg1="${scarlet.androidDaveNdk}" arg2="" />
+                        </or>
+                      </condition>
+                    </fail>
+                    <available file="${scarlet.androidDaveToolchainFile}" property="scarlet.androidDaveToolchainExists" />
+                    <fail message="Android NDK CMake toolchain not found at ${scarlet.androidDaveToolchainFile}">
+                      <condition>
+                        <not>
+                          <isset property="scarlet.androidDaveToolchainExists" />
+                        </not>
+                      </condition>
+                    </fail>
+                    <mkdir dir="${scarlet.androidDaveBuildDir}" />
+                    <exec executable="cmake" failonerror="true" dir="${project.basedir}">
+                      <arg value="-S" />
+                      <arg value="${scarlet.androidDaveSourceDir}" />
+                      <arg value="-B" />
+                      <arg value="${scarlet.androidDaveBuildDir}" />
+                      <arg value="-DCMAKE_TOOLCHAIN_FILE=${scarlet.androidDaveToolchainFile}" />
+                      <arg value="-DANDROID_ABI=${scarlet.androidDaveAbi}" />
+                      <arg value="-DANDROID_PLATFORM=${scarlet.androidDavePlatform}" />
+                      <!--
+                        c++_static bakes libc++ into our .so so the resulting
+                        library doesn't depend on a matching libc++_shared.so
+                        at runtime on Termux / stock Android.  c++_static is
+                        only safe when our .so is the sole C++ runtime user,
+                        which is the case for a JNI library.
+                      -->
+                      <arg value="-DANDROID_STL=c++_static" />
+                      <arg value="-DCMAKE_BUILD_TYPE=Release" />
+                    </exec>
+                    <exec executable="cmake" failonerror="true" dir="${project.basedir}">
+                      <arg value="--build" />
+                      <arg value="${scarlet.androidDaveBuildDir}" />
+                      <arg value="--config" />
+                      <arg value="Release" />
+                    </exec>
+                    <available file="${scarlet.androidDaveLibrary}" property="scarlet.androidDaveBuilt" />
+                    <fail message="Expected Android DAVE JNI library at ${scarlet.androidDaveLibrary}, but the native build did not produce it">
+                      <condition>
+                        <not>
+                          <isset property="scarlet.androidDaveBuilt" />
+                        </not>
+                      </condition>
+                    </fail>
+                    <mkdir dir="${project.build.outputDirectory}/natives/linux-aarch64" />
+                    <mkdir dir="${project.build.outputDirectory}/natives/android-aarch64" />
+                    <mkdir dir="${project.build.outputDirectory}/android-aarch64" />
+                    <copy file="${scarlet.androidDaveLibrary}"
+                          tofile="${project.build.outputDirectory}/natives/linux-aarch64/libdave-jvm.so"
+                          overwrite="true" />
+                    <copy file="${scarlet.androidDaveLibrary}"
+                          tofile="${project.build.outputDirectory}/natives/android-aarch64/libdave-jvm.so"
+                          overwrite="true" />
+                    <copy file="${scarlet.androidDaveLibrary}"
+                          tofile="${project.build.outputDirectory}/android-aarch64/libdave-jvm.so"
+                          overwrite="true" />
+                  </target>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>termux-local-dave</id>
+      <activation>
+        <property>
+          <name>scarlet.localAndroidDaveNative</name>
+        </property>
+      </activation>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>3.1.0</version>
+            <executions>
+              <execution>
+                <id>copy-local-android-dave-native</id>
+                <phase>process-resources</phase>
+                <goals>
+                  <goal>run</goal>
+                </goals>
+                <configuration>
+                  <target>
+                    <mkdir dir="${project.build.outputDirectory}/natives/linux-aarch64" />
+                    <mkdir dir="${project.build.outputDirectory}/natives/android-aarch64" />
+                    <mkdir dir="${project.build.outputDirectory}/android-aarch64" />
+                    <copy file="${scarlet.localAndroidDaveNative}"
+                          tofile="${project.build.outputDirectory}/natives/linux-aarch64/libdave-jvm.so"
+                          overwrite="true" />
+                    <copy file="${scarlet.localAndroidDaveNative}"
+                          tofile="${project.build.outputDirectory}/natives/android-aarch64/libdave-jvm.so"
+                          overwrite="true" />
+                    <copy file="${scarlet.localAndroidDaveNative}"
+                          tofile="${project.build.outputDirectory}/android-aarch64/libdave-jvm.so"
+                          overwrite="true" />
+                  </target>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
   <dependencies>
     <dependency>
       <groupId>net.dv8tion</groupId>
@@ -237,6 +494,11 @@
       <version>3.5.4</version>
     </dependency>
     <dependency>
+      <groupId>com.github.lostromb.concentus</groupId>
+      <artifactId>Concentus</artifactId>
+      <version>${concentus.version}</version>
+    </dependency>
+    <dependency>
       <groupId>net.java.dev.jna</groupId>
       <artifactId>jna</artifactId>
       <version>${jna.version}</version>
@@ -249,31 +511,39 @@
     <!-- DAVE/E2EE Protocol Support -->
     <dependency>
       <groupId>moe.kyokobot.libdave</groupId>
-      <artifactId>adapter-jda</artifactId>
+      <artifactId>libdave-jvm-adapter-jda</artifactId>
       <version>${libdave.version}</version>
     </dependency>
     <dependency>
       <groupId>moe.kyokobot.libdave</groupId>
-      <artifactId>impl-jni</artifactId>
+      <artifactId>libdave-jvm-impl</artifactId>
+      <version>${libdave.version}</version>
+    </dependency>
+    <!-- Android/Termux JNI natives for Discord voice E2EE. Kept in the
+         default build so plain `mvn package` preserves the Termux use-case
+         instead of silently dropping DAVE support on rebuild. -->
+    <dependency>
+      <groupId>moe.kyokobot.libdave</groupId>
+      <artifactId>libdave-jvm-natives-android</artifactId>
       <version>${libdave.version}</version>
     </dependency>
     <!-- Native libraries for DAVE - Linux x86-64 (glibc 2.28+) -->
     <dependency>
       <groupId>moe.kyokobot.libdave</groupId>
       <artifactId>natives-linux-x86-64</artifactId>
-      <version>${libdave.version}</version>
+      <version>${libdave.native.version}</version>
     </dependency>
     <!-- Native libraries for DAVE - Windows x86-64 -->
     <dependency>
       <groupId>moe.kyokobot.libdave</groupId>
       <artifactId>natives-win-x86-64</artifactId>
-      <version>${libdave.version}</version>
+      <version>${libdave.native.version}</version>
     </dependency>
     <!-- Native libraries for DAVE - macOS (Universal) -->
     <dependency>
       <groupId>moe.kyokobot.libdave</groupId>
       <artifactId>natives-darwin</artifactId>
-      <version>${libdave.version}</version>
+      <version>${libdave.native.version}</version>
     </dependency>
     <!-- jsr305 removed: @Nullable annotations replaced with comments in source -->
 <!--

@@ -43,6 +43,14 @@
                   <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
                 </transformer>
               </transformers>
+              <filters>
+                <filter>
+                  <artifact>moe.kyokobot.libdave:libdave-jvm-impl</artifact>
+                  <excludes>
+                    <exclude>moe/kyokobot/libdave/natives/DaveNativeBindings.class</exclude>
+                  </excludes>
+                </filter>
+              </filters>
             </configuration>
           </execution>
           <execution>
@@ -63,8 +71,27 @@
                 <filter>
                   <artifact>*:*</artifact>
                   <excludes>
+                    <exclude>native/android/**</exclude>
+                    <exclude>android-aarch64/libdave-jvm.so</exclude>
+                    <exclude>natives/android-aarch64/libdave-jvm.so</exclude>
+                    <exclude>termux-aarch64/libdave-jvm.so</exclude>
+                  </excludes>
+                </filter>
+                <filter>
+                  <artifact>moe.kyokobot.libdave:libdave-jvm-impl</artifact>
+                  <excludes>
+                    <exclude>moe/kyokobot/libdave/natives/DaveNativeBindings.class</exclude>
+                  </excludes>
+                </filter>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
                     <exclude>scarlet-features.properties</exclude>
                     <exclude>rvc/**</exclude>
+                    <exclude>native/android/**</exclude>
+                    <exclude>android-aarch64/libdave-jvm.so</exclude>
+                    <exclude>natives/android-aarch64/libdave-jvm.so</exclude>
+                    <exclude>termux-aarch64/libdave-jvm.so</exclude>
                   </excludes>
                 </filter>
               </filters>
@@ -100,6 +127,10 @@
                     <exclude>natives/**/*dave-jvm.so</exclude>
                     <exclude>natives/**/*dave-jvm.dll</exclude>
                     <exclude>natives/**/*dave-jvm.dylib</exclude>
+                    <exclude>android-*/libdave-jvm.so</exclude>
+                    <exclude>termux-*/libdave-jvm.so</exclude>
+                    <exclude>linux-*/libdave-jvm.so</exclude>
+                    <exclude>native/android/**</exclude>
                     <exclude>moe/kyokobot/libdave/**</exclude>
                     <exclude>net/sybyline/scarlet/server/discord/dave/**</exclude>
                     <exclude>net/sybyline/scarlet/server/discord/LDaveSessionFactory*.class</exclude>
@@ -109,10 +140,166 @@
               </filters>
             </configuration>
           </execution>
+          <execution>
+            <id>shade-android</id>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <shadedArtifactAttached>true</shadedArtifactAttached>
+              <shadedClassifierName>android</shadedClassifierName>
+              <transformers>
+                <transformer>
+                  <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
+                </transformer>
+              </transformers>
+              <filters>
+                <filter>
+                  <artifact>moe.kyokobot.libdave:libdave-jvm-impl</artifact>
+                  <excludes>
+                    <exclude>moe/kyokobot/libdave/natives/DaveNativeBindings.class</exclude>
+                  </excludes>
+                </filter>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>linux-*/libdave.so</exclude>
+                    <exclude>win32-*/libdave.dll</exclude>
+                    <exclude>darwin-*/libdave.dylib</exclude>
+                    <exclude>natives/linux-x86-64/libdave-jvm.so</exclude>
+                    <exclude>natives/linux-x86/libdave-jvm.so</exclude>
+                    <exclude>natives/linux-arm/libdave-jvm.so</exclude>
+                    <exclude>natives/linux-musl-x86-64/libdave-jvm.so</exclude>
+                    <exclude>natives/linux-musl-aarch64/libdave-jvm.so</exclude>
+                    <exclude>natives/win-*/dave-jvm.dll</exclude>
+                    <exclude>natives/darwin/libdave-jvm.dylib</exclude>
+                    <exclude>natives/darwin-*/libdave-jvm.dylib</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
     </plugins>
   </build>
+  <profiles>
+    <profile>
+      <id>bundled-android-dave</id>
+      <dependencies>
+        <dependency>
+          <groupId>moe.kyokobot.libdave</groupId>
+          <artifactId>libdave-jvm-natives-android</artifactId>
+          <version>${libdave.version}</version>
+        </dependency>
+      </dependencies>
+    </profile>
+    <profile>
+      <id>android-dave-native</id>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>3.1.0</version>
+            <executions>
+              <execution>
+                <id>build-android-dave-native</id>
+                <phase>process-resources</phase>
+                <goals>
+                  <goal>run</goal>
+                </goals>
+                <configuration>
+                  <target>
+                    <fail>
+                      <condition>
+                        <or>
+                          <not>
+                            <isset />
+                          </not>
+                          <equals />
+                        </or>
+                      </condition>
+                    </fail>
+                    <available />
+                    <fail>
+                      <condition>
+                        <not>
+                          <isset />
+                        </not>
+                      </condition>
+                    </fail>
+                    <mkdir />
+                    <exec>
+                      <arg />
+                      <arg />
+                      <arg />
+                      <arg />
+                      <arg />
+                      <arg />
+                      <arg />
+                      <arg />
+                      <arg />
+                    </exec>
+                    <exec>
+                      <arg />
+                      <arg />
+                      <arg />
+                      <arg />
+                    </exec>
+                    <available />
+                    <fail>
+                      <condition>
+                        <not>
+                          <isset />
+                        </not>
+                      </condition>
+                    </fail>
+                    <mkdir />
+                    <mkdir />
+                    <mkdir />
+                    <copy />
+                    <copy />
+                    <copy />
+                  </target>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <profile>
+      <id>termux-local-dave</id>
+      <build>
+        <plugins>
+          <plugin>
+            <artifactId>maven-antrun-plugin</artifactId>
+            <version>3.1.0</version>
+            <executions>
+              <execution>
+                <id>copy-local-android-dave-native</id>
+                <phase>process-resources</phase>
+                <goals>
+                  <goal>run</goal>
+                </goals>
+                <configuration>
+                  <target>
+                    <mkdir />
+                    <mkdir />
+                    <mkdir />
+                    <copy />
+                    <copy />
+                    <copy />
+                  </target>
+                </configuration>
+              </execution>
+            </executions>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+  </profiles>
   <repositories>
     <repository>
       <releases>
@@ -128,9 +315,19 @@
     </repository>
   </repositories>
   <properties>
-    <JDA.version>6.3.0</JDA.version>
-    <libdave.version>0.1.2</libdave.version>
-    <jna.version>5.18.1</jna.version>
+    <scarlet.androidDaveNdk>${env.ANDROID_NDK_HOME}</scarlet.androidDaveNdk>
+    <scarlet.androidDaveSourceDir>${project.basedir}/libdave-jvm-master</scarlet.androidDaveSourceDir>
+    <scarlet.androidDaveBuildDir>${project.build.directory}/libdave-jvm-android-${scarlet.androidDaveArch}</scarlet.androidDaveBuildDir>
+    <scarlet.androidDaveArch>aarch64</scarlet.androidDaveArch>
+    <libdave.native.version>0.1.2</libdave.native.version>
+    <concentus.version>master-3885c4e465-1</concentus.version>
     <vrchatapi.version>1.20.8-nightly.14</vrchatapi.version>
+    <scarlet.androidDaveAbi>arm64-v8a</scarlet.androidDaveAbi>
+    <scarlet.androidDaveToolchainFile>${scarlet.androidDaveNdk}/build/cmake/android.toolchain.cmake</scarlet.androidDaveToolchainFile>
+    <JDA.version>6.3.0</JDA.version>
+    <libdave.version>1.0.0</libdave.version>
+    <scarlet.androidDaveLibrary>${scarlet.androidDaveBuildDir}/libdave-jvm.so</scarlet.androidDaveLibrary>
+    <scarlet.androidDavePlatform>android-24</scarlet.androidDavePlatform>
+    <jna.version>5.18.1</jna.version>
   </properties>
 </project>

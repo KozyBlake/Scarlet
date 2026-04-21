@@ -9,8 +9,14 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InterruptedIOException;
+import java.net.ConnectException;
+import java.net.InetAddress;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -38,9 +44,15 @@ import java.util.stream.Stream;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.swing.JFileChooser;
+import javax.net.ssl.SSLException;
+import javax.net.ssl.SSLHandshakeException;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.concentus.OpusApplication;
+import org.concentus.OpusEncoder;
+import org.concentus.OpusException;
+import org.concentus.OpusSignal;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -124,7 +136,6 @@ import net.sybyline.scarlet.server.discord.LDaveSessionFactory;
 import net.sybyline.scarlet.server.discord.DCommands;
 import net.sybyline.scarlet.server.discord.DInteractions;
 import net.sybyline.scarlet.server.discord.DPerms;
-import net.sybyline.scarlet.server.discord.dave.Dave;
 import net.sybyline.scarlet.util.LRUMap;
 import net.sybyline.scarlet.util.Location;
 import net.sybyline.scarlet.util.MiscUtils;
@@ -168,23 +179,25 @@ public class ScarletDiscordJDA implements ScarletDiscord
         this.resetAvatarSearchProviders = scarlet.settings.new FileValuedVoid("Reset avatar search providers to default", "Reset", this::resetAvatarSearchProviders);
         this.load();
         if (Features.DAVE_ENABLED)
-            Dave.INSTANCE.daveSetLogSinkCallbackDefault();
+            LDaveSessionFactory.configureLoggingIfAvailable();
         // Install our shutdown-aware failure handler before any RestAction can fire.
         // See handleRestFailure() for the rationale.  Set once, globally — JDA's
         // default is static and applies to every RestAction that doesn't pass its
         // own failure callback to .queue().
         RestAction.setDefaultFailure(ScarletDiscordJDA::handleRestFailure);
         JDA jda = null;
-        String token0 = this.token.getOrNull();
+        String token0 = normalizeDiscordBotToken(this.token.getOrNull());
+        if (!Objects.equals(token0, this.token.getOrNull()))
+            this.token.set(token0);
         if (token0 != null && !token0.isEmpty()) try
         {
+            logDiscordStartupContext(token0);
             AudioModuleConfig audioModuleConfig = new AudioModuleConfig();
-            if (Features.DAVE_ENABLED)
-                audioModuleConfig = audioModuleConfig.withDaveSessionFactory(
-                    LDaveSessionFactory.isAvailable()
-                        ? LDaveSessionFactory.getInstance()
-                        : null // Fallback to passthrough mode if DAVE is not available
-                );
+            if (Features.DAVE_ENABLED && LDaveSessionFactory.isAvailable())
+                audioModuleConfig = audioModuleConfig.withDaveSessionFactory(LDaveSessionFactory.getInstance());
+            else if (Features.DAVE_ENABLED)
+                LOG.warn("DAVE session factory unavailable on {}; continuing without Discord voice E2EE support",
+                    net.sybyline.scarlet.util.Platform.describe());
             jda = JDABuilder
             .createDefault(token0)
             .enableIntents(GatewayIntent.MESSAGE_CONTENT)
@@ -193,9 +206,21 @@ public class ScarletDiscordJDA implements ScarletDiscord
             .setAudioModuleConfig(audioModuleConfig)
             .build();
         }
-        catch (InvalidTokenException|IllegalArgumentException ex)
+        catch (InvalidTokenException ex)
         {
+            LOG.error("Discord rejected the bot token during startup (length={}, fingerprint={}, platform={})",
+                Integer.valueOf(token0.length()), fingerprintDiscordToken(token0), net.sybyline.scarlet.util.Platform.describe(), ex);
             if (this.scarlet.settings.requireConfirmYesNo("You can reset the bot token in the Settings page.", "Invalid bot token"))
+            {
+                ; // noop
+            }
+        }
+        catch (IllegalArgumentException ex)
+        {
+            LOG.error("Discord JDA rejected startup configuration: {}", summarizeDiscordStartupFailure(ex), ex);
+            if (this.scarlet.settings.requireConfirmYesNo(
+                "Discord startup failed before login completed. The token may still be valid. See logs for the exact configuration error.",
+                "Discord startup error"))
             {
                 ; // noop
             }
@@ -278,6 +303,100 @@ public class ScarletDiscordJDA implements ScarletDiscord
         }
     }
 
+    private static void logDiscordStartupContext(String token)
+    {
+        LOG.info("Discord startup context: platform={}, headless={}, tokenLength={}, tokenFingerprint={}, java={}, os.arch={}",
+            net.sybyline.scarlet.util.Platform.describe(),
+            Boolean.valueOf(GraphicsEnvironment.isHeadless()),
+            Integer.valueOf(token.length()),
+            fingerprintDiscordToken(token),
+            System.getProperty("java.runtime.version"),
+            System.getProperty("os.arch"));
+        if (net.sybyline.scarlet.util.Platform.isAndroid() || net.sybyline.scarlet.util.Platform.isTermux())
+        {
+            LOG.info("Discord startup environment: TERMUX_VERSION={}, PREFIX={}, TZ={}, nowUtc={}",
+                System.getenv("TERMUX_VERSION"),
+                System.getenv("PREFIX"),
+                System.getenv("TZ"),
+                OffsetDateTime.now(ZoneOffset.UTC));
+            try
+            {
+                InetAddress[] addrs = InetAddress.getAllByName("discord.com");
+                LOG.info("Discord DNS lookup succeeded: discord.com -> {}",
+                    Arrays.stream(addrs).map(InetAddress::getHostAddress).collect(Collectors.joining(", ")));
+            }
+            catch (Exception ex)
+            {
+                LOG.warn("Discord DNS lookup failed for discord.com: {}", ex.toString());
+            }
+        }
+    }
+
+    private static String summarizeDiscordStartupFailure(Throwable err)
+    {
+        for (Throwable t = err; t != null; t = t.getCause())
+        {
+            if (t instanceof InvalidTokenException)
+                return "invalid token";
+            if (t instanceof UnknownHostException)
+                return "DNS resolution failed for Discord (" + t.getMessage() + ")";
+            if (t instanceof SSLHandshakeException)
+                return "TLS handshake failed (" + t.getMessage() + ")";
+            if (t instanceof SSLException)
+                return "TLS/SSL failure (" + t.getMessage() + ")";
+            if (t instanceof SocketTimeoutException)
+                return "network timeout while contacting Discord (" + t.getMessage() + ")";
+            if (t instanceof ConnectException)
+                return "TCP connection to Discord failed (" + t.getMessage() + ")";
+            if (t.getCause() == t)
+                break;
+        }
+        String message = err.getMessage();
+        return message != null && !message.trim().isEmpty()
+            ? message
+            : err.getClass().getName();
+    }
+
+    private static String normalizeDiscordBotToken(String token)
+    {
+        if (token == null)
+            return null;
+        String normalized = token
+            .replace("\uFEFF", "")
+            .replace("\u200B", "")
+            .replace("\u200C", "")
+            .replace("\u200D", "")
+            .replace("\u2060", "")
+            .replace("\r", "")
+            .replace("\n", "")
+            .trim();
+        if (normalized.regionMatches(true, 0, "Bot ", 0, 4))
+            normalized = normalized.substring(4).trim();
+        if ((normalized.startsWith("\"") && normalized.endsWith("\""))
+            || (normalized.startsWith("'") && normalized.endsWith("'")))
+            normalized = normalized.substring(1, normalized.length() - 1).trim();
+        normalized = normalized.replaceAll("\\p{Cntrl}", "");
+        return normalized.isEmpty() ? null : normalized;
+    }
+
+    private static String fingerprintDiscordToken(String token)
+    {
+        if (token == null || token.isEmpty())
+            return "empty";
+        try
+        {
+            byte[] digest = MessageDigest.getInstance("SHA-256").digest(token.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(12);
+            for (int i = 0; i < 6 && i < digest.length; i++)
+                sb.append(String.format("%02x", digest[i]));
+            return sb.toString();
+        }
+        catch (Exception ex)
+        {
+            return "sha256-error";
+        }
+    }
+
     final Scarlet scarlet;
     final File discordBotFile;
     final JDAAudioSendingHandler audio;
@@ -354,6 +473,11 @@ public class ScarletDiscordJDA implements ScarletDiscord
             {
                 this.setStaffMode();
                 return;
+            }
+            if (JDA.Status.FAILED_TO_LOGIN == this.jda.getStatus())
+            {
+                LOG.error("Discord login failed after JDA startup: {}", summarizeDiscordStartupFailure(ex), ex);
+                throw new RuntimeException("Discord login failed after startup; check scarlet.log for the exact cause", ex);
             }
             throw new RuntimeException("Awaiting JDA", ex);
         }
@@ -601,8 +725,19 @@ public class ScarletDiscordJDA implements ScarletDiscord
     }
 
     static final int BYTES_PER_20MS = 3840; // 20ms * (48000 frames/second) * (2 samples/frame) * (2 bytes/sample)
+    static final int SAMPLES_PER_20MS_PER_CHANNEL = 960;
     class JDAAudioSendingHandler implements AudioSendHandler
     {
+        JDAAudioSendingHandler()
+        {
+            this.provideOpusPackets = net.sybyline.scarlet.util.Platform.isAndroid()
+                || net.sybyline.scarlet.util.Platform.isTermux();
+            if (this.provideOpusPackets)
+            {
+                LOG.info("TTS Audio: Using built-in Java Opus encoder on {} to avoid JDA native Opus loading",
+                    net.sybyline.scarlet.util.Platform.describe());
+            }
+        }
 
         boolean submitAudio(File file)
         {
@@ -613,7 +748,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
                     audioManager, audioManager != null ? audioManager.isConnected() : "N/A");
                 return false;
             }
-            List<byte[]> buffersToAdd = new ArrayList<>();
+            List<ByteBuffer> buffersToAdd = new ArrayList<>();
             try (InputStream fis = new FileInputStream(file))
             {
                 try (AudioInputStream ais = AudioSystem.getAudioInputStream(new BufferedInputStream(fis)))
@@ -640,6 +775,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
                         // FIX 2: Track how many bytes were actually read into each buffer so that
                         // the last (partial) chunk is zero-padded correctly instead of being
                         // submitted as a full buffer of uninitialized/garbage bytes.
+                        OpusEncoder opusEncoder = this.provideOpusPackets ? this.newOpusEncoder() : null;
                         while (true)
                         {
                             byte[] buffer = new byte[BYTES_PER_20MS];
@@ -653,7 +789,9 @@ public class ScarletDiscordJDA implements ScarletDiscord
                                 break; // true EOF - no more data
                             // If total < BYTES_PER_20MS, the buffer is already zero-padded (new byte[])
                             // so the partial last frame is safe to submit as-is.
-                            buffersToAdd.add(buffer);
+                            buffersToAdd.add(this.provideOpusPackets
+                                ? this.encodeOpusFrame(opusEncoder, buffer)
+                                : ByteBuffer.wrap(buffer));
                             if (total < BYTES_PER_20MS)
                                 break; // partial read means EOF was reached
                         }
@@ -748,7 +886,32 @@ public class ScarletDiscordJDA implements ScarletDiscord
 
         AudioManager audioManager;
         AudioChannel audioChannel;
-        final Queue<byte[]> buffers = new ConcurrentLinkedQueue<>();
+        final boolean provideOpusPackets;
+        final Queue<ByteBuffer> buffers = new ConcurrentLinkedQueue<>();
+
+        private OpusEncoder newOpusEncoder() throws OpusException
+        {
+            OpusEncoder encoder = new OpusEncoder(48_000, 2, OpusApplication.OPUS_APPLICATION_VOIP);
+            encoder.setSignalType(OpusSignal.OPUS_SIGNAL_VOICE);
+            encoder.setBitrate(64_000);
+            encoder.setUseVBR(true);
+            encoder.setUseConstrainedVBR(true);
+            return encoder;
+        }
+
+        private ByteBuffer encodeOpusFrame(OpusEncoder encoder, byte[] pcmBytes) throws OpusException
+        {
+            short[] pcm = new short[pcmBytes.length / 2];
+            ByteBuffer.wrap(pcmBytes)
+                // JDA's INPUT_FORMAT is 48 kHz, 16-bit, stereo, signed, big-endian.
+                // Decode with the same byte order before feeding Concentus.
+                .order(ByteOrder.BIG_ENDIAN)
+                .asShortBuffer()
+                .get(pcm);
+            byte[] opus = new byte[4096];
+            int encoded = encoder.encode(pcm, 0, SAMPLES_PER_20MS_PER_CHANNEL, opus, 0, opus.length);
+            return ByteBuffer.wrap(Arrays.copyOf(opus, encoded));
+        }
 
         @Override
         public boolean canProvide()
@@ -759,8 +922,13 @@ public class ScarletDiscordJDA implements ScarletDiscord
         @Override
         public ByteBuffer provide20MsAudio()
         {
-            byte[] data = this.buffers.poll();
-            return data == null ? null : ByteBuffer.wrap(data);
+            return this.buffers.poll();
+        }
+
+        @Override
+        public boolean isOpus()
+        {
+            return this.provideOpusPackets;
         }
 
     }
@@ -801,13 +969,13 @@ public class ScarletDiscordJDA implements ScarletDiscord
         
         boolean save = false;
         
-        String token0 = spec.token;
+        String token0 = normalizeDiscordBotToken(spec.token);
         if (token0 == null)
         {
-            token0 = this.token.getOrNull();
+            token0 = normalizeDiscordBotToken(this.token.getOrNull());
             if (token0 == null)
             {
-                token0 = this.scarlet.settings.requireInput("Discord bot token (leave empty for staff mode)", true);
+                token0 = normalizeDiscordBotToken(this.scarlet.settings.requireInput("Discord bot token (leave empty for staff mode)", true));
             }
             else
             {
@@ -817,7 +985,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
         }
         this.scarlet.settings.new FileValuedVoid("Discord bot token", "Reset", () -> 
             this.scarlet.settings.requireConfirmYesNoAsync("Are you sure you want to reset the bot token?", "Reset bot token", () -> {
-                this.token.set(this.scarlet.settings.requireInput("Discord bot token (leave empty for staff mode)", true));
+                this.token.set(normalizeDiscordBotToken(this.scarlet.settings.requireInput("Discord bot token (leave empty for staff mode)", true)));
                 this.save();
             }, null)
         );

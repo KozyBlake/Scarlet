@@ -12,6 +12,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import net.sybyline.scarlet.util.Platform;
+
 /**
  * Comprehensive Linux Package Manager Detection and Management.
  * 
@@ -96,6 +98,9 @@ public class LinuxPackageManagerDetector {
         // The install command format uses {pkg} as placeholder for package name
         
         // Debian/Ubuntu family
+        PACKAGE_MANAGER_DEFINITIONS.put("pkg", new String[]{
+            "pkg install -y {pkg}", "pkg search {pkg}", "espeak", "false"
+        });
         PACKAGE_MANAGER_DEFINITIONS.put("apt", new String[]{
             "apt install -y {pkg}", "apt search {pkg}", "espeak", "true"
         });
@@ -191,6 +196,7 @@ public class LinuxPackageManagerDetector {
         // binary_check: Check if the binary exists
         // distro_check: Additional check specific to distro (optional)
         
+        DETECTION_COMMANDS.put("pkg", new String[]{"which pkg", "test -n \"$TERMUX_VERSION\" -o -n \"$TERMUX_APP_PID\""});
         DETECTION_COMMANDS.put("apt", new String[]{"which apt", "test -f /etc/debian_version"});
         DETECTION_COMMANDS.put("apt-get", new String[]{"which apt-get", "test -f /etc/debian_version"});
         DETECTION_COMMANDS.put("dnf", new String[]{"which dnf", "test -f /etc/fedora-release"});
@@ -221,6 +227,7 @@ public class LinuxPackageManagerDetector {
     
     static {
         // Native package managers get highest priority
+        PRIORITY_ORDER.put("pkg", 1);
         PRIORITY_ORDER.put("apt", 10);
         PRIORITY_ORDER.put("apt-get", 11);
         PRIORITY_ORDER.put("dnf", 20);
@@ -362,6 +369,9 @@ public class LinuxPackageManagerDetector {
     public static String getEspeakInstallCommand() {
         PackageManager pm = getPrimaryPackageManager();
         if (pm == null) {
+            if (Platform.isTermux()) {
+                return "pkg install -y espeak";
+            }
             return "sudo apt-get install -y espeak"; // Default fallback
         }
         return pm.getFullInstallCommand().replace("{pkg}", pm.packageName);
@@ -405,6 +415,7 @@ public class LinuxPackageManagerDetector {
     private static String getDisplayName(String name) {
         switch (name) {
             case "apt": return "APT (Debian/Ubuntu)";
+            case "pkg": return "Termux pkg";
             case "apt-get": return "APT-GET (Debian/Ubuntu Legacy)";
             case "dnf": return "DNF (Fedora)";
             case "yum": return "YUM (RHEL/CentOS)";

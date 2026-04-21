@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>moe.kyokobot.libdave</groupId>
+        <artifactId>libdave-jvm</artifactId>
+        <version>1.0.0</version>
+    </parent>
+
+    <artifactId>libdave-jvm-natives-android</artifactId>
+    <packaging>jar</packaging>
+    <name>libdave-jvm-natives-android</name>
+    <description>Android native libraries for libdave-jvm - Discord E2EE</description>
+
+    <dependencies>
+        <dependency>
+            <groupId>moe.kyokobot.libdave</groupId>
+            <artifactId>libdave-jvm-api</artifactId>
+            <version>${project.version}</version>
+            <scope>compile</scope>
+            <optional>true</optional>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <includes>
+                    <include>**/*.so</include>
+                </includes>
+            </resource>
+        </resources>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <configuration>
+                    <!-- This module is resource-only, so force the main jar to
+                         be created even when there are no compiled classes. -->
+                    <forceCreation>true</forceCreation>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-source-plugin</artifactId>
+                <configuration>
+                    <skipSource>true</skipSource>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+    <!-- Profiles for different Android architectures -->
+    <profiles>
+        <profile>
+            <id>android-arm64-v8a</id>
+            <properties>
+                <android.abi>arm64-v8a</android.abi>
+            </properties>
+        </profile>
+        <profile>
+            <id>android-armeabi-v7a</id>
+            <properties>
+                <android.abi>armeabi-v7a</android.abi>
+            </properties>
+        </profile>
+        <profile>
+            <id>android-x86</id>
+            <properties>
+                <android.abi>x86</android.abi>
+            </properties>
+        </profile>
+        <profile>
+            <id>android-x86_64</id>
+            <properties>
+                <android.abi>x86_64</android.abi>
+            </properties>
+        </profile>
+    </profiles>
+</project>

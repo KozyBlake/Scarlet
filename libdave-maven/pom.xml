@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <groupId>moe.kyokobot.libdave</groupId>
+    <artifactId>libdave-jvm</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+
+    <name>libdave-jvm</name>
+    <description>Discord Audio &amp; Video End-to-End Encryption (DAVE) for Java - Android Compatible</description>
+    <url>https://github.com/KyokoBot/libdave-jvm</url>
+
+    <licenses>
+        <license>
+            <name>The Apache Software License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>alula</id>
+            <name>Alula</name>
+            <email>git@alula.me</email>
+        </developer>
+    </developers>
+
+    <scm>
+        <url>https://github.com/KyokoBot/libdave-jvm</url>
+        <connection>scm:git:git://github.com/KyokoBot/libdave-jvm</connection>
+        <developerConnection>scm:git:ssh:git@github.com:KyokoBot/libdave-jvm</developerConnection>
+    </scm>
+
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <maven.compiler.source>8</maven.compiler.source>
+        <maven.compiler.target>8</maven.compiler.target>
+        <jetbrains.annotations.version>26.0.2</jetbrains.annotations.version>
+        <netty.version>4.2.10.Final</netty.version>
+        <lava.common.version>1.5.4</lava.common.version>
+        <junit.version>5.11.4</junit.version>
+        <jda.version>6.3.1</jda.version>
+        <logback.version>1.3.16</logback.version>
+    </properties>
+
+    <modules>
+        <module>api</module>
+        <module>impl-jni</module>
+        <module>adapter-jda</module>
+        <module>natives-android</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>org.jetbrains</groupId>
+                <artifactId>annotations</artifactId>
+                <version>${jetbrains.annotations.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.netty</groupId>
+                <artifactId>netty-buffer</artifactId>
+                <version>${netty.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>dev.arbjerg</groupId>
+                <artifactId>lava-common</artifactId>
+                <version>${lava.common.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.dv8tion</groupId>
+                <artifactId>JDA</artifactId>
+                <version>${jda.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>org.junit</groupId>
+                <artifactId>junit-bom</artifactId>
+                <version>${junit.version}</version>
+                <type>pom</type>
+                <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>ch.qos.logback</groupId>
+                <artifactId>logback-classic</artifactId>
+                <version>${logback.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-compiler-plugin</artifactId>
+                    <version>3.13.0</version>
+                    <configuration>
+                        <source>8</source>
+                        <target>8</target>
+                        <encoding>UTF-8</encoding>
+                    </configuration>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-jar-plugin</artifactId>
+                    <version>3.4.2</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-source-plugin</artifactId>
+                    <version>3.3.1</version>
+                    <executions>
+                        <execution>
+                            <id>attach-sources</id>
+                            <goals>
+                                <goal>jar-no-fork</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-javadoc-plugin</artifactId>
+                    <version>3.11.2</version>
+                    <!--
+                      JDK 17+ javadoc is strict by default.  The upstream
+                      libdave-jvm sources have ~60 undocumented public members
+                      and one bad @throws tag; loosening doclint here keeps
+                      the attached-javadocs jar producible without rewriting
+                      every doc comment in a vendored dependency.
+                    -->
+                    <configuration>
+                        <doclint>none</doclint>
+                        <failOnError>false</failOnError>
+                        <failOnWarnings>false</failOnWarnings>
+                        <quiet>true</quiet>
+                    </configuration>
+                    <executions>
+                        <execution>
+                            <id>attach-javadocs</id>
+                            <goals>
+                                <goal>jar</goal>
+                            </goals>
+                        </execution>
+                    </executions>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>

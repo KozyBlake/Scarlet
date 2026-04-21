@@ -14,6 +14,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.List;
+import java.util.ArrayList;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -26,6 +27,7 @@ import org.slf4j.LoggerFactory;
 
 import com.sun.jna.Native;
 
+import net.sybyline.scarlet.Scarlet;
 import net.sybyline.scarlet.util.Platform;
 import net.sybyline.scarlet.util.tts.LinuxPackageManagerDetector;
 
@@ -37,6 +39,8 @@ public class DaveLibraryLoader
     private static final Logger LOG = LoggerFactory.getLogger(DaveLibraryLoader.class);
 
     private static final String OPUS_DOWNLOAD_URL = "https://opus-codec.org/downloads/";
+    private static final String DAVE_NATIVE_PATH_ENV = "SCARLET_DAVE_NATIVE";
+    private static final String DAVE_NATIVE_PATH_PROP = "scarlet.dave.native";
 
     /**
      * Fallback distro→package table used only when LinuxPackageManagerDetector finds nothing.
@@ -101,6 +105,12 @@ public class DaveLibraryLoader
 
     private static DaveLibrary attemptLoad()
     {
+        Path customNative = resolveCustomNativeLibrary();
+        if (customNative != null)
+        {
+            LOG.info("Loading DAVE library from custom path: {}", customNative);
+            return Native.load(customNative.toString(), DaveLibrary.class);
+        }
         try
         {
             Path lib = extractNativeLibrary();
@@ -130,35 +140,36 @@ public class DaveLibraryLoader
 
     private static Path extractNativeLibrary()
     {
-        String resourcePath = getNativeResourcePath();
-        if (resourcePath == null) return null;
         String resourceName = getNativeResourceName();
-        URL resource = DaveLibraryLoader.class.getClassLoader().getResource(resourcePath + "/" + resourceName);
-        if (resource == null)
+        for (String resourcePath : getNativeResourceCandidates())
         {
-            LOG.warn("Native library resource not found: {}/{}", resourcePath, resourceName);
-            return null;
-        }
-        try
-        {
-            Path tempDir = Files.createTempDirectory("scarlet-native");
-            tempDir.toFile().deleteOnExit();
-            Path target = tempDir.resolve(resourceName);
-            try (java.io.InputStream is = resource.openStream())
+            URL resource = DaveLibraryLoader.class.getClassLoader().getResource(resourcePath + "/" + resourceName);
+            if (resource == null)
             {
-                Files.copy(is, target, StandardCopyOption.REPLACE_EXISTING);
+                LOG.debug("Native library resource not found: {}/{}", resourcePath, resourceName);
+                continue;
             }
-            target.toFile().deleteOnExit();
-            return target;
+            try
+            {
+                Path tempDir = Files.createTempDirectory("scarlet-native");
+                tempDir.toFile().deleteOnExit();
+                Path target = tempDir.resolve(resourceName);
+                try (java.io.InputStream is = resource.openStream())
+                {
+                    Files.copy(is, target, StandardCopyOption.REPLACE_EXISTING);
+                }
+                target.toFile().deleteOnExit();
+                return target;
+            }
+            catch (IOException e)
+            {
+                LOG.error("Failed to extract native library from {}/{}", resourcePath, resourceName, e);
+            }
         }
-        catch (IOException e)
-        {
-            LOG.error("Failed to extract native library", e);
-            return null;
-        }
+        return null;
     }
 
-    private static String getNativeResourcePath()
+    private static List<String> getNativeResourceCandidates()
     {
         String os   = System.getProperty("os.name").toLowerCase(Locale.ROOT);
         String arch = System.getProperty("os.arch").toLowerCase(Locale.ROOT);
@@ -170,7 +181,20 @@ public class DaveLibraryLoader
                        : arch.contains("x86_64") || arch.contains("amd64") || arch.contains("x64") ? "x86-64"
                        : arch.contains("x86") || arch.contains("i386") || arch.contains("i686") ? "x86"
                        : null;
-        return (osDir != null && archDir != null) ? osDir + "-" + archDir : null;
+        List<String> candidates = new ArrayList<>();
+        if (osDir == null || archDir == null)
+            return candidates;
+        if (Platform.isTermux())
+        {
+            candidates.add("termux-" + archDir);
+            candidates.add("android-" + archDir);
+        }
+        else if (Platform.isAndroid())
+        {
+            candidates.add("android-" + archDir);
+        }
+        candidates.add(osDir + "-" + archDir);
+        return candidates;
     }
 
     private static String getNativeResourceName()
@@ -183,12 +207,47 @@ public class DaveLibraryLoader
         }
     }
 
+    private static Path resolveCustomNativeLibrary()
+    {
+        String configured = System.getProperty(DAVE_NATIVE_PATH_PROP);
+        if (configured == null || configured.trim().isEmpty())
+            configured = System.getenv(DAVE_NATIVE_PATH_ENV);
+        if (configured != null && !configured.trim().isEmpty())
+        {
+            Path path = Paths.get(configured.trim()).toAbsolutePath().normalize();
+            if (Files.isRegularFile(path))
+                return path;
+            LOG.warn("Configured DAVE native path does not exist: {}", path);
+        }
+
+        String resourceName = getNativeResourceName();
+        List<Path> candidates = new ArrayList<>();
+        if (Platform.isTermux())
+        {
+            candidates.add(Scarlet.dir.toPath().resolve("native").resolve("termux").resolve(resourceName));
+            candidates.add(Scarlet.dir.toPath().resolve("native").resolve("android").resolve(resourceName));
+        }
+        if (Platform.isAndroid())
+            candidates.add(Scarlet.dir.toPath().resolve("native").resolve("android").resolve(resourceName));
+        candidates.add(Scarlet.dir.toPath().resolve("native").resolve(resourceName));
+        for (Path candidate : candidates)
+        {
+            if (Files.isRegularFile(candidate))
+                return candidate;
+        }
+        return null;
+    }
+
     // -------------------------------------------------------------------------
     // Dependency handling
     // -------------------------------------------------------------------------
 
     private static String identifyMissingLibrary(String msg)
     {
+        if (msg == null)
+            return "unknown";
+        if (msg.contains("libc.so.6"))
+            return "glibc";
         if (msg.contains("libopus"))   return "libopus";
         if (msg.contains("libm.so"))   return "libm";
         if (msg.contains("libpthread"))return "libpthread";
@@ -199,6 +258,15 @@ public class DaveLibraryLoader
 
     private static boolean handleMissingDependency(String missingLib, String errorMessage)
     {
+        if ("glibc".equals(missingLib))
+        {
+            showDialog("Incompatible DAVE Native Library",
+                "The bundled DAVE native library was built against glibc (expects libc.so.6), but this runtime does not provide glibc.\n\n"
+                    + "On Termux/Android this means Discord voice E2EE cannot be enabled with the current native binary.\n\n"
+                    + "Error: " + errorMessage,
+                JOptionPane.ERROR_MESSAGE);
+            return false;
+        }
         if (!Platform.CURRENT.is$nix())
         {
             showDialog("Installation Error",
@@ -212,7 +280,7 @@ public class DaveLibraryLoader
         if (pm != null)
         {
             String pkg = opusPackageNameFor(pm.name);
-            String cmd = pm.getFullInstallCommand().replace(pm.packageName, pkg);
+            String cmd = pm.getFullInstallCommand().replace("{pkg}", pkg);
             LOG.info("Using package manager '{}' to install opus (package: {})", pm.name, pkg);
             LinuxDistro distro = detectLinuxDistro();
             return showInstallDialog(missingLib, pkg, cmd, distro);
@@ -234,6 +302,7 @@ public class DaveLibraryLoader
     {
         switch (pmName)
         {
+            case "pkg":                    return "libopus";
             case "emerge":                 return "media-libs/opus";
             case "apt": case "apt-get":
             case "zypper":                 return "libopus0";
@@ -303,7 +372,7 @@ public class DaveLibraryLoader
         AtomicReference<Boolean> result = new AtomicReference<>(false);
         try
         {
-            EventQueue.invokeAndWait(() ->
+            runOnEventQueueAndWait(() ->
             {
                 String msg = String.format(
                     "A required library is missing: %s\n\nDistribution: %s\nRequired package: %s\n\n" +
@@ -341,7 +410,7 @@ public class DaveLibraryLoader
         if (GraphicsEnvironment.isHeadless()) { System.err.println(text); return; }
         try
         {
-            EventQueue.invokeAndWait(() ->
+            runOnEventQueueAndWait(() ->
             {
                 JTextArea ta = new JTextArea(text);
                 ta.setEditable(false); ta.setColumns(50); ta.setRows(12);
@@ -361,7 +430,7 @@ public class DaveLibraryLoader
         if (GraphicsEnvironment.isHeadless()) { System.err.println(text); return; }
         try
         {
-            EventQueue.invokeAndWait(() ->
+            runOnEventQueueAndWait(() ->
             {
                 JTextArea ta = new JTextArea(text);
                 ta.setEditable(false); ta.setColumns(50); ta.setRows(8);
@@ -377,7 +446,7 @@ public class DaveLibraryLoader
         if (GraphicsEnvironment.isHeadless()) { System.err.println("[DAVE] " + title + ": " + message); return; }
         try
         {
-            EventQueue.invokeAndWait(() ->
+            runOnEventQueueAndWait(() ->
             {
                 JTextArea ta = new JTextArea(message);
                 ta.setEditable(false); ta.setColumns(50); ta.setRows(8);
@@ -385,6 +454,18 @@ public class DaveLibraryLoader
             });
         }
         catch (Exception e) { LOG.error("Error showing dialog '{}': {}", title, e.getMessage()); }
+    }
+
+    private static void runOnEventQueueAndWait(Runnable runnable) throws Exception
+    {
+        if (EventQueue.isDispatchThread())
+        {
+            runnable.run();
+        }
+        else
+        {
+            EventQueue.invokeAndWait(runnable);
+        }
     }
 
     // -------------------------------------------------------------------------
@@ -398,6 +479,14 @@ public class DaveLibraryLoader
             String[] cmd;
             if (installCommand.startsWith("sudo "))
             {
+                if (Platform.isTermux())
+                {
+                    showDialog("Error",
+                        "This runtime appears to be Termux, but the suggested install command still requires sudo:\n"
+                            + installCommand + "\n\nPlease install the dependency manually with pkg/apt inside Termux.",
+                        JOptionPane.ERROR_MESSAGE);
+                    return false;
+                }
                 String inner = installCommand.substring(5);
                 if (isCommandAvailable("pkexec"))
                     cmd = new String[]{"pkexec", "sh", "-c", inner};
@@ -419,7 +508,10 @@ public class DaveLibraryLoader
             }
             else
             {
-                cmd = installCommand.split("\\s+");
+                if (Platform.isTermux())
+                    cmd = new String[]{"sh", "-c", installCommand};
+                else
+                    cmd = installCommand.split("\\s+");
             }
 
             ProcessBuilder pb = new ProcessBuilder(cmd);
