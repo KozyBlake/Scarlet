@@ -12,9 +12,11 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.PosixFilePermission;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -25,6 +27,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.Base64;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -351,6 +354,7 @@ public class Scarlet implements Closeable
     volatile boolean running = true;
     volatile int exitCode = 0;
     boolean staffMode = false;
+    final String ipcAuthToken = this.loadOrCreateIpcAuthToken();
     // Whether System.in is a usable, readable handle.  Set to false the first
     // time FileInputStream.available() throws IOException — happens on Windows
     // when Scarlet is launched without an attached console (javaw.exe, double-
@@ -807,7 +811,7 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
                                 LOG.error("Exception in ipc read: ", ioex);
                         }
                         line = new String(buf, 0, i, StandardCharsets.UTF_8);
-                        LOG.info("CLI from ipc ("+i+"): "+line);
+                        LOG.info("CLI from ipc ("+i+" bytes)");
                     }
                     catch (IOException ioex)
                     {
@@ -815,7 +819,7 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
                         if (this.running || !"GetOverlappedResult() failed for connect operation: 0".equals(ioex.getMessage()))
                             LOG.error("Exception in ipc loop", ioex);
                     }
-                    this.rawCommand(line);
+                    this.rawCommandFromIpc(line);
                 }
             }
             finally
@@ -843,7 +847,7 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             // library is updated.
             Class<?> socketClass        = Class.forName("org.scalasbt.ipcsocket.Win32NamedPipeServerSocket");
             Class<?> securityLevelClass = Class.forName("org.scalasbt.ipcsocket.Win32SecurityLevel");
-            Object   noSecurity         = securityLevelClass.getField("NO_SECURITY").get(null);
+            Object   localSecurity      = this.resolveWin32PipeSecurityLevel(securityLevelClass);
             String   pipeName           = "\\\\.\\pipe\\ScarletIPC-" + this.vrc.groupId;
 
             // Try known constructor signatures from newest to oldest, logging which one matched.
@@ -852,7 +856,7 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             {
                 java.lang.reflect.Constructor<?> ctor = socketClass.getConstructor(String.class, boolean.class, securityLevelClass);
                 LOG.info("IPC: using Win32NamedPipeServerSocket(String, boolean, Win32SecurityLevel)");
-                return (ServerSocket) ctor.newInstance(pipeName, false, noSecurity);
+                return (ServerSocket) ctor.newInstance(pipeName, false, localSecurity);
             }
             catch (NoSuchMethodException ignored) {}
 
@@ -870,7 +874,7 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             {
                 java.lang.reflect.Constructor<?> ctor = socketClass.getConstructor(int.class, String.class, boolean.class, boolean.class, securityLevelClass);
                 LOG.info("IPC: using Win32NamedPipeServerSocket(int, String, boolean, boolean, Win32SecurityLevel)");
-                return (ServerSocket) ctor.newInstance(255, pipeName, false, false, noSecurity);
+                return (ServerSocket) ctor.newInstance(255, pipeName, false, false, localSecurity);
             }
             catch (NoSuchMethodException ignored) {}
 
@@ -896,8 +900,102 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             {
                 LOG.warn("Failed to delete existing socket file: " + socketPath, ex);
             }
-            return new UnixDomainServerSocket(socketPath, false);
+            UnixDomainServerSocket server = new UnixDomainServerSocket(socketPath, false);
+            this.hardenUnixIpcSocket(socketFilePath);
+            return server;
         }
+    }
+
+    private Object resolveWin32PipeSecurityLevel(Class<?> securityLevelClass) throws Exception
+    {
+        for (String fieldName : new String[]{"OWNER_DACL", "LOCAL_SYSTEM", "AUTHENTICATED_CLIENT", "LOCAL_ONLY", "RESTRICTED", "DEFAULT"})
+        {
+            try
+            {
+                return securityLevelClass.getField(fieldName).get(null);
+            }
+            catch (NoSuchFieldException ignored)
+            {
+            }
+        }
+        return securityLevelClass.getField("NO_SECURITY").get(null);
+    }
+
+    private void hardenUnixIpcSocket(Path socketFilePath)
+    {
+        try
+        {
+            Files.setPosixFilePermissions(socketFilePath, java.util.EnumSet.of(
+                PosixFilePermission.OWNER_READ,
+                PosixFilePermission.OWNER_WRITE));
+        }
+        catch (UnsupportedOperationException ignored)
+        {
+        }
+        catch (IOException ioex)
+        {
+            LOG.warn("Failed to tighten IPC socket permissions for {}", socketFilePath, ioex);
+        }
+    }
+
+    private String loadOrCreateIpcAuthToken()
+    {
+        Path tokenPath = dir.toPath().resolve("ipc.token");
+        try
+        {
+            if (Files.isRegularFile(tokenPath))
+            {
+                return new String(Files.readAllBytes(tokenPath), StandardCharsets.UTF_8).trim();
+            }
+            byte[] bytes = new byte[24];
+            new java.security.SecureRandom().nextBytes(bytes);
+            String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
+            try
+            {
+                Files.write(tokenPath, token.getBytes(StandardCharsets.UTF_8));
+            }
+            catch (FileAlreadyExistsException ignored)
+            {
+                return new String(Files.readAllBytes(tokenPath), StandardCharsets.UTF_8).trim();
+            }
+            try
+            {
+                Files.setPosixFilePermissions(tokenPath, java.util.EnumSet.of(
+                    PosixFilePermission.OWNER_READ,
+                    PosixFilePermission.OWNER_WRITE));
+            }
+            catch (UnsupportedOperationException ignored)
+            {
+            }
+            return token;
+        }
+        catch (IOException ioex)
+        {
+            throw new IllegalStateException("Failed to initialize IPC auth token", ioex);
+        }
+    }
+
+    void rawCommandFromIpc(String line)
+    {
+        if (Boolean.getBoolean("scarlet.ipc.insecure"))
+        {
+            this.rawCommand(line);
+            return;
+        }
+        if (line == null)
+            return;
+        String trimmed = line.trim();
+        if (trimmed.isEmpty())
+            return;
+        int space = trimmed.indexOf(' ');
+        String token = space < 0 ? trimmed : trimmed.substring(0, space);
+        String command = space < 0 ? "" : trimmed.substring(space + 1).trim();
+        if (!Objects.equals(this.ipcAuthToken, token))
+        {
+            LOG.warn("Rejected unauthenticated IPC command");
+            return;
+        }
+        this.rawCommand(command);
     }
 
     void rawCommand(String line)
@@ -1000,7 +1098,7 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
                 String startMsg = "Importing watched groups legacy CSV from " + srcLabel;
                 LOG.info(startMsg);
                 if (out != null) out.accept(startMsg);
-                try (Reader reader = isUrl ? new InputStreamReader(HttpURLInputStream.get(from), StandardCharsets.UTF_8) : MiscUtils.reader(new File(from)))
+                try (Reader reader = isUrl ? new InputStreamReader(HttpURLInputStream.get(from, HttpURLInputStream.PUBLIC_ONLY), StandardCharsets.UTF_8) : MiscUtils.reader(new File(from)))
                 {
                     if (this.watchedGroups.importLegacyCSV(reader, true))
                     {
@@ -1030,7 +1128,7 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
                 String startMsg = "Importing watched groups JSON from " + srcLabel;
                 LOG.info(startMsg);
                 if (out != null) out.accept(startMsg);
-                try (Reader reader = isUrl ? new InputStreamReader(HttpURLInputStream.get(from), StandardCharsets.UTF_8) : MiscUtils.reader(new File(from)))
+                try (Reader reader = isUrl ? new InputStreamReader(HttpURLInputStream.get(from, HttpURLInputStream.PUBLIC_ONLY), StandardCharsets.UTF_8) : MiscUtils.reader(new File(from)))
                 {
                     if (this.watchedGroups.importJson(reader, true))
                     {

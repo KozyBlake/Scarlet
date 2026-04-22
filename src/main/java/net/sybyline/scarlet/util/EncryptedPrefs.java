@@ -62,7 +62,7 @@ public final class EncryptedPrefs
     private static byte[] crypt(int opmode, SecretKey key, byte[] iv, byte[] text) throws GeneralSecurityException
     {
         Cipher cipher = threadLocalCipher.get();
-        cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(GCM_TAG_SIZE, iv));
+        cipher.init(opmode, key, new GCMParameterSpec(GCM_TAG_SIZE, iv));
         return cipher.doFinal(text);
     }
 
@@ -72,10 +72,42 @@ public final class EncryptedPrefs
         this.localPassword = init(prefs, globalPassword);
         this.keyCache = new ConcurrentHashMap<>();
     }
+    public static String tryReadLocalPassword(Preferences prefs, String globalPassword)
+    {
+        if (prefs == null || globalPassword == null)
+            return null;
+        try
+        {
+            String absolutePath = prefs.absolutePath(),
+                   hash = masterPasswordKey(absolutePath, globalPassword);
+            byte[] localPasswordBytes = prefs.getByteArray(hash, null);
+            if (localPasswordBytes == null)
+                return null;
+            SecretKey initKey = derive(globalPassword.toCharArray(), absolutePath);
+            return decrypt(initKey, localPasswordBytes);
+        }
+        catch (Exception ex)
+        {
+            return null;
+        }
+    }
+    public static void installLocalPassword(Preferences prefs, String globalPassword, String localPassword)
+    {
+        if (prefs == null || globalPassword == null || localPassword == null)
+            throw new IllegalArgumentException("prefs, globalPassword, and localPassword must be non-null");
+        String absolutePath = prefs.absolutePath(),
+               hash = masterPasswordKey(absolutePath, globalPassword);
+        SecretKey initKey = derive(globalPassword.toCharArray(), absolutePath);
+        prefs.putByteArray(hash, encrypt(initKey, localPassword));
+    }
+    public static String masterPasswordKey(String absolutePath, String globalPassword)
+    {
+        return hash(absolutePath + ":" + globalPassword);
+    }
     private static char[] init(Preferences prefs, String globalPassword)
     {
         String absolutePath = prefs.absolutePath(),
-               hash = hash(absolutePath + ":" + globalPassword);
+               hash = masterPasswordKey(absolutePath, globalPassword);
         byte[] localPasswordBytes = prefs.getByteArray(hash, null);
         SecretKey initKey = derive(globalPassword.toCharArray(), absolutePath);
         if (localPasswordBytes != null)
@@ -137,7 +169,7 @@ public final class EncryptedPrefs
         {
             byte[] iv = new byte[IV_LENGTH];
             rand.nextBytes(iv);
-            byte[] ciphertext = crypt(Cipher.DECRYPT_MODE, key, iv, Base64.getEncoder().encodeToString(value.getBytes(StandardCharsets.UTF_8)).concat(" ").getBytes(StandardCharsets.UTF_8)),
+            byte[] ciphertext = crypt(Cipher.ENCRYPT_MODE, key, iv, value.getBytes(StandardCharsets.UTF_8)),
                    combined = new byte[iv.length + ciphertext.length];
             System.arraycopy(iv, 0, combined, 0, iv.length);
             System.arraycopy(ciphertext, 0, combined, iv.length, ciphertext.length);
@@ -160,8 +192,7 @@ public final class EncryptedPrefs
             byte[] iv = Arrays.copyOfRange(combined, 0, IV_LENGTH),
                    ciphertext = Arrays.copyOfRange(combined, IV_LENGTH, combined.length),
                    plaintext = crypt(Cipher.DECRYPT_MODE, key, iv, ciphertext);
-            String s =  new String(plaintext, StandardCharsets.UTF_8);
-            return new String(Base64.getDecoder().decode(s.substring(0, s.indexOf(' '))), StandardCharsets.UTF_8);
+            return new String(plaintext, StandardCharsets.UTF_8);
         }
         catch (GeneralSecurityException e)
         {

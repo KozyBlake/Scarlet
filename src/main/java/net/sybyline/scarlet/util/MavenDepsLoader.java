@@ -1,12 +1,14 @@
 package net.sybyline.scarlet.util;
 
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
 import java.util.jar.Manifest;
 
 
@@ -14,6 +16,7 @@ import net.sybyline.scarlet.Scarlet;
 
 public class MavenDepsLoader
 {
+    static final boolean ALLOW_RUNTIME_DOWNLOADS = Boolean.getBoolean("scarlet.allowRuntimeDependencyDownloads");
 
     public static void init()
     {
@@ -129,6 +132,11 @@ public class MavenDepsLoader
         Path depPath = depsDir.resolve(line);
         if (Files.isRegularFile(depPath))
             return;
+        if (!ALLOW_RUNTIME_DOWNLOADS)
+        {
+            System.err.println(String.format("net.sybyline.scarlet.util.MavenDepsLoader: Refusing to download missing dependency '%s' because runtime downloads are disabled. Start with -Dscarlet.allowRuntimeDependencyDownloads=true to allow this.", depName));
+            return;
+        }
         
         String depUrl = findDepUrl(line);
         
@@ -151,10 +159,32 @@ public class MavenDepsLoader
             return;
         }
         
-        try (HttpURLInputStream depIn = HttpURLInputStream.get(depUrl))
+        try
         {
-            Files.copy(depIn, depPath);
+            String expectedSha256 = fetchRemoteChecksum(depUrl, ".sha256");
+            if (expectedSha256 == null)
+            {
+                System.err.println(String.format("net.sybyline.scarlet.util.MavenDepsLoader: Refusing to download dependency '%s' because no remote SHA-256 checksum was available at '%s.sha256'", depName, depUrl));
+                return;
+            }
+            try (HttpURLInputStream depIn = HttpURLInputStream.get(depUrl, HttpURLInputStream.PUBLIC_ONLY))
+            {
+            Path tmp = Files.createTempFile(depParent, depName, ".part");
+            try
+            {
+                Files.copy(depIn, tmp, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+                if (!expectedSha256.equalsIgnoreCase(sha256Hex(tmp)))
+                    throw new SecurityException("Downloaded dependency checksum mismatch for " + depName);
+                if (!looksLikeSha256Path(line) && !verifyDependencyDigest(depPath, tmp))
+                    throw new SecurityException("Existing dependency digest mismatch for " + depName);
+                Files.move(tmp, depPath, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            finally
+            {
+                Files.deleteIfExists(tmp);
+            }
             System.out.println(String.format("net.sybyline.scarlet.util.MavenDepsLoader: Located and copied dependency '%s' from '%s' to '%s'", depName, depUrl, depPath));
+            }
         }
         catch (Exception ex)
         {
@@ -195,6 +225,64 @@ public class MavenDepsLoader
             }
         }
         return null;
+    }
+
+    static String fetchRemoteChecksum(String depUrl, String suffix)
+    {
+        String checksumUrl = depUrl + suffix;
+        try (HttpURLInputStream in = HttpURLInputStream.get(checksumUrl, HttpURLInputStream.PUBLIC_ONLY))
+        {
+            String text = new String(MiscUtils.readAllBytes(in), StandardCharsets.UTF_8).trim();
+            if (text.isEmpty())
+                return null;
+            int whitespace = text.indexOf(' ');
+            if (whitespace > 0)
+                text = text.substring(0, whitespace);
+            whitespace = text.indexOf('\t');
+            if (whitespace > 0)
+                text = text.substring(0, whitespace);
+            return text.matches("(?i)[0-9a-f]{64}") ? text.toLowerCase() : null;
+        }
+        catch (Exception ex)
+        {
+            return null;
+        }
+    }
+    static boolean verifyDependencyDigest(Path existing, Path downloaded)
+    {
+        try
+        {
+            if (!Files.isRegularFile(existing))
+                return true;
+            return java.util.Arrays.equals(sha256(existing), sha256(downloaded));
+        }
+        catch (Exception ex)
+        {
+            return false;
+        }
+    }
+    static boolean looksLikeSha256Path(String path)
+    {
+        return path != null && path.endsWith(".sha256");
+    }
+    static byte[] sha256(Path path) throws Exception
+    {
+        MessageDigest digest = MessageDigest.getInstance("SHA-256");
+        try (InputStream in = Files.newInputStream(path))
+        {
+            byte[] buf = new byte[8192];
+            for (int read; (read = in.read(buf)) >= 0;)
+                digest.update(buf, 0, read);
+        }
+        return digest.digest();
+    }
+    static String sha256Hex(Path path) throws Exception
+    {
+        byte[] digest = sha256(path);
+        StringBuilder sb = new StringBuilder(digest.length * 2);
+        for (byte b : digest)
+            sb.append(String.format("%02x", b));
+        return sb.toString();
     }
 
 }

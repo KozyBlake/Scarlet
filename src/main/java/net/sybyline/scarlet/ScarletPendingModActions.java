@@ -39,6 +39,7 @@ public class ScarletPendingModActions
         public BanInfo()
         {
         }
+        public String ownerSnowflake;
         public String description;
         public String[] tags;
     }
@@ -75,10 +76,25 @@ public class ScarletPendingModActions
 
     public boolean addBanInfo(String targetUserId)
     {
-        if (this.pendingBanInfo.putIfAbsent(targetUserId, new BanInfo()) != null)
+        return this.addBanInfo(targetUserId, null);
+    }
+
+    public boolean addBanInfo(String targetUserId, String ownerSnowflake)
+    {
+        BanInfo info = new BanInfo();
+        info.ownerSnowflake = ownerSnowflake;
+        if (this.pendingBanInfo.putIfAbsent(targetUserId, info) != null)
             return false;
         this.save();
         return true;
+    }
+
+    public boolean isBanInfoOwner(String targetUserId, String ownerSnowflake)
+    {
+        BanInfo info = this.pendingBanInfo.get(targetUserId);
+        if (info == null)
+            return false;
+        return info.ownerSnowflake == null || info.ownerSnowflake.equals(ownerSnowflake);
     }
 
     public boolean setBanInfoTags(String targetUserId, String[] tags)

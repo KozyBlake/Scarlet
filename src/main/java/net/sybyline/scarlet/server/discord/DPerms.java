@@ -47,6 +47,49 @@ import net.sybyline.scarlet.util.MiscUtils;
 
 public class DPerms
 {
+    static final Map<PermType, Set<String>> DEFAULT_ALLOWED_INTERACTION_OPS = new EnumMap<>(PermType.class);
+    static
+    {
+        allowDefaults(PermType.BUTTON_PRESS,
+            "pagination", "pagination-first", "pagination-last", "pagination-select", "pagination-cancel", "pagination-submit",
+            "edit-tags",
+            "vrchat-user-edit-manager-notes",
+            "vrchat-user-ban",
+            "immediate-ban-edit-desc", "immediate-ban-cancel", "immediate-ban-confirm",
+            "vrchat-user-unban",
+            "event-redact", "event-unredact",
+            "new-instance-create", "new-instance-cancel", "new-instance-modal",
+            "edit-desc",
+            "vrchat-report",
+            "view-potential-avatar-matches", "view-snapshot-user", "view-snapshot-user-groups", "view-snapshot-user-represented-group",
+            "submit-evidence",
+            "import-watched-groups",
+            "discord-kick-confirm", "discord-kick-cancel",
+            "discord-ban-confirm", "discord-ban-cancel");
+        allowDefaults(PermType.STRING_SELECT,
+            "pagination-submission",
+            "select-tags", "select-tags-1", "select-tags-2", "select-tags-3", "select-tags-4",
+            "immediate-ban-select-tags",
+            "new-instance-region", "new-instance-access-type", "new-instance-roles", "new-instance-flags",
+            "set-audit-aux-webhooks",
+            "event-roles-1-25", "event-roles-26-50", "event-platforms");
+        allowDefaults(PermType.MODAL_SUBMIT,
+            "pagination-select",
+            "watched-group-set-notes", "watched-entity-set-notes",
+            "vrchat-user-edit-manager-notes",
+            "immediate-ban-edit-desc",
+            "vrchat-user-ban-multi", "vrchat-user-unban-multi",
+            "new-instance-modal",
+            "edit-desc",
+            "edit-report-template",
+            "schedule-set-roles", "schedule-set-platforms");
+        allowDefaults(PermType.ENTITY_SELECT);
+    }
+    static void allowDefaults(PermType permType, String... ops)
+    {
+        Set<String> set = DEFAULT_ALLOWED_INTERACTION_OPS.computeIfAbsent(permType, $ -> new HashSet<>());
+        Collections.addAll(set, ops);
+    }
 
     static final OptionData
         TARGET_OPT_R = new OptionData(OptionType.MENTIONABLE, "target", "The target of the permission")
@@ -517,7 +560,12 @@ public class DPerms
     boolean check(PermType permType, Member member, String perm, boolean fallback)
     {
         Boolean value = this.get(permType, member, perm);
-        return value == null ? fallback : value.booleanValue();
+        return value == null ? (fallback || this.isDefaultAllowedInteractionOp(permType, perm)) : value.booleanValue();
+    }
+    boolean isDefaultAllowedInteractionOp(PermType permType, String perm)
+    {
+        Set<String> set = DEFAULT_ALLOWED_INTERACTION_OPS.get(permType);
+        return set != null && set.contains(perm);
     }
     boolean checkSlashCommand(Member member, String name, String group, String sub, boolean fallback)
     {
@@ -555,19 +603,19 @@ public class DPerms
     }
     public boolean check(ButtonInteractionEvent event)
     {
-        return this.isInGuild(event) && this.check(PermType.BUTTON_PRESS, event.getMember(), op(event.getButton().getCustomId()), true);
+        return this.isInGuild(event) && this.check(PermType.BUTTON_PRESS, event.getMember(), op(event.getButton().getCustomId()), false);
     }
     public boolean check(StringSelectInteractionEvent event)
     {
-        return this.isInGuild(event) && this.check(PermType.STRING_SELECT, event.getMember(), op(event.getSelectMenu().getCustomId()), true);
+        return this.isInGuild(event) && this.check(PermType.STRING_SELECT, event.getMember(), op(event.getSelectMenu().getCustomId()), false);
     }
     public boolean check(EntitySelectInteractionEvent event)
     {
-        return this.isInGuild(event) && this.check(PermType.ENTITY_SELECT, event.getMember(), op(event.getSelectMenu().getCustomId()), true);
+        return this.isInGuild(event) && this.check(PermType.ENTITY_SELECT, event.getMember(), op(event.getSelectMenu().getCustomId()), false);
     }
     public boolean check(ModalInteractionEvent event)
     {
-        return this.isInGuild(event) && this.check(PermType.MODAL_SUBMIT, event.getMember(), op(event.getModalId()), true);
+        return this.isInGuild(event) && this.check(PermType.MODAL_SUBMIT, event.getMember(), op(event.getModalId()), false);
     }
     public boolean check(Member member, String perm, boolean fallback)
     {

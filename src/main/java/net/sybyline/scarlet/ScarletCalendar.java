@@ -248,7 +248,7 @@ if(Scarlet.IS_DEV_ENV){groupId="grp_c19f568a-d105-442d-b82a-b5a2e103d13d";}
                             }
                             if (type != null)
                             {
-                                icon = Icon.from(HttpURLInputStream.get(imageUrl), null);
+                                icon = Icon.from(HttpURLInputStream.get(imageUrl, HttpURLInputStream.PUBLIC_ONLY), null);
                             }
                         }
                     }

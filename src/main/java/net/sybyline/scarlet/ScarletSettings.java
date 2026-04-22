@@ -4,28 +4,39 @@ import java.awt.GraphicsEnvironment;
 import java.awt.Rectangle;
 import java.io.Console;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.Reader;
 import java.io.Writer;
 import java.lang.reflect.Type;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Scanner;
+import java.util.Base64;
+import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.prefs.Preferences;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.nio.charset.StandardCharsets;
+import java.security.SecureRandom;
 
 import javax.swing.JOptionPane;
 import javax.swing.JPasswordField;
@@ -48,7 +59,44 @@ public class ScarletSettings
 {
 
     static final Logger LOG = LoggerFactory.getLogger("Scarlet/Settings");
-    private static final String globalPW = Optional.ofNullable(System.getenv("SCARLET_GLOBAL_PW")).orElseGet(()->System.getProperty("scarlet.global.pw", "ZaxzVNStRpG1DU9dLVE"));
+    private static final String LEGACY_GLOBAL_PW = "ZaxzVNStRpG1DU9dLVE";
+    private static final String globalPW = Optional.ofNullable(System.getenv("SCARLET_GLOBAL_PW")).orElseGet(() -> System.getProperty("scarlet.global.pw", fallbackGlobalPw()));
+
+    private static String fallbackGlobalPw()
+    {
+        try
+        {
+            File dir = Scarlet.dir;
+            if (dir == null)
+                throw new IllegalStateException("Scarlet data directory is not available");
+            Path secretPath = new File(dir, "global-prefs.key").toPath();
+            if (Files.isRegularFile(secretPath))
+            {
+                String existing = new String(Files.readAllBytes(secretPath), StandardCharsets.UTF_8).trim();
+                if (!existing.isEmpty())
+                    return existing;
+            }
+            byte[] secret = new byte[32];
+            new SecureRandom().nextBytes(secret);
+            String encoded = Base64.getEncoder().encodeToString(secret);
+            if (!Files.isDirectory(secretPath.getParent()))
+                Files.createDirectories(secretPath.getParent());
+            Files.write(secretPath, encoded.getBytes(StandardCharsets.UTF_8));
+            try
+            {
+                Files.setPosixFilePermissions(secretPath, EnumSet.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
+            }
+            catch (UnsupportedOperationException ignored)
+            {
+                // Best effort only; Windows and some filesystems do not support POSIX perms.
+            }
+            return encoded;
+        }
+        catch (Exception ex)
+        {
+            throw new IllegalStateException("Failed to initialize local fallback encryption password", ex);
+        }
+    }
 
     public ScarletSettings(Scarlet scarlet, File settingsFile)
     {
@@ -56,6 +104,7 @@ public class ScarletSettings
         this.settingsFile = settingsFile;
         this.settingsFileLastModified = settingsFile.lastModified();
         this.hasVersionChangedSinceLastRun = null;
+        this.warnBackupBeforeSecureStoreChanges();
         // Preferences.userNodeForPackage() touches the Windows Registry, and
         // EncryptedPrefs runs PBKDF2 with 100k iterations — both are slow on
         // Windows. We kick them off immediately on a background thread so they
@@ -66,8 +115,13 @@ public class ScarletSettings
         {
             try
             {
+                ScarletSettings.this.prefsInitStage = "opening Preferences user node";
                 Preferences prefs = Preferences.userNodeForPackage(Scarlet.class);
+                ScarletSettings.this.prefsInitStage = "migrating legacy encrypted preferences";
+                ScarletSettings.this.migrateLegacyEncryptedPrefs(prefs);
+                ScarletSettings.this.prefsInitStage = "opening encrypted preference wrapper";
                 EncryptedPrefs enc = new EncryptedPrefs(prefs, globalPW);
+                ScarletSettings.this.prefsInitStage = "publishing preference handles";
                 synchronized (ScarletSettings.this)
                 {
                     ScarletSettings.this.globalPreferences = prefs;
@@ -82,10 +136,13 @@ public class ScarletSettings
             }
             finally
             {
+                ScarletSettings.this.prefsInitStage = "ready";
                 ScarletSettings.this.prefsReady.countDown();
             }
         }, "Scarlet Prefs Init");
         prefsInitThread.setDaemon(true);
+        this.prefsInitThread = prefsInitThread;
+        LOG.info("Initializing secure preference store in background");
         prefsInitThread.start();
         this.json = null;
         this.lastRunVersion = new RegistryString("lastRunVersion");
@@ -107,6 +164,98 @@ public class ScarletSettings
         this.lastCacheCleanup = new RegistryOffsetDateTime("lastCacheCleanup");
     }
 
+    private void warnBackupBeforeSecureStoreChanges()
+    {
+        File dataDir = Scarlet.dir;
+        File settingsParent = this.settingsFile != null ? this.settingsFile.getParentFile() : null;
+        File settingsFile = this.settingsFile;
+        File storeBin = dataDir != null ? new File(dataDir, "store.bin") : null;
+        File discordBotFile = dataDir != null ? new File(dataDir, "discord_bot.json") : null;
+        File watchedGroupsFile = dataDir != null ? new File(dataDir, "watched_groups.json") : null;
+        File watchedAvatarsFile = dataDir != null ? new File(dataDir, "watched_avatars.json") : null;
+        File goodPronounsFile = dataDir != null ? new File(dataDir, "good_pronoun.json") : null;
+        File badPronounsFile = dataDir != null ? new File(dataDir, "bad_pronoun.json") : null;
+        String legacyPrefsNode = "/net/sybyline/scarlet",
+               legacyPrefsStore = isWindows()
+                   ? "Windows Java Preferences registry node HKEY_CURRENT_USER\\Software\\JavaSoft\\Prefs\\net\\sybyline\\scarlet"
+                   : "Java Preferences node " + legacyPrefsNode;
+        String dataDirText = dataDir != null ? dataDir.getAbsolutePath() : "(unavailable)",
+               settingsDirText = settingsParent != null ? settingsParent.getAbsolutePath() : dataDirText;
+        String message =
+            "Back up your Scarlet data before startup continues.\n\n" +
+            "Scarlet may migrate or rewrap stored settings and credentials during initialization.\n" +
+            "If something goes wrong, a backup is the safest way to recover.\n\n" +
+            "Data that could be reset, reverted, or need recovery includes:\n" +
+            " - Discord bot token\n" +
+            " - VRChat usernames, passwords, TOTP secrets, and cookie/session data\n" +
+            " - Watched groups\n" +
+            " - Pronoun allow/deny lists\n" +
+            " - Watched avatars\n\n" +
+            "Watched groups, pronouns, and watched avatars are less likely to be touched, but you should still back them up first as a fail-safe.\n\n" +
+            "Recommended current files/folders to copy now:\n" +
+            " - " + dataDirText + "\n" +
+            " - " + settingsDirText + "\n" +
+            " - " + pathOrUnavailable(settingsFile) + "\n" +
+            " - " + pathOrUnavailable(storeBin) + "\n" +
+            " - " + pathOrUnavailable(discordBotFile) + "\n" +
+            " - " + pathOrUnavailable(watchedGroupsFile) + "\n" +
+            " - " + pathOrUnavailable(watchedAvatarsFile) + "\n" +
+            " - " + pathOrUnavailable(goodPronounsFile) + "\n" +
+            " - " + pathOrUnavailable(badPronounsFile) + "\n\n" +
+            "Legacy credential storage to back up as well:\n" +
+            " - " + legacyPrefsStore + "\n" +
+            " - Legacy plain-text settings keys may also exist in " + pathOrUnavailable(settingsFile) + " as vrc_username / vrc_password\n\n" +
+            "Startup will continue after this reminder is acknowledged.";
+        LOG.warn("Back up Scarlet data before initialization continues. Risky items include Discord token, VRChat credentials, watched groups, pronouns, and watched avatars. Recommended backup path(s): {}, {}. Legacy credential storage: {}",
+            dataDirText,
+            settingsDirText,
+            legacyPrefsStore);
+        System.err.println();
+        System.err.println("===========================================");
+        System.err.println("  BACK UP YOUR SCARLET DATA BEFORE CONTINUING");
+        System.err.println("  Scarlet may migrate stored settings and credentials during startup.");
+        System.err.println("  This can affect Discord bot token, VRChat credentials/cookies,");
+        System.err.println("  watched groups, pronoun lists, and watched avatars.");
+        System.err.println("  Recommended current backup path(s):");
+        System.err.println("   - " + dataDirText);
+        System.err.println("   - " + settingsDirText);
+        System.err.println("   - " + pathOrUnavailable(settingsFile));
+        System.err.println("   - " + pathOrUnavailable(storeBin));
+        System.err.println("   - " + pathOrUnavailable(discordBotFile));
+        System.err.println("   - " + pathOrUnavailable(watchedGroupsFile));
+        System.err.println("   - " + pathOrUnavailable(watchedAvatarsFile));
+        System.err.println("   - " + pathOrUnavailable(goodPronounsFile));
+        System.err.println("   - " + pathOrUnavailable(badPronounsFile));
+        System.err.println("  Legacy credential storage:");
+        System.err.println("   - " + legacyPrefsStore);
+        System.err.println("   - " + pathOrUnavailable(settingsFile) + " (legacy keys vrc_username / vrc_password)");
+        System.err.println("===========================================");
+        System.err.println();
+        if (this.scarlet != null && this.scarlet.splash != null)
+        {
+            this.scarlet.splash.splashSubtext("Back up Scarlet data before continuing");
+        }
+        if (!GraphicsEnvironment.isHeadless())
+        {
+            JOptionPane.showMessageDialog(
+                null,
+                message,
+                "Back Up Scarlet Data",
+                JOptionPane.WARNING_MESSAGE);
+        }
+    }
+
+    private static boolean isWindows()
+    {
+        String osName = System.getProperty("os.name");
+        return osName != null && osName.toLowerCase().contains("win");
+    }
+
+    private static String pathOrUnavailable(File file)
+    {
+        return file == null ? "(unavailable)" : file.getAbsolutePath();
+    }
+
     /**
      * Blocks until the background Preferences + EncryptedPrefs initialisation
      * is complete. Must be called before any access to globalPreferences,
@@ -114,11 +263,41 @@ public class ScarletSettings
      */
     void awaitPrefs()
     {
+        this.awaitPrefs("startup");
+    }
+
+    void awaitPrefs(String reason)
+    {
         if (this.prefsReady.getCount() == 0)
             return;
         try
         {
-            this.prefsReady.await();
+            long started = System.currentTimeMillis();
+            while (!this.prefsReady.await(5L, TimeUnit.SECONDS))
+            {
+                long waitedMillis = System.currentTimeMillis() - started;
+                LOG.warn("Still waiting {} ms for secure preference store during {} (stage: {})",
+                    waitedMillis,
+                    reason,
+                    this.prefsInitStage);
+                Thread worker = this.prefsInitThread;
+                if (worker != null)
+                {
+                    StackTraceElement[] stack = worker.getStackTrace();
+                    if (stack.length > 0)
+                    {
+                        LOG.warn("Secure preference worker thread is currently at {}", stack[0]);
+                    }
+                    else
+                    {
+                        LOG.warn("Secure preference worker thread state is {}", worker.getState());
+                    }
+                }
+                if (this.scarlet != null && this.scarlet.splash != null)
+                {
+                    this.scarlet.splash.splashSubtext("Opening secure credential store");
+                }
+            }
         }
         catch (InterruptedException e)
         {
@@ -129,9 +308,94 @@ public class ScarletSettings
 
     public void setNamespace(String namespace)
     {
-        this.awaitPrefs();
+        this.awaitPrefs("setting VRChat group namespace");
         this.preferences = this.globalPreferences.node(namespace);
+        this.migrateLegacyEncryptedPrefs(this.preferences);
         this.encrypted = new EncryptedPrefs(this.preferences, globalPW);
+    }
+
+    private void migrateLegacyEncryptedPrefs(Preferences prefs)
+    {
+        if (prefs == null)
+            return;
+        try
+        {
+            if (EncryptedPrefs.tryReadLocalPassword(prefs, globalPW) != null)
+                return;
+            for (String legacyGlobalPw : legacyGlobalPasswords())
+            {
+                if (Objects.equals(legacyGlobalPw, globalPW))
+                    continue;
+                String localPassword = EncryptedPrefs.tryReadLocalPassword(prefs, legacyGlobalPw);
+                if (localPassword == null)
+                    continue;
+                LOG.info("Backing up encrypted preferences node {} before legacy wrapper migration", prefs.absolutePath());
+                backupPreferencesNode(prefs);
+                LOG.info("Rewrapping encrypted preferences node {} with the current local secret", prefs.absolutePath());
+                EncryptedPrefs.installLocalPassword(prefs, globalPW, localPassword);
+                prefs.flush();
+                LOG.info("Migrated encrypted preferences node {} from legacy global password wrapper", prefs.absolutePath());
+                return;
+            }
+        }
+        catch (Exception ex)
+        {
+            throw new IllegalStateException("Failed to migrate legacy encrypted preferences for " + prefs.absolutePath(), ex);
+        }
+    }
+    private static Set<String> legacyGlobalPasswords()
+    {
+        LinkedHashSet<String> passwords = new LinkedHashSet<>();
+        passwords.add(LEGACY_GLOBAL_PW);
+        passwords.add(legacyDerivedGlobalPwV1());
+        return passwords;
+    }
+    private static String legacyDerivedGlobalPwV1()
+    {
+        String seed = String.join("\n",
+            Optional.ofNullable(System.getProperty("user.name")).orElse(""),
+            Optional.ofNullable(System.getProperty("user.home")).orElse(""),
+            Optional.ofNullable(System.getenv("COMPUTERNAME")).orElseGet(() -> Optional.ofNullable(System.getenv("HOSTNAME")).orElse("")),
+            Optional.ofNullable(System.getProperty("os.name")).orElse(""),
+            Optional.ofNullable(Scarlet.dir).map(File::getAbsolutePath).orElse(""));
+        try
+        {
+            byte[] digest = java.security.MessageDigest.getInstance("SHA-256").digest(seed.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(digest.length * 2);
+            for (byte b : digest)
+            {
+                sb.append(Character.forDigit((b >>> 4) & 0xF, 16));
+                sb.append(Character.forDigit(b & 0xF, 16));
+            }
+            return sb.toString();
+        }
+        catch (Exception ex)
+        {
+            throw new IllegalStateException("Failed to derive legacy fallback encryption password", ex);
+        }
+    }
+    private static void backupPreferencesNode(Preferences prefs) throws Exception
+    {
+        File dir = Scarlet.dir;
+        if (dir == null)
+            throw new IllegalStateException("Scarlet data directory is not available");
+        File backupDir = new File(dir, "backups");
+        if (!backupDir.isDirectory() && !backupDir.mkdirs())
+            throw new IllegalStateException("Failed to create backup directory " + backupDir);
+        String sanitizedPath = prefs.absolutePath().replace('\\', '_').replace('/', '_').replace(':', '_');
+        File backupFile = new File(backupDir, "prefs-migration-" + sanitizedPath + "-" + System.currentTimeMillis() + ".xml");
+        try (FileOutputStream out = new FileOutputStream(backupFile))
+        {
+            prefs.exportSubtree(out);
+        }
+        LOG.info("Backed up encrypted preferences node {} to {}", prefs.absolutePath(), backupFile);
+        try
+        {
+            Files.setPosixFilePermissions(backupFile.toPath(), EnumSet.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
+        }
+        catch (UnsupportedOperationException ignored)
+        {
+        }
     }
 
     final Scarlet scarlet;
@@ -141,6 +405,8 @@ public class ScarletSettings
     // These are initialised on a background thread (see constructor). All
     // access must go through awaitPrefs() before touching them.
     final CountDownLatch prefsReady = new CountDownLatch(1);
+    volatile String prefsInitStage = "starting";
+    volatile Thread prefsInitThread;
     Preferences globalPreferences;
     EncryptedPrefs globalEncrypted;
     Preferences preferences;
@@ -472,14 +738,14 @@ public class ScarletSettings
         }
         protected String read()
         {
-            ScarletSettings.this.awaitPrefs();
+            ScarletSettings.this.awaitPrefs("reading preference " + this.name);
             String string = ScarletSettings.this.preferences.get(this.name, null);
             if (string == null) string = ScarletSettings.this.globalPreferences.get(this.name, null);
             return string;
         }
         protected void write(String string)
         {
-            ScarletSettings.this.awaitPrefs();
+            ScarletSettings.this.awaitPrefs("writing preference " + this.name);
             ScarletSettings.this.preferences.put(this.name, string);
         }
         public void set(T value_)
@@ -518,7 +784,7 @@ public class ScarletSettings
         @Override
         protected String read()
         {
-            ScarletSettings.this.awaitPrefs();
+            ScarletSettings.this.awaitPrefs("reading encrypted preference " + this.name);
             String string = this.globalOnly ? null : ScarletSettings.this.encrypted.get(this.name);
             if (string == null) string = ScarletSettings.this.globalEncrypted.get(this.name);
             return string;
@@ -526,7 +792,7 @@ public class ScarletSettings
         @Override
         protected void write(String string)
         {
-            ScarletSettings.this.awaitPrefs();
+            ScarletSettings.this.awaitPrefs("writing encrypted preference " + this.name);
             (this.globalOnly ? ScarletSettings.this.globalEncrypted : ScarletSettings.this.encrypted).put(this.name, string);
         }
         /**
@@ -539,7 +805,7 @@ public class ScarletSettings
             this.cached = null;
             synchronized (ScarletSettings.this)
             {
-                ScarletSettings.this.awaitPrefs();
+                ScarletSettings.this.awaitPrefs("clearing encrypted preference " + this.name);
                 ScarletSettings.this.globalEncrypted.remove(this.name);
                 if (!this.globalOnly)
                     ScarletSettings.this.encrypted.remove(this.name);

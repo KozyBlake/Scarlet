@@ -17,10 +17,14 @@ import net.dv8tion.jda.api.utils.FileUpload;
 
 public interface Gifs
 {
+    static final int MAX_GIF_BYTES = 16 * 1024 * 1024;
+    static final int MAX_GIF_FRAMES = 256;
+    static final int MAX_GIF_DIMENSION = 2048;
+    static final long MAX_GIF_PIXELS = 2_048L * 2_048L;
 
     static String resolveTenorGifUrl(String url) throws IOException
     {
-        try (HttpURLInputStream in = HttpURLInputStream.get(url))
+        try (HttpURLInputStream in = HttpURLInputStream.get(url, HttpURLInputStream.PUBLIC_ONLY))
         {
             return Hypertext.scrapeMetaNameContent(new InputStreamReader(in)).getOrDefault("twitter:image", url);
         }
@@ -29,12 +33,32 @@ public interface Gifs
     static GifDecoder decode(String url) throws IOException
     {
         byte[] bytes;
-        try (HttpURLInputStream in = HttpURLInputStream.get(url, $ -> $.addRequestProperty("Accept", "image/gif")))
+        try (HttpURLInputStream in = HttpURLInputStream.get(url, $ -> $.addRequestProperty("Accept", "image/gif"), HttpURLInputStream.PUBLIC_ONLY))
         {
+            int contentLength = in.connection().getContentLength();
+            if (contentLength > MAX_GIF_BYTES)
+                throw new IOException("GIF exceeds maximum allowed size");
             bytes = MiscUtils.readAllBytes(in);
+            if (bytes.length > MAX_GIF_BYTES)
+                throw new IOException("GIF exceeds maximum allowed size");
         }
         GifDecoder decoder = new GifDecoder();
-        decoder.read(new ByteArrayInputStream(bytes));
+        int status = decoder.read(new ByteArrayInputStream(bytes));
+        if (status != GifDecoder.STATUS_OK)
+            throw new IOException("GIF decode failed with status " + status);
+        int frameCount = decoder.getFrameCount();
+        int width = decoder.getFrameSize().width;
+        int height = decoder.getFrameSize().height;
+        if (frameCount <= 0)
+            throw new IOException("GIF contains no frames");
+        if (frameCount > MAX_GIF_FRAMES)
+            throw new IOException("GIF has too many frames");
+        if (width <= 0 || height <= 0)
+            throw new IOException("GIF has invalid dimensions");
+        if (width > MAX_GIF_DIMENSION || height > MAX_GIF_DIMENSION)
+            throw new IOException("GIF dimensions exceed maximum allowed size");
+        if ((long)width * (long)height > MAX_GIF_PIXELS)
+            throw new IOException("GIF pixel area exceeds maximum allowed size");
         return decoder;
     }
 

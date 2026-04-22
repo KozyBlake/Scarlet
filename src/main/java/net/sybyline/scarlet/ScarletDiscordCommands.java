@@ -429,7 +429,7 @@ public class ScarletDiscordCommands
              if (fileName.endsWith(".csv"))
              {
                  LOG.info("Importing watched groups legacy CSV from attachment: "+fileName);
-                 try (Reader reader = new InputStreamReader(HttpURLInputStream.get(attachmentUrl)))
+                 try (Reader reader = new InputStreamReader(HttpURLInputStream.get(attachmentUrl, HttpURLInputStream.PUBLIC_ONLY)))
                  {
                      if (ScarletDiscordCommands.this.discord.scarlet.watchedGroups.importLegacyCSV(reader, true))
                      {
@@ -451,7 +451,7 @@ public class ScarletDiscordCommands
              else if (fileName.endsWith(".json"))
              {
                  LOG.info("Importing watched groups JSON from attachment: "+fileName);
-                 try (Reader reader = new InputStreamReader(HttpURLInputStream.get(attachmentUrl)))
+                 try (Reader reader = new InputStreamReader(HttpURLInputStream.get(attachmentUrl, HttpURLInputStream.PUBLIC_ONLY)))
                  {
                      if (ScarletDiscordCommands.this.discord.scarlet.watchedGroups.importJson(reader, true))
                      {
@@ -919,7 +919,7 @@ public class ScarletDiscordCommands
              if (fileName.endsWith(".csv"))
              {
                  LOG.info("Importing watched "+this._plural()+" legacy CSV from attachment: "+fileName);
-                 try (Reader reader = new InputStreamReader(HttpURLInputStream.get(attachmentUrl)))
+                 try (Reader reader = new InputStreamReader(HttpURLInputStream.get(attachmentUrl, HttpURLInputStream.PUBLIC_ONLY)))
                  {
                      if (this._watchedEntities().importLegacyCSV(reader, true))
                      {
@@ -941,7 +941,7 @@ public class ScarletDiscordCommands
              else if (fileName.endsWith(".json"))
              {
                  LOG.info("Importing watched "+this._plural()+" JSON from attachment: "+fileName);
-                 try (Reader reader = new InputStreamReader(HttpURLInputStream.get(attachmentUrl)))
+                 try (Reader reader = new InputStreamReader(HttpURLInputStream.get(attachmentUrl, HttpURLInputStream.PUBLIC_ONLY)))
                  {
                      if (this._watchedEntities().importJson(reader, true))
                      {
@@ -1902,7 +1902,7 @@ public class ScarletDiscordCommands
         }
         else if (tagImmediately)
         {
-            if (!this.discord.scarlet.pendingModActions.addBanInfo(vrcTargetId))
+            if (!this.discord.scarlet.pendingModActions.addBanInfo(vrcTargetId, event.getUser().getId()))
             {
                 hook.sendMessage("This VRChat user currently has automated/assisted moderation pending, please retry later").setEphemeral(true).queue();
                 return;
@@ -2120,7 +2120,7 @@ public class ScarletDiscordCommands
             
             String ictoken;
             do ictoken = UUID.randomUUID().toString();
-            while (ScarletDiscordCommands.this.discord.instanceCreation.putIfAbsent(ictoken, new ScarletDiscordJDA.InstanceCreation(ictoken, vrchatWorld.getId(), groupId)) != null);
+            while (ScarletDiscordCommands.this.discord.instanceCreation.putIfAbsent(ictoken, new ScarletDiscordJDA.InstanceCreation(ictoken, vrchatWorld.getId(), groupId, event.getUser().getId())) != null);
             
             List<GroupRole> roles = ScarletDiscordCommands.this.discord.scarlet.vrc.getGroupRoles(groupId);
             
@@ -3127,7 +3127,7 @@ public class ScarletDiscordCommands
                        attachmentUrl = reportTemplate.getUrl();
                 
                 LOG.info(String.format("%s (<@%s>) Uploading report template: %s", requesterDisplayName, requesterSf, fileName));
-                try (Reader reader = new InputStreamReader(HttpURLInputStream.get(attachmentUrl)))
+                try (Reader reader = new InputStreamReader(HttpURLInputStream.get(attachmentUrl, HttpURLInputStream.PUBLIC_ONLY)))
                 {
                     String contents = new BufferedReader(reader).lines().collect(Collectors.joining("\n"));
                     if (ScarletDiscordCommands.this.discord.scarlet.vrcReport.trySet(contents))

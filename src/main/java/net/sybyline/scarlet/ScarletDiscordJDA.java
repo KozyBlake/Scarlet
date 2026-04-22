@@ -1073,13 +1073,17 @@ public class ScarletDiscordJDA implements ScarletDiscord
 
     static class InstanceCreation
     {
-        InstanceCreation(String ictoken, String worldId, String groupId)
+        InstanceCreation(String ictoken, String worldId, String groupId, String ownerSnowflake)
         {
+            this.ictoken = ictoken;
             this.worldId = worldId;
             this.groupId = groupId;
+            this.ownerSnowflake = ownerSnowflake;
         }
+        final String ictoken;
         final String worldId;
         final String groupId;
+        final String ownerSnowflake;
         InstanceRegion region = InstanceRegion.US;
         List<String> roleIds = null;
         GroupAccessType groupAccessType = GroupAccessType.PUBLIC;
@@ -1262,6 +1266,11 @@ public class ScarletDiscordJDA implements ScarletDiscord
         @Override
         public void onModalInteraction(ModalInteractionEvent event)
         {
+            if (ScarletDiscordJDA.this.interactions.isImmediateModalFlow(event))
+            {
+                if (ScarletDiscordJDA.this.interactions.handle(event))
+                    return;
+            }
             if (!ScarletDiscordJDA.this.perms.check(event))
             {
                 this.interactionPerms(event);

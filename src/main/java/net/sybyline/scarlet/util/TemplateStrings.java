@@ -73,4 +73,23 @@ public class TemplateStrings<T>
         return TemplateStrings.<T>of((Class<T>)parameters.getClass()).interpolate(text, parameters);
     }
 
+    public static String sanitizePathComponent(String text)
+    {
+        if (text == null || text.isEmpty())
+            return "_";
+        StringBuilder sb = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++)
+        {
+            char c = text.charAt(i);
+            if (c <= 31 || c == 127 || c == '/' || c == '\\' || c == ':' || c == '*' || c == '?' || c == '"' || c == '<' || c == '>' || c == '|')
+                sb.append('_');
+            else
+                sb.append(c);
+        }
+        String sanitized = sb.toString().trim();
+        while (sanitized.contains(".."))
+            sanitized = sanitized.replace("..", "_");
+        return sanitized.isEmpty() ? "_" : sanitized;
+    }
+
 }

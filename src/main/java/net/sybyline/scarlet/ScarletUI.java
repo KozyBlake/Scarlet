@@ -1178,7 +1178,7 @@ public class ScarletUI implements IScarletUI
         else
         {
             String url = this.scarlet.settings.requireInput("URL of CSV or JSON", false);
-            try (Reader reader = new InputStreamReader(HttpURLInputStream.get(url), StandardCharsets.UTF_8))
+            try (Reader reader = new InputStreamReader(HttpURLInputStream.get(url, HttpURLInputStream.PUBLIC_ONLY), StandardCharsets.UTF_8))
             {
                 if (url.contains(".csv"))
                 {

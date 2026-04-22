@@ -242,7 +242,6 @@ public class ScarletVRChat implements Closeable
         // override default ApiClient
         Configuration.setDefaultApiClient(this.client);
         this.cookies.setup(this.client);
-        this.cookies.load();
         this.groupId = MiscUtils.extractTypedUuid("grp", "", scarlet.settings.getStringOrRequireInput("vrchat_group_id", "VRChat Group ID", false));
         ExtendedUserAgent.setCurrentGroupId(this.groupId);
         this.groupOwnerId = null;
@@ -252,7 +251,7 @@ public class ScarletVRChat implements Closeable
         this.allGroupPermissions = new VrcAllGroupPermissions(null);
         this.currentUser = null;
         this.currentUserId = null;
-        scarlet.settings.setNamespace(this.groupId);
+        this.secureStoreReady = false;
         this.cachedUsers = new ScarletJsonCache<>("usr", User.class);
         this.cachedWorlds = new ScarletJsonCache<>("wrld", World.class);
         this.cachedGroups = new ScarletJsonCache<>("grp", Group.class);
@@ -269,6 +268,7 @@ public class ScarletVRChat implements Closeable
     final ScarletSettings.RegistryStringEncrypted username, password, totpsecret;
     final ScarletVRChatCookieJar cookies;
     final ApiClient client;
+    volatile boolean secureStoreReady;
     /** Mirrors the last value passed to client.setUsername() for use in the UTF-8 Auth interceptor. */
     volatile String pendingUsername = null;
     /** Mirrors the last value passed to client.setPassword() for use in the UTF-8 Auth interceptor. */
@@ -316,9 +316,22 @@ public class ScarletVRChat implements Closeable
 
     public void login()
     {
+        this.ensureSecureStoreReady();
         this.login(false);
         for (String alt : this.cookies.alts())
             this.loginAlt(alt, false);
+    }
+
+    private synchronized void ensureSecureStoreReady()
+    {
+        if (this.secureStoreReady)
+            return;
+        this.scarlet.splash.splashSubtext("Opening secure credential store");
+        LOG.info("Opening secure credential store");
+        this.cookies.load();
+        this.scarlet.settings.setNamespace(this.groupId);
+        this.secureStoreReady = true;
+        LOG.info("Secure credential store ready");
     }
 
     private void login(boolean isRefresh)

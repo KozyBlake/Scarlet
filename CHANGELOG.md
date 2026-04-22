@@ -2,55 +2,75 @@
 # Changelog
 
 ## Unreleased
+  - No unreleased entries yet.
+
+## 0.4.16-b5
   - Added a third `minimal` edition built alongside full and lite; `mvn clean package` now produces `scarlet-0.4.16-b5-minimal.jar`
   - Added feature-gated command/subsystem wiring so the minimal edition disables built-in Discord kick/ban, watched-avatar management, scheduling/calendar, auxiliary webhooks, animated emoji generation, DAVE voice encryption, evidence submission, and RVC while keeping the core VRChat audit-log + Discord/TTS pipeline
-  - Added Android/Termux support for Discord DAVE voice E2EE — runtime detection via `Platform.IS_ANDROID` / `Platform.IS_TERMUX`, a new `AndroidDaveJvmLibraryLoader` that extracts `libdave-jvm.so` from `natives/linux-aarch64`, `natives/android-aarch64`, or `android-aarch64`, and a local `moe.kyokobot.libdave.natives.DaveNativeBindings` override that supersedes the upstream impl-jni class via a shade-plugin filter so the bundled Lavaplayer `NativeLibraryLoader` is bypassed on Bionic
-  - Added two Maven profiles for producing a Bionic-compatible native library: `-Pandroid-dave-native -Dscarlet.buildAndroidDaveNative=true` runs the Android NDK CMake toolchain against the vendored `libdave-jvm-master/` tree with `ANDROID_STL=c++_static`, and `-Ptermux-local-dave -Dscarlet.localAndroidDaveNative=<path>` copies a prebuilt .so into the jar (full usage in `local-deps/libdave-android/README.md`)
-  - Added runtime override knobs `scarlet.daveJvm.native` / `SCARLET_DAVE_JVM_NATIVE` (JNI path) and `scarlet.dave.native` / `SCARLET_DAVE_NATIVE` (JNA fallback path) plus `<Scarlet dir>/native/{termux,android}/libdave-jvm.so` / `libdave.so` locations for users supplying a .so outside the jar
-  - Fixed `libdave-jvm-master/CMakeLists.txt` referencing `src/main/cpp`, `boringssl`, `mlspp`, `libdave/cpp`, `cmake`, and `json-cpp` at the project root — the actual source tree lives under `natives/` — so the Android-aware root CMakeLists can now find the sources it needs when invoked by the `android-dave-native` Maven profile
-  - Fixed `DaveLibraryLoader.handleMissingDependency()` on Termux now detecting glibc-only bundled binaries (NEEDED `libc.so.6`) and surfacing an "incompatible native library" dialog instead of trying to run `sudo apt install libopus0`
+  - Added Android/Termux support for Discord DAVE voice E2EE via `Platform.IS_ANDROID` / `Platform.IS_TERMUX`, `AndroidDaveJvmLibraryLoader`, and a local `DaveNativeBindings` override so the bundled Lavaplayer native loader is bypassed on Bionic
+  - Added two Maven profiles for producing a Bionic-compatible native library: `-Pandroid-dave-native -Dscarlet.buildAndroidDaveNative=true` and `-Ptermux-local-dave -Dscarlet.localAndroidDaveNative=<path>`
+  - Added runtime override knobs `scarlet.daveJvm.native` / `SCARLET_DAVE_JVM_NATIVE` and `scarlet.dave.native` / `SCARLET_DAVE_NATIVE`, plus `<Scarlet dir>/native/{termux,android}/libdave-jvm.so` / `libdave.so` search paths
+  - Added "lite" edition built alongside the full edition - `mvn package` now produces both `scarlet-0.4.16-b5.jar` and `scarlet-0.4.16-b5-lite.jar`; the lite JAR has no RVC UI, no Python bridge, and skips the torch/rvc-python dependency install flow
+  - Added compile-time feature flag `net.sybyline.scarlet.Features.RVC_ENABLED`, driven by the bundled `scarlet-features.properties` resource (stripped by the lite shade execution)
+  - Added `tts_rvc_pitch` setting (range -24..+24 semitones) under Settings -> Text-to-Speech for tuning the RVC model's pitch offset when the TTS voice's fundamental doesn't match what the model was trained on
+  - Added `--models-dir` flag to the RVC Python bridge so it finds models even when the bridge is extracted to a different subtree than the user's models directory
+  - Added stem-contains matching for `.index` files so a model and its retrieval index are paired even when the filenames don't match exactly
+  - Added automatic refresh of classpath-extracted bridge assets on startup so upgraded Python bridges take effect without requiring users to delete the AppData copy
+  - Added per-install IPC authentication tokens so local IPC commands are no longer accepted unauthenticated by default
+  - Added public-only outbound URL validation to block SSRF-style fetches against private, loopback, and local network targets across GIF conversion and import paths
+  - Added strict GIF safety limits covering payload size, frame count, dimensions, and total pixel area to reduce memory/CPU denial-of-service risk
+  - Added path sanitization and root-boundary checks for evidence exports so attachment-driven filenames cannot escape the configured evidence directory
+  - Added explicit interaction ownership checks for pending moderation and instance-creation flows so one Discord user cannot hijack another user's in-progress controls
+  - Added runtime permission re-checks on privileged Discord UI actions such as redact/unredact, tag editing, notes edits, watched-group imports, report-template changes, aux webhook changes, and moderation actions
+  - Added safer interaction defaults by moving buttons/selects/modals onto explicit known-safe allowlists instead of framework-wide implicit allow
+  - Added hardened encrypted-preferences migration with automatic legacy wrapper detection, backup export, and rewrapping under the current per-install secret
+  - Added automatic recovery of older Discord and VRChat credentials by migrating legacy encrypted preference nodes to the current secret wrapper
+  - Added startup backup warnings before secure-store initialization, including current and legacy data locations to copy before migration runs
+  - Added startup diagnostics for secure preference initialization so stalls now log the current stage and worker-thread location instead of appearing frozen
+  - Added deferred secure-store opening during VRChat startup so early splash progress remains visible before encrypted credential access begins
+  - Added security regression checks covering encrypted preference round-trips, legacy wrapper migration, and public URL validation
+  - Fixed RVC conversion failing with `_pickle.UnpicklingError: Weights only load failed` on PyTorch 2.6+ by transparently restoring `torch.load`'s `weights_only=False` default and allowlisting `fairseq.data.dictionary.Dictionary` via `torch.serialization.add_safe_globals`
+  - Fixed RVC conversion failing with `Expected a JsonObject but was JsonPrimitive` when rvc-python progress prints leaked onto stdout - the bridge now routes library stdout to stderr during inference, and Java parses the last balanced JSON object rather than the whole buffer as a defence-in-depth measure
+  - Fixed dependency-install wheel picker falling back to CPU on CUDA 13.0 because of a broken version comparison; now uses tuple comparison and correctly selects `cu124` for CUDA >= 12.4
+  - Fixed unnecessary torch reinstall causing `WinError 5 - Access is denied` on Windows when the DLLs were already loaded; the install step is now skipped entirely when both `torch` and `torchaudio` are already present
+  - Fixed post-install `_try_import` checks reporting packages as missing due to stale `importlib` finder / metadata caches; caches are now invalidated after every pip run
+  - Fixed `torchcodec` incorrectly gating `rvc_compatible` in `--status` output; it is now in the optional package set (rvc-python 0.1.5 does not import it)
+  - Fixed RVC-related settings appearing in the UI of the lite edition - they are now filtered out when `Features.RVC_ENABLED` is false
+  - Fixed `EncryptedPrefs` decrypt flow so secure preferences actually decrypt in decrypt mode, and removed pointless base64-wrapping of plaintext before encryption
+  - Fixed legacy secret-at-rest protection relying on a universal default fallback by moving to a persisted random per-install fallback secret
+  - Fixed unauthenticated local IPC control on Windows named pipes and Unix sockets from being accepted without a secret by default
+  - Fixed `/vrchat-animated-emoji from-url` and related remote-fetch paths accepting arbitrary internal/private targets
+  - Fixed evidence file writes being vulnerable to path traversal through templated or attachment-derived names
+  - Fixed privileged Discord interaction handlers trusting the UI layer too much by enforcing authorization again at execution time
+  - Fixed pending moderation state and instance-creation state being reusable by other users who could trigger the same custom IDs
+  - Fixed runtime dependency bootstrap trusting downloaded jars too easily by disabling it by default and validating remote checksums when enabled
+  - Fixed startup appearing to freeze with no clue when secure preferences are slow or blocked by adding staged logging and splash progress around secure-store work
+  - Fixed `libdave-jvm-master/CMakeLists.txt` referencing `src/main/cpp`, `boringssl`, `mlspp`, `libdave/cpp`, `cmake`, and `json-cpp` at the project root - the actual source tree lives under `natives/` - so the Android-aware root CMakeLists can now find the sources it needs when invoked by the `android-dave-native` Maven profile
+  - Fixed `DaveLibraryLoader.handleMissingDependency()` on Termux now detecting glibc-only bundled binaries (`libc.so.6`) and surfacing an "incompatible native library" dialog instead of trying to run `sudo apt install libopus0`
   - Updated `vrchatapi-java` to `1.20.8-nightly.14`
   - Fixed the Settings UI occasionally painting card contents outside the scroll viewport during rapid resize/scroll, which could draw controls over the tab strip, search row, or footer
+  - Fixed `java.io.IOException: The handle is invalid` being thrown ten times a second from `Scarlet.spin()` on Windows when the user launched Scarlet without an attached console (double-clicked JAR via `javaw.exe`, Windows shortcut, Task Scheduler, detached launch) - the CLI reader now detects the invalid stdin handle on first failure, logs it once at INFO, and skips further `System.in.available()` polling for the session
+  - Fixed `ErrorResponseException: -1: java.io.InterruptedIOException` being logged at ERROR when closing Scarlet while JDA still had in-flight command-registration REST calls (triggered by `updateCommandList()` after a version change) - installed a custom `RestAction.setDefaultFailure` handler in `ScarletDiscordJDA` that routes `InterruptedIOException` down to DEBUG and delegates all other failures to JDA's original default handler
+  - Fixed inverted `awaitShutdown` condition in `ScarletDiscordJDA.close()` - the code was force-shutting-down JDA only after graceful shutdown had already succeeded (no-op) and doing nothing when the 10s timeout elapsed (leaving pending requests hanging); now correctly force-shuts-down on timeout and preserves the thread interrupt status on `InterruptedException`
+  - Fixed RVC, TTS, and xdg-utils dependency-installer dialogs having their Yes/No buttons clipped off the bottom of the screen on Windows at elevated display scale (125%/150%/200%)
+  - Fixed RVC dependency installation failing with "pip reported success installing rvc-python but the package is still not importable" on fresh Python 3.10/3.11 installs by adding compatibility shims for `collections.abc`, Python 3.11 dataclass defaults, and better import-error surfacing in the bridge
+  - Fixed `_try_import` silently discarding exception details - the bridge now records the actual exception into a process-wide `_IMPORT_ERRORS` map and surfaces broken imports in `--status`
+  - Changed `TtsService` RVC accessors (`isRvcAvailable`, `getRvcStatus`, `getRvcModelsDir`, `getRvcModels`, `setRvcConfig`) to null-safe so a null `RvcService` in the lite edition is handled gracefully
+  - Changed `RvcService.getResourcePath()` to prefer a fresh classpath extraction over the AppData cache, so bundled bridge upgrades take effect on the next launch
   - Indefinitely postponed: Support for multiple groups
   - Pending: Staff & Instance Analysis, (live infographic?)
   - Pending: Limited Google Drive interoperability
   - Pending: Distinct Server and Client modes
-  - Codex will review your output once you are done.
-
-## 0.4.16-b5
-  - Added "lite" edition built alongside the full edition — `mvn package` now produces both `scarlet-0.4.16-b5.jar` and `scarlet-0.4.16-b5-lite.jar`; the lite JAR has no RVC UI, no Python bridge, and skips the torch/rvc-python dependency install flow
-  - Added compile-time feature flag `net.sybyline.scarlet.Features.RVC_ENABLED`, driven by the bundled `scarlet-features.properties` resource (stripped by the lite shade execution)
-  - Added `tts_rvc_pitch` setting (range -24..+24 semitones) under Settings → Text-to-Speech for tuning the RVC model's pitch offset when the TTS voice's fundamental doesn't match what the model was trained on
-  - Added `--models-dir` flag to the RVC Python bridge so it finds models even when the bridge is extracted to a different subtree than the user's models directory
-  - Added stem-contains matching for `.index` files so a model and its retrieval index are paired even when the filenames don't match exactly
-  - Added automatic refresh of classpath-extracted bridge assets on startup so upgraded Python bridges take effect without requiring users to delete the AppData copy
-  - Fixed RVC conversion failing with `_pickle.UnpicklingError: Weights only load failed` on PyTorch 2.6+ by transparently restoring `torch.load`'s `weights_only=False` default and allowlisting `fairseq.data.dictionary.Dictionary` via `torch.serialization.add_safe_globals`
-  - Fixed RVC conversion failing with `Expected a JsonObject but was JsonPrimitive` when rvc-python progress prints leaked onto stdout — the bridge now routes library stdout to stderr during inference, and Java parses the last balanced JSON object rather than the whole buffer as a defence-in-depth measure
-  - Fixed dependency-install wheel picker falling back to CPU on CUDA 13.0 because of a broken version comparison; now uses tuple comparison and correctly selects `cu124` for CUDA ≥ 12.4
-  - Fixed unnecessary torch reinstall causing `WinError 5 — Access is denied` on Windows when the DLLs were already loaded; the install step is now skipped entirely when both `torch` and `torchaudio` are already present
-  - Fixed post-install `_try_import` checks reporting packages as missing due to stale `importlib` finder / metadata caches; caches are now invalidated after every pip run
-  - Fixed `torchcodec` incorrectly gating `rvc_compatible` in `--status` output; it is now in the optional package set (rvc-python 0.1.5 does not import it)
-  - Fixed RVC-related settings appearing in the UI of the lite edition — they are now filtered out when `Features.RVC_ENABLED` is false
-  - Fixed `java.io.IOException: The handle is invalid` being thrown ten times a second from `Scarlet.spin()` on Windows when the user launched Scarlet without an attached console (double-clicked JAR via `javaw.exe`, Windows shortcut, Task Scheduler, detached launch) — the CLI reader now detects the invalid stdin handle on first failure, logs it once at INFO, and skips further `System.in.available()` polling for the session
-  - Fixed `ErrorResponseException: -1: java.io.InterruptedIOException` being logged at ERROR when closing Scarlet while JDA still had in-flight command-registration REST calls (triggered by `updateCommandList()` after a version change) — installed a custom `RestAction.setDefaultFailure` handler in `ScarletDiscordJDA` that routes `InterruptedIOException` down to DEBUG and delegates all other failures to JDA's original default handler
-  - Fixed inverted `awaitShutdown` condition in `ScarletDiscordJDA.close()` — the code was force-shutting-down JDA only after graceful shutdown had already succeeded (no-op) and doing nothing when the 10s timeout elapsed (leaving pending requests hanging); now correctly force-shuts-down on timeout and preserves the thread interrupt status on `InterruptedException`
-  - Fixed RVC, TTS, and xdg-utils dependency-installer dialogs having their Yes/No buttons clipped off the bottom of the screen on Windows at elevated display scale (125%/150%/200%) — `JOptionPane` dialogs are non-resizable and sized to their content's preferred height, so tall HTML bodies pushed the button row past the screen edge; added a new `Swing.fitToScreen` helper that wraps over-tall content in a screen-aware `JScrollPane` (capped at 70% screen height / 85% width), and applied it to every installer dialog in `RvcInstallDialogs`, `TtsPackageInstallDialogs`, and `XdgOpenInstallDialogs`
-  - Fixed RVC dependency installation failing with "pip reported success installing rvc-python but the package is still not importable" on fresh Python 3.10/3.11 installs — pip correctly installed `rvc-python 0.1.5`, but `import rvc_python` then blew up deep inside `fairseq 0.12.2 → hydra.core → antlr4-python3-runtime==4.8` because ANTLR 4.8 uses `from collections import Callable`, an alias removed in Python 3.10; the bridge's `_try_import` was silently swallowing the `ImportError` and reporting the package as missing. Added a `collections.abc` compat shim at the top of `rvc_bridge.py` that re-binds the removed ABC aliases (`Callable`, `Iterable`, `Mapping`, …) on Python 3.10+ before any `fairseq`/`rvc_python` import can fire, guarded with `hasattr` so it's a no-op on 3.9
-  - Fixed RVC dependency installation still failing on Python 3.11 after the `collections.abc` shim with `ValueError: mutable default <class 'fairseq.dataclass.configs.CommonConfig'> for field common is not allowed: use default_factory` — Python 3.11's `@dataclass` rejects any default whose class has `__hash__ is None` (every plain `@dataclass` class qualifies), which fairseq 0.12.2 relies on in patterns like `common: CommonConfig = CommonConfig()` throughout `fairseq.dataclass.configs`. Added a second compat shim at the top of `rvc_bridge.py` that replaces `dataclasses.dataclass` with a wrapper which pre-walks the class body and auto-converts mutable instance defaults (bare values or `field(default=…)`) into `field(default_factory=<deepcopy of a frozen snapshot>)` — strictly a superset of stock behaviour, so all existing valid dataclasses are unaffected, and every instance still gets its own copy (which is what a correctly-written `default_factory=lambda: X()` would have produced)
-  - Fixed `_try_import` silently discarding exception details — the bridge now records the actual exception into a process-wide `_IMPORT_ERRORS` map, exposes it as `broken_imports` in the `--status` JSON, and `--install` distinguishes "package absent from disk" (retry install) from "package installed but broken at import time" (surface the real exception in the failure message so the user and maintainers see why, instead of being pointed at an unhelpful manual `pip install …` command that won't change anything)
-  - Changed `TtsService` RVC accessors (`isRvcAvailable`, `getRvcStatus`, `getRvcModelsDir`, `getRvcModels`, `setRvcConfig`) to null-safe so a null `RvcService` in the lite edition is handled gracefully
-  - Changed `RvcService.getResourcePath()` to prefer a fresh classpath extraction over the AppData cache, so bundled bridge upgrades take effect on the next launch
-
 ## 0.4.16-b4
   - Added built-in `/discord-kick` and `/discord-ban` Discord slash commands using the native Discord member picker
   - Added optional reason parameter to `/discord-kick` and `/discord-ban`
   - Added DM notification sent to the target user before a kick or ban is carried out
   - Added one-time opt-in prompt on first startup asking whether to enable the built-in Discord kick/ban commands
-  - Added `discord_kick_ban_enabled` toggle under Settings → Discord
+  - Added `discord_kick_ban_enabled` toggle under Settings Ã¢â€ â€™ Discord
   - Added ephemeral response when `/discord-kick` or `/discord-ban` is used while the feature is disabled, directing the user to Settings
   - Added in-app CLI panel as a dedicated "CLI" tab in the Scarlet UI, with a terminal-style read-only output area and a command input field
   - Added `rawCommand` output routing so CLI results appear in the in-app panel as well as the system log
-  - Added "Run CLI command" entry under Settings → CLI for running commands via a popup dialog
+  - Added "Run CLI command" entry under Settings Ã¢â€ â€™ CLI for running commands via a popup dialog
   - Added startup banner to the console showing the Scarlet version and a hint to type `help`
   - Fixed CLI `help` command output not being printed to the console
   - Improved logging for Discord kick and ban actions (actor, target, guild, reason all recorded at INFO level)

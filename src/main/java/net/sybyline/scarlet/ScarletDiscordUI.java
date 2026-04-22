@@ -83,6 +83,8 @@ public class ScarletDiscordUI
     @ModalSub("watched-group-set-notes")
     public void watchedGroupSetNotes(ModalInteractionEvent event)
     {
+        if (!this.checkConfigAccess(event, "edit watched group notes"))
+            return;
         String[] parts = event.getModalId().split(":");
         String groupId = parts[1];
         ScarletWatchedGroups.WatchedGroup watchedGroup = this.discord.scarlet.watchedGroups.getWatchedGroup(groupId);
@@ -99,6 +101,8 @@ public class ScarletDiscordUI
     @ModalSub("watched-entity-set-notes")
     public void watchedEntitySetNotes(ModalInteractionEvent event)
     {
+        if (!this.checkConfigAccess(event, "edit watched entity notes"))
+            return;
         String[] parts = event.getModalId().split(":");
         String entityKind = parts[1],
                entityId = parts[2];
@@ -116,6 +120,9 @@ public class ScarletDiscordUI
     public void editTags(ButtonInteractionEvent event, InteractionHook hook)
     {
         String[] parts = event.getButton().getCustomId().split(":");
+        String auditEntryId = parts[1];
+        if (!this.checkAuditEntryModerationAccess(event.getMember(), hook, auditEntryId))
+            return;
                 
         List<ScarletModerationTags.Tag> tags = this.discord.scarlet.moderationTags.getTags();
         
@@ -124,8 +131,6 @@ public class ScarletDiscordUI
             hook.sendMessage("No moderation tags!").setEphemeral(true).queue();
             return;
         }
-        
-        String auditEntryId = parts[1];
         
         int total = tags.size();
         StringSelectMenu.Builder[] builders = new StringSelectMenu.Builder[(total - 1) / 25 + 1];
@@ -203,6 +208,8 @@ public class ScarletDiscordUI
         String[] parts = event.getSelectMenu().getCustomId().split(":");
         
         String auditEntryId = parts[1];
+        if (!this.checkAuditEntryModerationAccess(event.getMember(), hook, auditEntryId))
+            return;
         
         ScarletData.AuditEntryMetadata auditEntryMeta = this.discord.scarlet.data.auditEntryMetadata_editTags(auditEntryId,
                 event.getSelectMenu().getOptions().stream().map(SelectOption::getValue).filter($ -> !event.getValues().contains($)).toArray(String[]::new),
@@ -223,6 +230,8 @@ public class ScarletDiscordUI
         String[] parts = event.getButton().getCustomId().split(":");
 
         String vrcTargetId = parts[1];
+        if (!this.checkGroupModerationAccess(event.getMember(), event, "edit manager notes"))
+            return;
         
         String vrcActorId = this.discord.scarlet.data.globalMetadata_getSnowflakeId(event.getUser().getId());
         if (vrcActorId == null)
@@ -254,6 +263,8 @@ public class ScarletDiscordUI
         String[] parts = event.getModalId().split(":");
 
         String vrcTargetId = parts[1];
+        if (!this.checkGroupModerationAccess(event.getMember(), event, "edit manager notes"))
+            return;
         
         String vrcActorId = this.discord.scarlet.data.globalMetadata_getSnowflakeId(event.getUser().getId());
         if (vrcActorId == null)
@@ -343,6 +354,8 @@ public class ScarletDiscordUI
     {
         String[] parts = event.getSelectMenu().getCustomId().split(":");
         String targetUserId = parts[1];
+        if (!this.checkPendingBanOwnership(event, targetUserId))
+            return;
         if (this.discord.scarlet.pendingModActions.setBanInfoTags(targetUserId, event.getValues().toArray(new String[0])))
         {
             event.reply("No pending ban").setEphemeral(true).queue();
@@ -356,6 +369,8 @@ public class ScarletDiscordUI
     {
         String[] parts = event.getButton().getCustomId().split(":");
         String targetUserId = parts[1];
+        if (!this.checkPendingBanOwnership(event, targetUserId))
+            return;
         
         Modal.Builder m = Modal.create("immediate-ban-edit-desc:"+targetUserId, "Edit description")
             .addComponents(Label.of("Input description", TextInput
@@ -372,6 +387,8 @@ public class ScarletDiscordUI
     {
         String[] parts = event.getModalId().split(":");
         String targetUserId = parts[1];
+        if (!this.checkPendingBanOwnership(event, targetUserId))
+            return;
         if (this.discord.scarlet.pendingModActions.setBanInfoDescription(targetUserId, event.getValue("input-desc:"+targetUserId).getAsString()))
         {
             event.reply("No pending ban").setEphemeral(true).queue();
@@ -385,6 +402,8 @@ public class ScarletDiscordUI
     {
         String[] parts = event.getButton().getCustomId().split(":");
         String targetUserId = parts[1];
+        if (!this.checkPendingBanOwnership(event, targetUserId))
+            return;
         event.deferEdit().queue();
         this.discord.scarlet.pendingModActions.pollBanInfo(targetUserId);
         event.getMessage().delete().queue();
@@ -395,6 +414,8 @@ public class ScarletDiscordUI
     {
         String[] parts = event.getButton().getCustomId().split(":");
         String targetUserId = parts[1];
+        if (!this.checkPendingBanOwnership(event.getMember(), hook, event.getUser().getId(), targetUserId))
+            return;
         if (this._vrchatUserBan(hook, event.getMember(), targetUserId))
         {
             event.getMessage().delete().queue();
@@ -541,6 +562,8 @@ public class ScarletDiscordUI
         String[] parts = event.getButton().getCustomId().split(":");
         
         String auditEntryId = parts[1];
+        if (!this.checkAuditEntryModerationAccess(event.getMember(), hook, auditEntryId))
+            return;
         
         ScarletData.AuditEntryMetadata auditEntryMeta = this.discord.scarlet.data.auditEntryMetadata(auditEntryId);
         if (auditEntryMeta == null)
@@ -589,6 +612,8 @@ public class ScarletDiscordUI
         String[] parts = event.getButton().getCustomId().split(":");
         
         String auditEntryId = parts[1];
+        if (!this.checkAuditEntryModerationAccess(event.getMember(), hook, auditEntryId))
+            return;
         
         ScarletData.AuditEntryMetadata auditEntryMeta = this.discord.scarlet.data.auditEntryMetadata(auditEntryId);
         if (auditEntryMeta == null)
@@ -634,6 +659,8 @@ public class ScarletDiscordUI
         String ictoken = parts[1];
         
         InstanceCreation ic = this.discord.instanceCreation.get(ictoken);
+        if (!this.checkInstanceCreationOwnership(event.getMember(), hook, event.getUser().getId(), ic))
+            return;
         
         if (ic == null)
         {
@@ -721,6 +748,9 @@ public class ScarletDiscordUI
     {
         String[] parts = event.getButton().getCustomId().split(":");
         String ictoken = parts[1];
+        InstanceCreation ic = this.discord.instanceCreation.get(ictoken);
+        if (!this.checkInstanceCreationOwnership(event.getMember(), hook, event.getUser().getId(), ic))
+            return;
         this.discord.instanceCreation.remove(ictoken);
         hook.deleteMessageById(event.getMessageId()).queue();
         hook.deleteOriginal().queue();
@@ -732,6 +762,8 @@ public class ScarletDiscordUI
         String[] parts = event.getButton().getCustomId().split(":");
         String ictoken = parts[1];
         InstanceCreation ic = this.discord.instanceCreation.get(ictoken);
+        if (!this.checkInstanceCreationOwnership(event, event.getUser().getId(), ic))
+            return;
         event.replyModal(Modal.create("new-instance-modal:"+ictoken, "Additional options")
                 .addComponents(Label.of("Display name (unknown purpose)", TextInput.create("display-name:"+ictoken, TextInputStyle.SHORT)
                     .setValue(ic == null ? null : ic.displayName)
@@ -747,6 +779,8 @@ public class ScarletDiscordUI
         String ictoken = parts[1];
         String displayName = event.getValue("display-name:"+parts[1]).getAsString();
         InstanceCreation ic = this.discord.instanceCreation.get(ictoken);
+        if (!this.checkInstanceCreationOwnership(event, event.getUser().getId(), ic))
+            return;
         if (ic == null)
         {
             event.reply("This interaction has timed out.").queue($ -> $.deleteOriginal().queueAfter(3_000L, TimeUnit.MILLISECONDS));
@@ -762,6 +796,8 @@ public class ScarletDiscordUI
         String[] parts = event.getSelectMenu().getCustomId().split(":");
         String ictoken = parts[1];
         InstanceCreation ic = this.discord.instanceCreation.get(ictoken);
+        if (!this.checkInstanceCreationOwnership(event, event.getUser().getId(), ic))
+            return;
         if (ic != null) try
         {
             ic.region = event.getValues().stream().findFirst().map(InstanceRegion::fromValue).get();
@@ -780,6 +816,8 @@ public class ScarletDiscordUI
         String[] parts = event.getSelectMenu().getCustomId().split(":");
         String ictoken = parts[1];
         InstanceCreation ic = this.discord.instanceCreation.get(ictoken);
+        if (!this.checkInstanceCreationOwnership(event, event.getUser().getId(), ic))
+            return;
         if (ic != null) try
         {
             ic.groupAccessType = event.getValues().stream().findFirst().map(GroupAccessType::fromValue).get();
@@ -798,6 +836,8 @@ public class ScarletDiscordUI
         String[] parts = event.getSelectMenu().getCustomId().split(":");
         String ictoken = parts[1];
         InstanceCreation ic = this.discord.instanceCreation.get(ictoken);
+        if (!this.checkInstanceCreationOwnership(event, event.getUser().getId(), ic))
+            return;
         if (ic != null) try
         {
             ic.roleIds = new ArrayList<>(event.getValues());
@@ -816,6 +856,8 @@ public class ScarletDiscordUI
         String[] parts = event.getSelectMenu().getCustomId().split(":");
         String ictoken = parts[1];
         InstanceCreation ic = this.discord.instanceCreation.get(ictoken);
+        if (!this.checkInstanceCreationOwnership(event, event.getUser().getId(), ic))
+            return;
         if (ic != null) try
         {
             ic.queueEnabled = event.getValues().contains("queueEnabled");
@@ -845,6 +887,8 @@ public class ScarletDiscordUI
     {
         String[] parts = event.getButton().getCustomId().split(":");
         String auditEntryId = parts[1];
+        if (!this.checkAuditEntryModerationAccess(event.getMember(), event, auditEntryId))
+            return;
         TextInput.Builder ti = TextInput
             .create("input-desc:"+auditEntryId, TextInputStyle.PARAGRAPH)
             .setRequired(true)
@@ -866,6 +910,8 @@ public class ScarletDiscordUI
     public void editDesc(ModalInteractionEvent event)
     {
         String[] parts = event.getModalId().split(":");
+        if (!this.checkAuditEntryModerationAccess(event.getMember(), event, parts[1]))
+            return;
         String desc = event.getValue("input-desc:"+parts[1]).getAsString();
         event.replyFormat("### Setting description:\n%s", desc).setEphemeral(true).queue();
         ScarletData.AuditEntryMetadata auditEntryMeta = this.discord.scarlet.data.auditEntryMetadata_setDescription(parts[1], desc);
@@ -1244,13 +1290,14 @@ public class ScarletDiscordUI
                     .audit(auditEntryId)
                     .index(auditEntryTargetUserMeta.getUserCaseEvidenceCount())
                     ;
-                File dest = filePath.nextFile(evidenceRoot, this.discord.evidenceFilePathFormat.get());
-                if (dest.isFile())
+                try
                 {
-                    hook.sendMessageFormat("File '%s' already exists, skipping.", fileName).setEphemeral(true).queue();
-                }
-                else try
-                {
+                    File dest = filePath.nextFile(evidenceRoot, this.discord.evidenceFilePathFormat.get());
+                    if (dest.isFile())
+                    {
+                        hook.sendMessageFormat("File '%s' already exists, skipping.", fileName).setEphemeral(true).queue();
+                        continue;
+                    }
                     if (!dest.getParentFile().isDirectory())
                         dest.getParentFile().mkdirs();
                     attachment.getProxy().downloadToFile(dest).join();
@@ -1275,6 +1322,8 @@ public class ScarletDiscordUI
     @Ephemeral
     public void importWatchedGroups(ButtonInteractionEvent event, InteractionHook hook)
     {
+        if (!this.checkConfigAccess(event.getMember(), hook, "import watched groups"))
+            return;
         String[] parts = event.getButton().getCustomId().split(":");
         String messageSnowflake = parts[1];
         
@@ -1301,7 +1350,7 @@ public class ScarletDiscordUI
             if (fileName.endsWith(".csv"))
             {
                 LOG.info("Importing watched groups legacy CSV from attachment: "+fileName);
-                try (Reader reader = new InputStreamReader(HttpURLInputStream.get(attachmentUrl)))
+                try (Reader reader = new InputStreamReader(HttpURLInputStream.get(attachmentUrl, HttpURLInputStream.PUBLIC_ONLY)))
                 {
                     if (this.discord.scarlet.watchedGroups.importLegacyCSV(reader, true))
                     {
@@ -1323,7 +1372,7 @@ public class ScarletDiscordUI
             else if (fileName.endsWith(".json"))
             {
                 LOG.info("Importing watched groups JSON from attachment: "+fileName);
-                try (Reader reader = new InputStreamReader(HttpURLInputStream.get(attachmentUrl)))
+                try (Reader reader = new InputStreamReader(HttpURLInputStream.get(attachmentUrl, HttpURLInputStream.PUBLIC_ONLY)))
                 {
                     if (this.discord.scarlet.watchedGroups.importJson(reader, true))
                     {
@@ -1353,6 +1402,8 @@ public class ScarletDiscordUI
     @ModalSub("edit-report-template")
     public void editReportTemplate(ModalInteractionEvent event)
     {
+        if (!this.checkConfigAccess(event, "edit the report template"))
+            return;
         String contents = event.getValue("report-template").getAsString();
         try
         {
@@ -1380,6 +1431,11 @@ public class ScarletDiscordUI
     @Ephemeral
     public void discordKickConfirm(ButtonInteractionEvent event, InteractionHook hook)
     {
+        if (event.getMember() == null || !event.getMember().hasPermission(net.dv8tion.jda.api.Permission.KICK_MEMBERS))
+        {
+            hook.sendMessage("You do not have permission to kick members.").setEphemeral(true).queue();
+            return;
+        }
         // Split with limit 3 so a colon inside the reason is preserved intact
         String[] parts = event.getButton().getCustomId().split(":", 3);
         String targetId = parts[1];
@@ -1513,6 +1569,11 @@ public class ScarletDiscordUI
     @Ephemeral
     public void discordBanConfirm(ButtonInteractionEvent event, InteractionHook hook)
     {
+        if (event.getMember() == null || !event.getMember().hasPermission(net.dv8tion.jda.api.Permission.BAN_MEMBERS))
+        {
+            hook.sendMessage("You do not have permission to ban members.").setEphemeral(true).queue();
+            return;
+        }
         // Split with limit 3 so a colon inside the reason is preserved intact
         String[] parts = event.getButton().getCustomId().split(":", 3);
         String targetId = parts[1];
@@ -1655,6 +1716,8 @@ public class ScarletDiscordUI
     @StringSel("set-audit-aux-webhooks")
     public void setAuditAuxWebhooks(StringSelectInteractionEvent event)
     {
+        if (!this.checkConfigAccess(event, "set audit auxiliary webhooks"))
+            return;
         String[] parts = event.getSelectMenu().getCustomId().split(":");
         String auditType0 = parts[1];
         GroupAuditType auditType = GroupAuditType.of(auditType0);
@@ -1674,6 +1737,204 @@ public class ScarletDiscordUI
                 event.getValues().stream().collect(Collectors.joining(", "))).setEphemeral(true).queue();
             this.discord.auditType2scarletAuxWh.put(auditType0, new UniqueStrings(event.getValues()));
         }
+    }
+
+    boolean checkAuditEntryModerationAccess(Member member, InteractionHook hook, String auditEntryId)
+    {
+        if (member == null)
+        {
+            hook.sendMessage("Could not determine your guild permissions.").setEphemeral(true).queue();
+            return false;
+        }
+        if (this.discord.checkMemberHasVRChatPermission(GroupPermissions.group_bans_manage, member)
+            || this.discord.checkMemberHasScarletPermission(ScarletPermission.GROUPEX_BANS_MANAGE, member, false)
+            || member.hasPermission(net.dv8tion.jda.api.Permission.MODERATE_MEMBERS)
+            || member.hasPermission(net.dv8tion.jda.api.Permission.MANAGE_SERVER))
+            return true;
+        hook.sendMessage("You do not have permission to modify audit event moderation state.").setEphemeral(true).queue();
+        LOG.warn("Rejected unauthorized moderation interaction by {} for audit entry {}", member.getId(), auditEntryId);
+        return false;
+    }
+    boolean checkAuditEntryModerationAccess(Member member, ButtonInteractionEvent event, String auditEntryId)
+    {
+        if (member == null)
+        {
+            event.reply("Could not determine your guild permissions.").setEphemeral(true).queue();
+            return false;
+        }
+        if (this.discord.checkMemberHasVRChatPermission(GroupPermissions.group_bans_manage, member)
+            || this.discord.checkMemberHasScarletPermission(ScarletPermission.GROUPEX_BANS_MANAGE, member, false)
+            || member.hasPermission(net.dv8tion.jda.api.Permission.MODERATE_MEMBERS)
+            || member.hasPermission(net.dv8tion.jda.api.Permission.MANAGE_SERVER))
+            return true;
+        event.reply("You do not have permission to modify audit event moderation state.").setEphemeral(true).queue();
+        LOG.warn("Rejected unauthorized moderation interaction by {} for audit entry {}", member.getId(), auditEntryId);
+        return false;
+    }
+    boolean checkAuditEntryModerationAccess(Member member, ModalInteractionEvent event, String auditEntryId)
+    {
+        if (member == null)
+        {
+            event.reply("Could not determine your guild permissions.").setEphemeral(true).queue();
+            return false;
+        }
+        if (this.discord.checkMemberHasVRChatPermission(GroupPermissions.group_bans_manage, member)
+            || this.discord.checkMemberHasScarletPermission(ScarletPermission.GROUPEX_BANS_MANAGE, member, false)
+            || member.hasPermission(net.dv8tion.jda.api.Permission.MODERATE_MEMBERS)
+            || member.hasPermission(net.dv8tion.jda.api.Permission.MANAGE_SERVER))
+            return true;
+        event.reply("You do not have permission to modify audit event moderation state.").setEphemeral(true).queue();
+        LOG.warn("Rejected unauthorized moderation interaction by {} for audit entry {}", member.getId(), auditEntryId);
+        return false;
+    }
+    boolean checkConfigAccess(Member member, InteractionHook hook, String action)
+    {
+        if (member == null)
+        {
+            hook.sendMessage("Could not determine your guild permissions.").setEphemeral(true).queue();
+            return false;
+        }
+        if (member.hasPermission(net.dv8tion.jda.api.Permission.MANAGE_SERVER)
+            || member.hasPermission(net.dv8tion.jda.api.Permission.ADMINISTRATOR))
+            return true;
+        hook.sendMessage("You do not have permission to " + action + ".").setEphemeral(true).queue();
+        LOG.warn("Rejected unauthorized configuration interaction by {} while trying to {}", member.getId(), action);
+        return false;
+    }
+    boolean checkConfigAccess(ModalInteractionEvent event, String action)
+    {
+        Member member = event.getMember();
+        if (member == null)
+        {
+            event.reply("Could not determine your guild permissions.").setEphemeral(true).queue();
+            return false;
+        }
+        if (member.hasPermission(net.dv8tion.jda.api.Permission.MANAGE_SERVER)
+            || member.hasPermission(net.dv8tion.jda.api.Permission.ADMINISTRATOR))
+            return true;
+        event.reply("You do not have permission to " + action + ".").setEphemeral(true).queue();
+        LOG.warn("Rejected unauthorized configuration interaction by {} while trying to {}", member.getId(), action);
+        return false;
+    }
+    boolean checkConfigAccess(StringSelectInteractionEvent event, String action)
+    {
+        Member member = event.getMember();
+        if (member == null)
+        {
+            event.reply("Could not determine your guild permissions.").setEphemeral(true).queue();
+            return false;
+        }
+        if (member.hasPermission(net.dv8tion.jda.api.Permission.MANAGE_SERVER)
+            || member.hasPermission(net.dv8tion.jda.api.Permission.ADMINISTRATOR))
+            return true;
+        event.reply("You do not have permission to " + action + ".").setEphemeral(true).queue();
+        LOG.warn("Rejected unauthorized configuration interaction by {} while trying to {}", member.getId(), action);
+        return false;
+    }
+    boolean checkGroupModerationAccess(Member member, ButtonInteractionEvent event, String action)
+    {
+        if (member == null)
+        {
+            event.reply("Could not determine your guild permissions.").setEphemeral(true).queue();
+            return false;
+        }
+        if (this.discord.checkMemberHasVRChatPermission(GroupPermissions.group_bans_manage, member)
+            || this.discord.checkMemberHasScarletPermission(ScarletPermission.GROUPEX_BANS_MANAGE, member, false)
+            || member.hasPermission(net.dv8tion.jda.api.Permission.MODERATE_MEMBERS)
+            || member.hasPermission(net.dv8tion.jda.api.Permission.MANAGE_SERVER))
+            return true;
+        event.reply("You do not have permission to " + action + ".").setEphemeral(true).queue();
+        LOG.warn("Rejected unauthorized moderation interaction by {} while trying to {}", member.getId(), action);
+        return false;
+    }
+    boolean checkGroupModerationAccess(Member member, ModalInteractionEvent event, String action)
+    {
+        if (member == null)
+        {
+            event.reply("Could not determine your guild permissions.").setEphemeral(true).queue();
+            return false;
+        }
+        if (this.discord.checkMemberHasVRChatPermission(GroupPermissions.group_bans_manage, member)
+            || this.discord.checkMemberHasScarletPermission(ScarletPermission.GROUPEX_BANS_MANAGE, member, false)
+            || member.hasPermission(net.dv8tion.jda.api.Permission.MODERATE_MEMBERS)
+            || member.hasPermission(net.dv8tion.jda.api.Permission.MANAGE_SERVER))
+            return true;
+        event.reply("You do not have permission to " + action + ".").setEphemeral(true).queue();
+        LOG.warn("Rejected unauthorized moderation interaction by {} while trying to {}", member.getId(), action);
+        return false;
+    }
+    boolean checkPendingBanOwnership(String requesterSnowflake, String targetUserId)
+    {
+        return this.discord.scarlet.pendingModActions.isBanInfoOwner(targetUserId, requesterSnowflake);
+    }
+    boolean checkPendingBanOwnership(StringSelectInteractionEvent event, String targetUserId)
+    {
+        if (this.checkPendingBanOwnership(event.getUser().getId(), targetUserId))
+            return true;
+        event.reply("That moderation flow belongs to a different user or has expired.").setEphemeral(true).queue();
+        return false;
+    }
+    boolean checkPendingBanOwnership(ButtonInteractionEvent event, String targetUserId)
+    {
+        if (this.checkPendingBanOwnership(event.getUser().getId(), targetUserId))
+            return true;
+        event.reply("That moderation flow belongs to a different user or has expired.").setEphemeral(true).queue();
+        return false;
+    }
+    boolean checkPendingBanOwnership(ModalInteractionEvent event, String targetUserId)
+    {
+        if (this.checkPendingBanOwnership(event.getUser().getId(), targetUserId))
+            return true;
+        event.reply("That moderation flow belongs to a different user or has expired.").setEphemeral(true).queue();
+        return false;
+    }
+    boolean checkPendingBanOwnership(Member member, InteractionHook hook, String requesterSnowflake, String targetUserId)
+    {
+        if (!this.checkPendingBanOwnership(requesterSnowflake, targetUserId))
+        {
+            hook.sendMessage("That moderation flow belongs to a different user or has expired.").setEphemeral(true).queue();
+            return false;
+        }
+        return member != null;
+    }
+    boolean checkInstanceCreationOwnership(String requesterSnowflake, InstanceCreation ic)
+    {
+        return ic != null && requesterSnowflake.equals(ic.ownerSnowflake);
+    }
+    boolean checkInstanceCreationOwnership(ButtonInteractionEvent event, String requesterSnowflake, InstanceCreation ic)
+    {
+        if (this.checkInstanceCreationOwnership(requesterSnowflake, ic))
+            return true;
+        event.reply("That instance creation flow belongs to a different user or has expired.").setEphemeral(true).queue();
+        return false;
+    }
+    boolean checkInstanceCreationOwnership(ModalInteractionEvent event, String requesterSnowflake, InstanceCreation ic)
+    {
+        if (this.checkInstanceCreationOwnership(requesterSnowflake, ic))
+            return true;
+        event.reply("That instance creation flow belongs to a different user or has expired.").setEphemeral(true).queue();
+        return false;
+    }
+    boolean checkInstanceCreationOwnership(StringSelectInteractionEvent event, String requesterSnowflake, InstanceCreation ic)
+    {
+        if (this.checkInstanceCreationOwnership(requesterSnowflake, ic))
+            return true;
+        event.reply("That instance creation flow belongs to a different user or has expired.").setEphemeral(true).queue();
+        return false;
+    }
+    boolean checkInstanceCreationOwnership(Member member, InteractionHook hook, String requesterSnowflake, InstanceCreation ic)
+    {
+        if (ic == null)
+        {
+            hook.sendMessage("This interaction timed out.").setEphemeral(true).queue();
+            return false;
+        }
+        if (!requesterSnowflake.equals(ic.ownerSnowflake))
+        {
+            hook.sendMessage("That instance creation flow belongs to a different user or has expired.").setEphemeral(true).queue();
+            return false;
+        }
+        return member != null;
     }
 
 }

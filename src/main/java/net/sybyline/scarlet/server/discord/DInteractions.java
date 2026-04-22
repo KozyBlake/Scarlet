@@ -2010,6 +2010,14 @@ public class DInteractions
         }
         return true;
     }
+    public boolean isImmediateModalFlow(ModalInteractionEvent event)
+    {
+        if (event == null)
+            return false;
+        String userSf = event.getUser().getId();
+        ModalFlowImmediate.Holder holder = this.modalFlowImmediates.get(userSf);
+        return holder != null && Objects.equals(holder.modalId, event.getModalId());
+    }
 
     public void clearDeadPagination()
     {

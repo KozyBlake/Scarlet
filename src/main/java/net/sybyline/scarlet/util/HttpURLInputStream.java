@@ -10,7 +10,10 @@ import java.io.Reader;
 import java.io.Writer;
 import java.lang.reflect.Type;
 import java.net.HttpURLConnection;
+import java.net.InetAddress;
+import java.net.URI;
 import java.net.URL;
+import java.util.function.Predicate;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 
@@ -23,6 +26,7 @@ import net.sybyline.scarlet.Scarlet;
 
 public class HttpURLInputStream extends FilterInputStream
 {
+    public static final Predicate<String> PUBLIC_ONLY = HttpURLInputStream::isPublicHttpUrl;
 
     public static final Func.V1<IOException, HttpURLConnection> DISABLE_REDIRECTS = $ -> $.setInstanceFollowRedirects(false);
 
@@ -33,6 +37,14 @@ public class HttpURLInputStream extends FilterInputStream
     public static HttpURLInputStream get(String url, Func.V1<IOException, HttpURLConnection> init) throws IOException
     {
         return of(url, null, init, null);
+    }
+    public static HttpURLInputStream get(String url, Predicate<String> validator) throws IOException
+    {
+        return of(url, null, null, null, validator);
+    }
+    public static HttpURLInputStream get(String url, Func.V1<IOException, HttpURLConnection> init, Predicate<String> validator) throws IOException
+    {
+        return of(url, null, init, null, validator);
     }
 
     public static HttpURLInputStream head(String url) throws IOException
@@ -92,6 +104,12 @@ public class HttpURLInputStream extends FilterInputStream
 
     public static HttpURLInputStream of(String url, String method, Func.V1<IOException, HttpURLConnection> init, Func.V1<IOException, OutputStream> send) throws IOException
     {
+        return of(url, method, init, send, null);
+    }
+    public static HttpURLInputStream of(String url, String method, Func.V1<IOException, HttpURLConnection> init, Func.V1<IOException, OutputStream> send, Predicate<String> validator) throws IOException
+    {
+        if (validator != null && !validator.test(url))
+            throw new IOException("Blocked unsafe URL: " + url);
         URL url0 = new URL(url);
         HttpURLConnection connection = (HttpURLConnection)url0.openConnection();
         connection.setRequestProperty("User-Agent", Scarlet.USER_AGENT);
@@ -144,6 +162,56 @@ public class HttpURLInputStream extends FilterInputStream
         finally
         {
             this.connection.disconnect();
+        }
+    }
+
+    static boolean isPublicHttpUrl(String url)
+    {
+        try
+        {
+            URI uri = URI.create(url);
+            String scheme = uri.getScheme();
+            if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme))
+                return false;
+            String host = uri.getHost();
+            if (host == null || host.isEmpty())
+                return false;
+            InetAddress[] addresses = InetAddress.getAllByName(host);
+            if (addresses.length == 0)
+                return false;
+            for (InetAddress address : addresses)
+            {
+                if (address.isAnyLocalAddress() || address.isLoopbackAddress() || address.isSiteLocalAddress() || address.isLinkLocalAddress())
+                    return false;
+                byte[] bytes = address.getAddress();
+                if (bytes.length == 4)
+                {
+                    int b0 = bytes[0] & 0xFF;
+                    int b1 = bytes[1] & 0xFF;
+                    if (b0 == 10 || b0 == 127)
+                        return false;
+                    if (b0 == 169 && b1 == 254)
+                        return false;
+                    if (b0 == 172 && 16 <= b1 && b1 <= 31)
+                        return false;
+                    if (b0 == 192 && b1 == 168)
+                        return false;
+                }
+                else if (bytes.length == 16)
+                {
+                    int b0 = bytes[0] & 0xFF;
+                    int b1 = bytes[1] & 0xFF;
+                    if ((b0 & 0xFE) == 0xFC)
+                        return false;
+                    if (b0 == 0xFE && (b1 & 0xC0) == 0x80)
+                        return false;
+                }
+            }
+            return true;
+        }
+        catch (Exception ex)
+        {
+            return false;
         }
     }
 

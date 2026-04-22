@@ -1,6 +1,7 @@
 package net.sybyline.scarlet;
 
 import java.io.File;
+import java.io.IOException;
 
 import io.github.vrchatapi.model.Group;
 import io.github.vrchatapi.model.User;
@@ -62,6 +63,7 @@ public class ScarletEvidence
         {
             if (fileNameExt != null)
             {
+                fileNameExt = TemplateStrings.sanitizePathComponent(new File(fileNameExt).getName());
                 int period = fileNameExt.lastIndexOf('.');
                 this.fileName = period < 0 ? fileNameExt : fileNameExt.substring(0, period);
                 this.fileExt = period < 0 ? "" : fileNameExt.substring(period + 1);
@@ -95,17 +97,37 @@ public class ScarletEvidence
             this.prevFormat = value;
             return value;
         }
-        public File nextFile(String evidenceRoot, String format)
+        public File nextFile(String evidenceRoot, String format) throws IOException
         {
-            File file = new File(evidenceRoot, this.format(format));
+            File root = new File(evidenceRoot).getCanonicalFile();
+            File file = new File(root, sanitizeRelativePath(this.format(format))).getCanonicalFile();
+            if (!file.toPath().startsWith(root.toPath()))
+                throw new IOException("Refusing to write evidence outside configured evidence root");
             if (format.contains("{index}"))
             {
                 while (file.isFile())
                 {
-                    file = new File(evidenceRoot, this.format(format));
+                    this.incrementIndex();
+                    file = new File(root, sanitizeRelativePath(this.format(format))).getCanonicalFile();
+                    if (!file.toPath().startsWith(root.toPath()))
+                        throw new IOException("Refusing to write evidence outside configured evidence root");
                 }
             }
             return file;
+        }
+        private static String sanitizeRelativePath(String relativePath)
+        {
+            String[] parts = relativePath.replace('\\', '/').split("/");
+            StringBuilder sb = new StringBuilder();
+            for (String part : parts)
+            {
+                if (part == null || part.isEmpty())
+                    continue;
+                if (sb.length() != 0)
+                    sb.append(File.separatorChar);
+                sb.append(TemplateStrings.sanitizePathComponent(part));
+            }
+            return sb.length() == 0 ? "_" : sb.toString();
         }
         public String prevFormat()
         {
