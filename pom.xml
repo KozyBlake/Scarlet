@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>net.sybyline</groupId>
   <artifactId>scarlet</artifactId>
-  <version>0.4.16-b1</version><!--scarlet-version-->
+  <version>0.4.16-b5</version><!--scarlet-version-->
   <name>Scarlet</name>
   <build>
     <plugins>
@@ -82,7 +82,7 @@
     <vrchatapi.version>1.20.8-nightly.8</vrchatapi.version>
     <!-- Test/internal experiment dependencies -->
     <jcef.version>132.3.1</jcef.version>
-    <nanohttpd.version>2.3.2-SNAPSHOT</nanohttpd.version>
+    <nanohttpd.version>2.3.1</nanohttpd.version>
     <selenium.version>4.31.0</selenium.version>
   </properties>
   <dependencies>
