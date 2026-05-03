@@ -13,9 +13,18 @@ import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.URL;
+import java.security.KeyStore;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 import java.util.function.Predicate;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
@@ -112,6 +121,8 @@ public class HttpURLInputStream extends FilterInputStream
             throw new IOException("Blocked unsafe URL: " + url);
         URL url0 = new URL(url);
         HttpURLConnection connection = (HttpURLConnection)url0.openConnection();
+        if (connection instanceof HttpsURLConnection)
+            applyCompatTls((HttpsURLConnection)connection);
         connection.setRequestProperty("User-Agent", Scarlet.USER_AGENT);
         connection.setConnectTimeout(5_000);
         connection.setReadTimeout(5_000);
@@ -324,6 +335,124 @@ public class HttpURLInputStream extends FilterInputStream
     public static <T> Func.V1<IOException, OutputStream> writeAsJson(Charset charset, Gson gson, TypeToken<T> type, T value)
     {
         return out -> writeJson(out, charset, gson, type, value);
+    }
+
+    private static final String[] LEGACY_TLS_COMPAT_CERT_RESOURCES =
+    {
+        "/net/sybyline/scarlet/compat/GoGetSSLECCDVSSLCA2.pem",
+        "/net/sybyline/scarlet/compat/SectigoPublicServerAuthenticationRootE46.pem",
+        "/net/sybyline/scarlet/compat/SectigoPublicServerAuthenticationCADVE36.pem",
+        "/net/sybyline/scarlet/compat/LetsEncryptR12.pem",
+        "/net/sybyline/scarlet/compat/ISRGRootX1.pem",
+    };
+    private static volatile javax.net.ssl.SSLSocketFactory compatSocketFactory;
+    private static volatile boolean compatTlsInitAttempted;
+
+    private static void applyCompatTls(HttpsURLConnection connection)
+    {
+        ensureCompatTlsInitialized();
+        if (compatSocketFactory != null)
+            connection.setSSLSocketFactory(compatSocketFactory);
+    }
+    private static synchronized void ensureCompatTlsInitialized()
+    {
+        if (compatTlsInitAttempted)
+            return;
+        compatTlsInitAttempted = true;
+        try
+        {
+            X509TrustManager base = defaultTrustManager();
+            X509TrustManager extra = compatTrustManager();
+            CompositeX509TrustManager composite = new CompositeX509TrustManager(base, extra);
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, new TrustManager[] { composite }, null);
+            compatSocketFactory = sslContext.getSocketFactory();
+            Scarlet.LOG.warn("Using Scarlet's bundled HTTPS compatibility certificates for legacy Java trust stores");
+        }
+        catch (Exception ex)
+        {
+            Scarlet.LOG.debug("Unable to initialize legacy HTTPS compatibility certificates; continuing with the JVM default trust store", ex);
+        }
+    }
+    private static X509TrustManager defaultTrustManager() throws Exception
+    {
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        tmf.init((KeyStore)null);
+        return pickTrustManager(tmf.getTrustManagers());
+    }
+    private static X509TrustManager compatTrustManager() throws Exception
+    {
+        KeyStore keyStore = KeyStore.getInstance(KeyStore.getDefaultType());
+        keyStore.load(null, null);
+        CertificateFactory certificateFactory = CertificateFactory.getInstance("X.509");
+        int idx = 0;
+        for (String resource : LEGACY_TLS_COMPAT_CERT_RESOURCES)
+        {
+            try (InputStream in = HttpURLInputStream.class.getResourceAsStream(resource))
+            {
+                if (in == null)
+                    continue;
+                X509Certificate cert = (X509Certificate)certificateFactory.generateCertificate(in);
+                keyStore.setCertificateEntry("scarlet-compat-" + (idx++), cert);
+            }
+        }
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        tmf.init(keyStore);
+        return pickTrustManager(tmf.getTrustManagers());
+    }
+    private static X509TrustManager pickTrustManager(TrustManager[] trustManagers)
+    {
+        for (TrustManager trustManager : trustManagers)
+            if (trustManager instanceof X509TrustManager)
+                return (X509TrustManager)trustManager;
+        throw new IllegalStateException("No X509TrustManager available");
+    }
+    private static final class CompositeX509TrustManager implements X509TrustManager
+    {
+        private final X509TrustManager[] delegates;
+        CompositeX509TrustManager(X509TrustManager... delegates)
+        {
+            this.delegates = delegates;
+        }
+        @Override
+        public void checkClientTrusted(X509Certificate[] chain, String authType) throws java.security.cert.CertificateException
+        {
+            java.security.cert.CertificateException last = null;
+            for (X509TrustManager delegate : this.delegates) try
+            {
+                delegate.checkClientTrusted(chain, authType);
+                return;
+            }
+            catch (java.security.cert.CertificateException ex)
+            {
+                last = ex;
+            }
+            throw last != null ? last : new java.security.cert.CertificateException("No trust manager accepted the client certificate chain");
+        }
+        @Override
+        public void checkServerTrusted(X509Certificate[] chain, String authType) throws java.security.cert.CertificateException
+        {
+            java.security.cert.CertificateException last = null;
+            for (X509TrustManager delegate : this.delegates) try
+            {
+                delegate.checkServerTrusted(chain, authType);
+                return;
+            }
+            catch (java.security.cert.CertificateException ex)
+            {
+                last = ex;
+            }
+            throw last != null ? last : new java.security.cert.CertificateException("No trust manager accepted the server certificate chain");
+        }
+        @Override
+        public X509Certificate[] getAcceptedIssuers()
+        {
+            java.util.LinkedHashMap<String, X509Certificate> certs = new java.util.LinkedHashMap<>();
+            for (X509TrustManager delegate : this.delegates)
+                for (X509Certificate cert : delegate.getAcceptedIssuers())
+                    certs.put(cert.getSubjectX500Principal().getName(), cert);
+            return certs.values().toArray(new X509Certificate[certs.size()]);
+        }
     }
 
 }

@@ -24,6 +24,9 @@
               <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
               <addClasspath>true</addClasspath>
             </manifest>
+            <manifestEntries>
+              <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
+            </manifestEntries>
           </archive>
         </configuration>
       </plugin>
@@ -49,6 +52,9 @@
               <transformers>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
+                  <manifestEntries>
+                    <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
+                  </manifestEntries>
                 </transformer>
               </transformers>
               <filters>
@@ -84,6 +90,9 @@
               <transformers>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
+                  <manifestEntries>
+                    <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
+                  </manifestEntries>
                 </transformer>
               </transformers>
               <filters>
@@ -178,6 +187,9 @@
               <transformers>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
+                  <manifestEntries>
+                    <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
+                  </manifestEntries>
                 </transformer>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
                   <resource>scarlet-features.properties</resource>
@@ -248,6 +260,9 @@
               <transformers>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                   <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
+                  <manifestEntries>
+                    <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
+                  </manifestEntries>
                 </transformer>
               </transformers>
               <filters>
@@ -296,7 +311,7 @@
     </repository>
   </repositories>
   <properties>
-    <vrchatapi.version>1.20.8-nightly.14</vrchatapi.version>
+    <vrchatapi.version>1.20.8-nightly.15</vrchatapi.version>
     <JDA.version>6.3.0</JDA.version>
     <concentus.version>master-3885c4e465-1</concentus.version>
     <jna.version>5.18.1</jna.version>

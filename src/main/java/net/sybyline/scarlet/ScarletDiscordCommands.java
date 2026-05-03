@@ -4210,12 +4210,12 @@ public class ScarletDiscordCommands
         }
 
         // Encode reason into button ID (truncated to fit Discord's 100-char limit)
-        String reasonSuffix = (reason != null && !reason.isBlank())
+        String reasonSuffix = (reason != null && !reason.trim().isEmpty())
             ? ":" + MiscUtils.maybeEllipsis(55, reason.trim())
             : "";
         String confirmId = "discord-ban-confirm:" + discordUser.getId() + reasonSuffix;
 
-        String reasonLine = reason != null && !reason.isBlank()
+        String reasonLine = reason != null && !reason.trim().isEmpty()
             ? "\n**Reason:** " + MarkdownSanitizer.escape(reason.trim())
             : "";
         hook.sendMessageFormat(
@@ -4283,12 +4283,12 @@ public class ScarletDiscordCommands
         }
 
         // Encode reason into button ID (truncated to fit Discord's 100-char limit)
-        String reasonSuffix = (reason != null && !reason.isBlank())
+        String reasonSuffix = (reason != null && !reason.trim().isEmpty())
             ? ":" + MiscUtils.maybeEllipsis(58, reason.trim())
             : "";
         String confirmId = "discord-kick-confirm:" + discordUser.getId() + reasonSuffix;
 
-        String reasonLine = reason != null && !reason.isBlank()
+        String reasonLine = reason != null && !reason.trim().isEmpty()
             ? "\n**Reason:** " + MarkdownSanitizer.escape(reason.trim())
             : "";
         hook.sendMessageFormat(

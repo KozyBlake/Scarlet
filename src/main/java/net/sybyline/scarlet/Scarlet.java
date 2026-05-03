@@ -1,5 +1,6 @@
 package net.sybyline.scarlet;
 
+import java.awt.GraphicsEnvironment;
 import java.io.Closeable;
 import java.io.File;
 import java.io.FileWriter;
@@ -35,6 +36,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 import java.util.stream.Stream;
 
+import javax.swing.JOptionPane;
+
 import org.scalasbt.ipcsocket.UnixDomainServerSocket;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -61,6 +64,7 @@ import net.sybyline.scarlet.util.MiscUtils;
 import net.sybyline.scarlet.util.Platform;
 import net.sybyline.scarlet.util.ProcLock;
 import net.sybyline.scarlet.util.VrcIds;
+import net.sybyline.scarlet.util.VrchatApiVersionChecker;
 import net.sybyline.scarlet.util.tts.TtsService;
 import net.sybyline.scarlet.util.EnforcementAgeState;
 import net.sybyline.scarlet.util.EnforcementListState;
@@ -138,6 +142,7 @@ public class Scarlet implements Closeable
         
         COMMUNITY_URL = "https://vrchat.community/",
         COMMUNITY_GITHUB_URL = "https://github.com/vrchatapi",
+        VRCHAT_API_RELEASES_URL = VrchatApiVersionChecker.PROJECT_URL,
         
         API_VERSION = "api/1",
         API_HOST_0 = "vrchat.com",
@@ -371,24 +376,45 @@ public class Scarlet implements Closeable
     
     final ScarletSettings settings = new ScarletSettings(this, new File(dir, "settings.json"));
     {
-        Float uiScale = this.settings.getObject("ui_scale", Float.class);
-        if (uiScale != null)
+        if (!Platform.forceHeadlessUi())
         {
-            Swing.scaleAll(uiScale.floatValue());
+            Float uiScale = this.settings.getObject("ui_scale", Float.class);
+            if (uiScale != null)
+            {
+                Swing.scaleAll(uiScale.floatValue());
+            }
+            else
+            {
+                // No manual override — try to auto-detect from desktop environment on Linux
+                Float autoScale = Swing.detectLinuxUIScale();
+                if (autoScale != null)
+                    Swing.scaleAll(autoScale);
+            }
         }
-        else
-        {
-            // No manual override — try to auto-detect from desktop environment on Linux
-            Float autoScale = Swing.detectLinuxUIScale();
-            if (autoScale != null)
-                Swing.scaleAll(autoScale);
-        }
-        String groupId = this.settings.getString("vrchat_group_id");
-        if (groupId != null && !(groupId = VrcIds.resolveGroupId(groupId)).isEmpty())
+        String groupId = this.resolveStartupGroupLockId();
+        if (groupId != null)
         {
             if (!ProcLock.tryLock(new File(user_home, ".scarlet."+groupId+".lock")))
                 throw new IllegalStateException("Duplicate processes detected for group "+groupId);
         }
+    }
+    private String resolveStartupGroupLockId()
+    {
+        String configuredGroupId = this.settings.getString("vrchat_group_id");
+        if (configuredGroupId == null)
+            return null;
+        String resolvedGroupId = VrcIds.resolveGroupId(configuredGroupId);
+        if (resolvedGroupId == null)
+            return null;
+        resolvedGroupId = resolvedGroupId.trim();
+        if (resolvedGroupId.isEmpty())
+            return null;
+        if (VrcIds.id_group.matcher(resolvedGroupId).matches())
+            return resolvedGroupId;
+        LOG.warn("Ignoring invalid VRChat group id setting while creating the startup process lock: `{}` resolved to `{}`", configuredGroupId, resolvedGroupId);
+        this.settings.getJson().remove("vrchat_group_id");
+        this.settings.saveJson();
+        return null;
     }
     final IScarletUI ui = IScarletUI.create(this);
     final ScarletEventListener eventListener = new ScarletEventListener(this);
@@ -500,7 +526,7 @@ public class Scarlet implements Closeable
                                   {
                                       this.settings.requireInputAsync("CLI command (type 'help' to list all commands)", false, cmd ->
                                       {
-                                          if (cmd != null && !cmd.isBlank())
+                                          if (cmd != null && !cmd.trim().isEmpty())
                                               this.exec.execute(() -> this.rawCommand(cmd.trim()));
                                       });
                                   });
@@ -569,6 +595,7 @@ public class Scarlet implements Closeable
         System.out.println("===========================================");
         this.ui.loadSettings();
         this.eventListener.settingsLoaded();
+        this.checkVrchatApiPreflight();
         // Initialize TTS after UI is ready (for dialog parent component)
         this.splash.splashSubtext("Initializing Text-to-Speech");
         this.initTtsService();
@@ -1150,6 +1177,15 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
                     if (out != null) out.accept("[error] " + msg + ": " + ex.getMessage());
                 }
             } break;
+            case "vrchatapi-test": {
+                VrchatApiVersionChecker.Report report = VrchatApiVersionChecker.createTestUpdateAvailableReport();
+                this.vrchatApiPreflightReport = report;
+                this.ui.refreshVrchatApiStatus();
+                this.showVrchatApiPreflightWarning(report);
+                String msg = "Triggered hidden VRChat API update warning test";
+                LOG.info(msg);
+                if (out != null) out.accept(msg);
+            } break;
             }
         }
         catch (Exception ex)
@@ -1182,6 +1218,72 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
 
     String newerVersion = null,
            allVersions[] = {};
+    VrchatApiVersionChecker.Report vrchatApiPreflightReport = null;
+
+    void checkVrchatApiPreflight()
+    {
+        this.splash.splashSubtext("Checking VRChat API status");
+        VrchatApiVersionChecker.Report report = VrchatApiVersionChecker.check();
+        this.vrchatApiPreflightReport = report;
+        if (report.failure != null)
+            LOG.debug("VRChat API preflight check issue", report.failure);
+        switch (report.level)
+        {
+        case OK:
+            LOG.info(report.message);
+            this.ui.refreshVrchatApiStatus();
+            return;
+        case INFO:
+            LOG.info(report.message);
+            this.ui.refreshVrchatApiStatus();
+            return;
+        case WARNING:
+        default:
+            LOG.warn(report.message);
+            this.showVrchatApiPreflightWarning(report);
+            this.ui.refreshVrchatApiStatus();
+            return;
+        }
+    }
+
+    void showVrchatApiPreflightWarning(VrchatApiVersionChecker.Report report)
+    {
+        if (Platform.forceHeadlessUi() || GraphicsEnvironment.isHeadless())
+            return;
+        Swing.invokeWait(() ->
+        {
+            StringBuilder text = new StringBuilder(report.message);
+            if (report.updateAvailable)
+            {
+                text.append("\n\nScarlet will continue starting, but if VRChat features behave oddly,");
+                text.append("\nyou may need a newer Scarlet build with an updated API adapter.");
+                text.append("\n\nIf this is causing problems, please open a ticket in the Scarlet Discord");
+                text.append("\nserver and ping BlakeBelladonna or Vinyarion.");
+                int choice = JOptionPane.showOptionDialog(
+                    this.ui.getParentComponent(),
+                    text.toString(),
+                    "VRChat API Update Available",
+                    JOptionPane.DEFAULT_OPTION,
+                    JOptionPane.WARNING_MESSAGE,
+                    null,
+                    new Object[] { "Continue", "Open API Page", "Open Discord" },
+                    "Continue"
+                );
+                if (choice == 1)
+                    MiscUtils.AWTDesktop.browse(URI.create(VRCHAT_API_RELEASES_URL));
+                else if (choice == 2)
+                    MiscUtils.AWTDesktop.browse(URI.create(SCARLET_DISCORD_URL));
+                return;
+            }
+            JOptionPane.showMessageDialog(
+                this.ui.getParentComponent(),
+                text.toString(),
+                "VRChat API Status",
+                JOptionPane.WARNING_MESSAGE
+            );
+        });
+    }
+
     void checkUpdate()
     {
         try

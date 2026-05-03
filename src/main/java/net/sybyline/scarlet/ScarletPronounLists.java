@@ -136,7 +136,7 @@ public class ScarletPronounLists
             String[] arr = Scarlet.GSON_PRETTY.fromJson(fr, String[].class);
             if (arr != null)
                 for (String s : arr)
-                    if (s != null && !s.isBlank())
+                    if (s != null && !s.trim().isEmpty())
                         target.add(s.trim().toLowerCase(java.util.Locale.ROOT));
         }
         catch (Exception ex)

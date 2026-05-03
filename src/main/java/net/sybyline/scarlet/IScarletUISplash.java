@@ -8,12 +8,16 @@ import java.io.Closeable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import net.sybyline.scarlet.util.Platform;
+
 public interface IScarletUISplash extends Closeable
 {
 
     static IScarletUISplash create(Scarlet scarlet)
     {
-        return GraphicsEnvironment.isHeadless() ? new ScarletUISplashHeadless() : new ScarletUISplash(scarlet);
+        return Platform.forceHeadlessUi() || GraphicsEnvironment.isHeadless()
+            ? new ScarletUISplashHeadless()
+            : new ScarletUISplash(scarlet);
     }
 
     void splashText(String text);

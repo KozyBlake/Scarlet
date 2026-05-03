@@ -29,6 +29,7 @@ public enum Platform
     public static final Platform CURRENT;
     public static final boolean IS_ANDROID;
     public static final boolean IS_TERMUX;
+    public static final boolean FORCE_HEADLESS_UI;
 
     static
     {
@@ -64,6 +65,11 @@ public enum Platform
         IS_TERMUX =
                termuxVersion != null
             || (prefix != null && prefix.replace('\\', '/').contains("/com.termux/"));
+
+        FORCE_HEADLESS_UI =
+               IS_ANDROID
+            || IS_TERMUX
+            || Boolean.getBoolean("scarlet.forceHeadlessUi");
     }
 
     public boolean isNT()    { return this == NT; }
@@ -78,6 +84,10 @@ public enum Platform
     public static boolean isTermux()
     {
         return IS_TERMUX;
+    }
+    public static boolean forceHeadlessUi()
+    {
+        return FORCE_HEADLESS_UI || Boolean.getBoolean("java.awt.headless");
     }
 
     // =======================================================================

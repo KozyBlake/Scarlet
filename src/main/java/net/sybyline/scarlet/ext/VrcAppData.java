@@ -18,6 +18,8 @@ public interface VrcAppData
 
     // VRChat's Steam App ID
     String VRCHAT_APP_ID = "438100";
+    String VRCHAT_ANDROID_PACKAGE = "com.vrchat.mobile.playstore";
+    String VRCHAT_ANDROID_EXTERNAL_FILES = "/storage/emulated/0/Android/data/" + VRCHAT_ANDROID_PACKAGE + "/files";
 
     // Proton compatdata relative path (same for all Steam libraries)
     String PROTON_PREFIX = "steamapps/compatdata/" + VRCHAT_APP_ID + "/pfx/drive_c/users/steamuser/";
@@ -29,9 +31,53 @@ public interface VrcAppData
      * Resolves a VRChat appdata path.
      * On Linux: tries each Steam library root in order, falling back to ~/.steam/steam.
      * On Windows: resolves directly from user.home.
+     *
+     * <p>If the {@code scarlet.vrcAppData.dir} system property (or
+     * {@code SCARLET_VRC_APPDATA_DIR} environment variable) is set, it is
+     * treated as the root of the "AppData/LocalLow/VRChat/VRChat" directory
+     * structure and all paths are resolved relative to it.  This is how the
+     * Scarlet Android release (scarlet-android) points the core tailer at
+     * the log file it is writing out from logcat.
      */
     static File resolve(String relative)
     {
+        String override = System.getProperty("scarlet.vrcAppData.dir");
+        if (override == null || override.isEmpty())
+            override = System.getenv("SCARLET_VRC_APPDATA_DIR");
+        if (override != null && !override.isEmpty())
+        {
+            // The override is expected to BE the LocalLow/VRChat/VRChat
+            // directory (or the Temp/VRChat/VRChat directory).  Strip the
+            // common prefixes off the relative path so a single root
+            // property still produces the right File for both DIR and TEMP.
+            String rel = relative;
+            for (String prefix : new String[]{
+                    "AppData/LocalLow/VRChat/VRChat",
+                    "AppData/Local/Temp/VRChat/VRChat"})
+            {
+                if (rel.equals(prefix))
+                {
+                    rel = "";
+                    break;
+                }
+                if (rel.startsWith(prefix + "/"))
+                {
+                    rel = rel.substring(prefix.length() + 1);
+                    break;
+                }
+            }
+            File o = new File(override);
+            return rel.isEmpty() ? o : new File(o, rel);
+        }
+        if (Platform.isAndroid() || Platform.isTermux())
+        {
+            File android = resolveAndroid(relative);
+            if (android != null)
+            {
+                LOG.info("Resolved VRChat path via Android app-data detection: {}", android);
+                return android;
+            }
+        }
         if (!Platform.CURRENT.is$nix())
             return new File(System.getProperty("user.home"), relative);
 
@@ -48,6 +94,48 @@ public interface VrcAppData
             System.getProperty("user.home"),
             ".steam/steam/" + PROTON_PREFIX + relative);
         LOG.warn("Could not detect Steam library for VRChat, falling back to default path: {}", fallback);
+        return fallback;
+    }
+
+    static File resolveAndroid(String relative)
+    {
+        String rel = relative.replace('\\', '/');
+        String[] prefixes = {
+            "AppData/LocalLow/VRChat/VRChat",
+            "AppData/Local/Temp/VRChat/VRChat"
+        };
+        for (String prefix : prefixes)
+        {
+            if (rel.equals(prefix))
+                rel = "";
+            else if (rel.startsWith(prefix + "/"))
+                rel = rel.substring(prefix.length() + 1);
+        }
+
+        List<File> candidates = new ArrayList<>();
+        String envExternalStorage = System.getenv("EXTERNAL_STORAGE");
+        String envStorage = System.getenv("ANDROID_STORAGE");
+        String envStorageEmulated = System.getenv("EMULATED_STORAGE_TARGET");
+
+        candidates.add(new File(VRCHAT_ANDROID_EXTERNAL_FILES));
+        if (envExternalStorage != null && !envExternalStorage.isEmpty())
+            candidates.add(new File(envExternalStorage, "Android/data/" + VRCHAT_ANDROID_PACKAGE + "/files"));
+        if (envStorage != null && !envStorage.isEmpty())
+            candidates.add(new File(envStorage, "emulated/0/Android/data/" + VRCHAT_ANDROID_PACKAGE + "/files"));
+        if (envStorageEmulated != null && !envStorageEmulated.isEmpty())
+            candidates.add(new File(envStorageEmulated, "0/Android/data/" + VRCHAT_ANDROID_PACKAGE + "/files"));
+
+        File fallback = null;
+        for (File candidateRoot : candidates)
+        {
+            if (candidateRoot == null)
+                continue;
+            File candidate = rel.isEmpty() ? candidateRoot : new File(candidateRoot, rel);
+            if (fallback == null)
+                fallback = candidate;
+            if (candidate.exists())
+                return candidate;
+        }
         return fallback;
     }
 

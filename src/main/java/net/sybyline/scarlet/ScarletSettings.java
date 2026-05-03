@@ -114,6 +114,8 @@ public class ScarletSettings
             {
                 ScarletSettings.this.prefsInitStage = "opening Preferences user node";
                 Preferences prefs = Preferences.userNodeForPackage(Scarlet.class);
+                ScarletSettings.this.globalPreferences = prefs;
+                ScarletSettings.this.preferences = prefs;
                 ScarletSettings.this.prefsInitStage = "opening encrypted preference wrapper";
                 EncryptedPrefs enc = new EncryptedPrefs(prefs, globalPW);
                 ScarletSettings.this.prefsInitStage = "publishing preference handles";
@@ -125,6 +127,25 @@ public class ScarletSettings
             catch (Throwable t)
             {
                 LOG.error("Exception initializing Preferences on background thread", t);
+                try
+                {
+                    if (ScarletSettings.this.globalPreferences == null)
+                    {
+                        Preferences prefs = Preferences.userNodeForPackage(Scarlet.class);
+                        ScarletSettings.this.globalPreferences = prefs;
+                        ScarletSettings.this.preferences = prefs;
+                    }
+                    if (ScarletSettings.this.globalEncrypted == null)
+                    {
+                        EncryptedPrefs fallback = new EncryptedPrefs(ScarletSettings.this.globalPreferences, globalPW);
+                        ScarletSettings.this.globalEncrypted = fallback;
+                        ScarletSettings.this.encrypted = fallback;
+                    }
+                }
+                catch (Throwable fallbackError)
+                {
+                    LOG.error("Exception initializing compatibility preference fallback", fallbackError);
+                }
             }
             finally
             {
@@ -340,7 +361,15 @@ public class ScarletSettings
     {
         this.awaitPrefs("setting VRChat group namespace");
         this.preferences = this.globalPreferences.node(namespace);
-        this.encrypted = new EncryptedPrefs(this.preferences, globalPW);
+        try
+        {
+            this.encrypted = new EncryptedPrefs(this.preferences, globalPW);
+        }
+        catch (Throwable t)
+        {
+            LOG.error("Exception initializing namespace secure preference wrapper; reusing global compatibility store", t);
+            this.encrypted = this.globalEncrypted;
+        }
     }
 
     final Scarlet scarlet;

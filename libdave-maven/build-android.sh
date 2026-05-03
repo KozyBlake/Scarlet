@@ -47,18 +47,26 @@ for ARCH in "${ARCHS[@]}"; do
         arm64-v8a)
             ANDROID_ABI="arm64-v8a"
             CMAKE_SYSTEM_PROCESSOR="aarch64"
+            ANDROID_ARM_MODE_ARG="-DANDROID_ARM_MODE=arm"
+            ANDROID_ARM_NEON_ARG="-DANDROID_ARM_NEON=ON"
             ;;
         armeabi-v7a)
             ANDROID_ABI="armeabi-v7a"
             CMAKE_SYSTEM_PROCESSOR="armv7-a"
+            ANDROID_ARM_MODE_ARG="-DANDROID_ARM_MODE=arm"
+            ANDROID_ARM_NEON_ARG="-DANDROID_ARM_NEON=ON"
             ;;
         x86)
             ANDROID_ABI="x86"
             CMAKE_SYSTEM_PROCESSOR="i686"
+            ANDROID_ARM_MODE_ARG=""
+            ANDROID_ARM_NEON_ARG="-DANDROID_ARM_NEON=OFF"
             ;;
         x86_64)
             ANDROID_ABI="x86_64"
             CMAKE_SYSTEM_PROCESSOR="x86_64"
+            ANDROID_ARM_MODE_ARG=""
+            ANDROID_ARM_NEON_ARG="-DANDROID_ARM_NEON=OFF"
             ;;
     esac
     
@@ -76,8 +84,8 @@ for ARCH in "${ARCHS[@]}"; do
           -DANDROID_ABI="${ANDROID_ABI}" \
           -DANDROID_PLATFORM=android-${ANDROID_API} \
           -DANDROID_STL=c++_static \
-          -DANDROID_ARM_MODE=arm \
-          -DANDROID_ARM_NEON=ON \
+          ${ANDROID_ARM_MODE_ARG} \
+          ${ANDROID_ARM_NEON_ARG} \
           -DREQUIRE_BORINGSSL=ON \
           -DDISABLE_PQ=ON \
           -DDISABLE_GREASE=ON \

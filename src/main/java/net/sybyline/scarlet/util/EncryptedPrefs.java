@@ -28,11 +28,14 @@ public final class EncryptedPrefs
 
     private static final String DIGEST_METHOD = "SHA-256",
                                 CIPHER_METHOD = "AES/GCM/NoPadding",
-                                KEYGEN_METHOD = "PBKDF2WithHmacSHA256";
-    private static final int    KEY_SIZE = 256,
+                                KEYGEN_METHOD = "PBKDF2WithHmacSHA256",
+                                LEGACY_KEYGEN_METHOD = "PBKDF2WithHmacSHA1",
+                                FALLBACK_PREFIX = "plain:";
+    private static final int    PREFERRED_KEY_SIZE = 256,
                                 KEYGEN_ITERATIONS = 100_000,
                                 IV_LENGTH = 12,
                                 GCM_TAG_SIZE = 128;
+    private static final int    SUPPORTED_KEY_SIZE = detectSupportedKeySize();
     private static final SecureRandom rand;
     static
     {
@@ -48,6 +51,23 @@ public final class EncryptedPrefs
         rand = srand;
     }
     private static final ThreadLocal<Cipher> threadLocalCipher = ThreadLocal.withInitial(EncryptedPrefs::createCipher);
+    private static int detectSupportedKeySize()
+    {
+        try
+        {
+            int max = Cipher.getMaxAllowedKeyLength("AES");
+            if (max >= PREFERRED_KEY_SIZE)
+                return PREFERRED_KEY_SIZE;
+            if (max >= 128)
+                return 128;
+            return Math.max(0, max);
+        }
+        catch (GeneralSecurityException e)
+        {
+            LOG.warn("Could not detect maximum AES key size; encrypted preferences will fall back to plain storage", e);
+            return 0;
+        }
+    }
     private static Cipher createCipher()
     {
         try
@@ -56,12 +76,15 @@ public final class EncryptedPrefs
         }
         catch (GeneralSecurityException e)
         {
-            throw new AssertionError(e);
+            LOG.warn("Cipher {} is unavailable; encrypted preferences will fall back to plain storage", CIPHER_METHOD, e);
+            return null;
         }
     }
     private static byte[] crypt(int opmode, SecretKey key, byte[] iv, byte[] text) throws GeneralSecurityException
     {
         Cipher cipher = threadLocalCipher.get();
+        if (cipher == null)
+            throw new GeneralSecurityException("Cipher unavailable: " + CIPHER_METHOD);
         cipher.init(opmode, key, new GCMParameterSpec(GCM_TAG_SIZE, iv));
         return cipher.doFinal(text);
     }
@@ -69,8 +92,13 @@ public final class EncryptedPrefs
     public EncryptedPrefs(Preferences prefs, String globalPassword)
     {
         this.prefs = prefs;
-        this.localPassword = init(prefs, globalPassword);
+        this.plaintextFallback = prefs == null || globalPassword == null || SUPPORTED_KEY_SIZE < 128;
+        this.localPassword = this.plaintextFallback ? copyOrEmpty(globalPassword) : init(prefs, globalPassword);
         this.keyCache = new ConcurrentHashMap<>();
+        if (this.plaintextFallback)
+            LOG.warn("Encrypted preferences unavailable; falling back to plain Java Preferences storage");
+        else if (SUPPORTED_KEY_SIZE < PREFERRED_KEY_SIZE)
+            LOG.warn("Encrypted preferences are using AES-{} compatibility mode instead of AES-{}", SUPPORTED_KEY_SIZE, PREFERRED_KEY_SIZE);
     }
     public static String tryReadLocalPassword(Preferences prefs, String globalPassword)
     {
@@ -80,6 +108,8 @@ public final class EncryptedPrefs
         {
             String absolutePath = prefs.absolutePath(),
                    hash = masterPasswordKey(absolutePath, globalPassword);
+            if (SUPPORTED_KEY_SIZE < 128)
+                return prefs.get(FALLBACK_PREFIX + hash, null);
             byte[] localPasswordBytes = prefs.getByteArray(hash, null);
             if (localPasswordBytes == null)
                 return null;
@@ -95,6 +125,11 @@ public final class EncryptedPrefs
     {
         if (prefs == null || globalPassword == null || localPassword == null)
             throw new IllegalArgumentException("prefs, globalPassword, and localPassword must be non-null");
+        if (SUPPORTED_KEY_SIZE < 128)
+        {
+            prefs.put(FALLBACK_PREFIX + masterPasswordKey(prefs.absolutePath(), globalPassword), localPassword);
+            return;
+        }
         String absolutePath = prefs.absolutePath(),
                hash = masterPasswordKey(absolutePath, globalPassword);
         SecretKey initKey = derive(globalPassword.toCharArray(), absolutePath);
@@ -108,42 +143,82 @@ public final class EncryptedPrefs
     {
         String absolutePath = prefs.absolutePath(),
                hash = masterPasswordKey(absolutePath, globalPassword);
+        if (SUPPORTED_KEY_SIZE < 128)
+        {
+            String existing = prefs.get(FALLBACK_PREFIX + hash, null);
+            if (existing != null)
+                return existing.toCharArray();
+            byte[] bytes = new byte[32];
+            rand.nextBytes(bytes);
+            String localPassword = new String(Base64.getUrlEncoder().encode(bytes), StandardCharsets.UTF_8);
+            prefs.put(FALLBACK_PREFIX + hash, localPassword);
+            return localPassword.toCharArray();
+        }
         byte[] localPasswordBytes = prefs.getByteArray(hash, null);
         SecretKey initKey = derive(globalPassword.toCharArray(), absolutePath);
         if (localPasswordBytes != null)
-            return decrypt(initKey, localPasswordBytes).toCharArray();
+        {
+            String decrypted = decrypt(initKey, localPasswordBytes);
+            if (decrypted != null)
+                return decrypted.toCharArray();
+        }
         byte[] bytes = new byte[32];
         rand.nextBytes(bytes);
         String localPassword = new String(Base64.getUrlEncoder().encode(bytes), StandardCharsets.UTF_8);
-        prefs.putByteArray(hash, encrypt(initKey, localPassword));
+        byte[] encrypted = encrypt(initKey, localPassword);
+        if (encrypted == null)
+        {
+            LOG.warn("Initial secure preference seed could not be encrypted; falling back to plain Java Preferences storage");
+            prefs.put(FALLBACK_PREFIX + hash, localPassword);
+        }
+        else
+        {
+            prefs.putByteArray(hash, encrypted);
+        }
         return localPassword.toCharArray();
     }
 
     private final Preferences prefs;
     private final char[] localPassword;
     private final Map<String, SecretKey> keyCache;
+    private final boolean plaintextFallback;
 
     public void put(String key, String value)
     {
         if (value == null)
             this.remove(key);
+        else if (this.plaintextFallback)
+            this.prefs.put(FALLBACK_PREFIX + hash(key), value);
         else
-            this.prefs.putByteArray(hash(key), encrypt(this.getOrDerive(key), value));
+        {
+            byte[] encrypted = encrypt(this.getOrDerive(key), value);
+            if (encrypted == null)
+                this.prefs.put(FALLBACK_PREFIX + hash(key), value);
+            else
+                this.prefs.putByteArray(hash(key), encrypted);
+        }
     }
 
     public String get(String key)
     {
+        if (this.plaintextFallback)
+            return this.prefs.get(FALLBACK_PREFIX + hash(key), null);
+        String plain = this.prefs.get(FALLBACK_PREFIX + hash(key), null);
+        if (plain != null)
+            return plain;
         return decrypt(this.getOrDerive(key), this.prefs.getByteArray(hash(key), null));
     }
 
     public void remove(String key)
     {
         this.prefs.remove(hash(key));
+        this.prefs.remove(FALLBACK_PREFIX + hash(key));
     }
 
     public boolean contains(String key)
     {
-        return this.prefs.getByteArray(hash(key), null) != null;
+        return this.prefs.getByteArray(hash(key), null) != null
+            || this.prefs.get(FALLBACK_PREFIX + hash(key), null) != null;
     }
 
     private SecretKey getOrDerive(String salt)
@@ -155,11 +230,18 @@ public final class EncryptedPrefs
     {
         try
         {
-            return new SecretKeySpec(SecretKeyFactory.getInstance(KEYGEN_METHOD).generateSecret(new PBEKeySpec(password, salt.getBytes(StandardCharsets.UTF_8), KEYGEN_ITERATIONS, KEY_SIZE)).getEncoded(), "AES");
+            return new SecretKeySpec(SecretKeyFactory.getInstance(KEYGEN_METHOD).generateSecret(new PBEKeySpec(password, salt.getBytes(StandardCharsets.UTF_8), KEYGEN_ITERATIONS, SUPPORTED_KEY_SIZE)).getEncoded(), "AES");
         }
         catch (GeneralSecurityException e)
         {
-            throw new IllegalStateException("Derrivation failed", e);
+            try
+            {
+                return new SecretKeySpec(SecretKeyFactory.getInstance(LEGACY_KEYGEN_METHOD).generateSecret(new PBEKeySpec(password, salt.getBytes(StandardCharsets.UTF_8), KEYGEN_ITERATIONS, SUPPORTED_KEY_SIZE)).getEncoded(), "AES");
+            }
+            catch (GeneralSecurityException legacy)
+            {
+                throw new IllegalStateException("Derrivation failed", legacy);
+            }
         }
     }
 
@@ -194,7 +276,7 @@ public final class EncryptedPrefs
                    plaintext = crypt(Cipher.DECRYPT_MODE, key, iv, ciphertext);
             return new String(plaintext, StandardCharsets.UTF_8);
         }
-        catch (GeneralSecurityException e)
+        catch (Exception e)
         {
             LOG.warn("Exception decrypting", e);
             return null;
@@ -219,6 +301,11 @@ public final class EncryptedPrefs
         {
             throw new AssertionError(e);
         }
+    }
+
+    private static char[] copyOrEmpty(String value)
+    {
+        return value == null ? new char[0] : value.toCharArray();
     }
 
 }

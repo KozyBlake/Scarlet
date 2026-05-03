@@ -9,11 +9,16 @@ import java.awt.Insets;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Type;
 import java.net.URI;
 import java.security.GeneralSecurityException;
+import java.security.KeyStore;
+import java.security.cert.CertificateFactory;
+import java.security.cert.X509Certificate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -27,6 +32,11 @@ import javax.swing.JLabel;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.net.ssl.SSLHandshakeException;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.X509TrustManager;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -114,6 +124,11 @@ public class ScarletVRChat implements Closeable
 {
 
     static final Logger LOG = LoggerFactory.getLogger("Scarlet/VRChat");
+    private static final String LEGACY_TLS_COMPAT_SETTING = "vrchat_legacy_tls_compat_enabled";
+    private static final String[] LEGACY_TLS_COMPAT_CERT_RESOURCES = {
+        "/net/sybyline/scarlet/compat/GoGetSSLECCDVSSLCA2.pem",
+        "/net/sybyline/scarlet/compat/SectigoPublicServerAuthenticationRootE46.pem"
+    };
 
     public static final Comparator<GroupAuditLogEntry> OLDEST_TO_NEWEST = Comparator.comparing(GroupAuditLogEntry::getCreatedAt);
 
@@ -198,7 +213,11 @@ public class ScarletVRChat implements Closeable
         this.password = scarlet.settings.new RegistryStringEncrypted(domain+":password", true);
         this.totpsecret = scarlet.settings.new RegistryStringEncrypted(domain+":totpsecret", true);
         this.cookies = new ScarletVRChatCookieJar(scarlet, domain, cookieFile);
-        this.client = new ApiClient(new OkHttpClient.Builder()
+        this.legacyTrustCompatEnabled = Boolean.TRUE.equals(this.scarlet.settings.getObject(LEGACY_TLS_COMPAT_SETTING, Boolean.class));
+        OkHttpClient.Builder okHttpBuilder = new OkHttpClient.Builder();
+        if (this.legacyTrustCompatEnabled)
+            this.applyLegacyTlsCompat(okHttpBuilder);
+        this.client = new ApiClient(okHttpBuilder
                 // ── VRChat Basic Auth encoding fix ────────────────────────────────────────
                 // VRChat's API is non-standard: it expects credentials to be URL-encoded
                 // BEFORE Base64-encoding for HTTP Basic Auth. Their web client does this
@@ -269,6 +288,8 @@ public class ScarletVRChat implements Closeable
     final ScarletVRChatCookieJar cookies;
     final ApiClient client;
     volatile boolean secureStoreReady;
+    final boolean legacyTrustCompatEnabled;
+    volatile boolean legacyTrustCompatPrompted;
     /** Mirrors the last value passed to client.setUsername() for use in the UTF-8 Auth interceptor. */
     volatile String pendingUsername = null;
     /** Mirrors the last value passed to client.setPassword() for use in the UTF-8 Auth interceptor. */
@@ -307,6 +328,154 @@ public class ScarletVRChat implements Closeable
         return tag instanceof ApiCallback
             ? originalResponse.newBuilder().body(new ProgressResponseBody(originalResponse.body(), (ApiCallback<?>)tag)).build()
             : originalResponse;
+    }
+
+    private void applyLegacyTlsCompat(OkHttpClient.Builder builder)
+    {
+        try
+        {
+            X509TrustManager systemTrust = defaultTrustManager();
+            X509TrustManager compatTrust = compatTrustManager();
+            X509TrustManager composite = new CompositeX509TrustManager(systemTrust, compatTrust);
+            SSLContext sslContext = SSLContext.getInstance("TLS");
+            sslContext.init(null, new TrustManager[] { composite }, null);
+            builder.sslSocketFactory(sslContext.getSocketFactory(), composite);
+            LOG.warn("Using Scarlet's bundled VRChat TLS compatibility certificates");
+        }
+        catch (GeneralSecurityException | IOException ex)
+        {
+            LOG.error("Failed to initialize bundled VRChat TLS compatibility certificates", ex);
+        }
+    }
+
+    private static X509TrustManager defaultTrustManager() throws GeneralSecurityException
+    {
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        tmf.init((KeyStore)null);
+        return pickTrustManager(tmf.getTrustManagers());
+    }
+
+    private static X509TrustManager compatTrustManager() throws GeneralSecurityException, IOException
+    {
+        KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
+        try
+        {
+            ks.load(null, null);
+        }
+        catch (IOException ioex)
+        {
+            throw ioex;
+        }
+        catch (Exception ex)
+        {
+            throw new GeneralSecurityException("Failed to initialize compatibility keystore", ex);
+        }
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
+        for (int i = 0; i < LEGACY_TLS_COMPAT_CERT_RESOURCES.length; i++)
+        {
+            String resource = LEGACY_TLS_COMPAT_CERT_RESOURCES[i];
+            try (InputStream in = ScarletVRChat.class.getResourceAsStream(resource))
+            {
+                if (in == null)
+                    throw new IOException("Missing compatibility certificate resource " + resource);
+                X509Certificate cert = (X509Certificate)cf.generateCertificate(in);
+                ks.setCertificateEntry("scarlet-compat-" + i, cert);
+            }
+        }
+        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        tmf.init(ks);
+        return pickTrustManager(tmf.getTrustManagers());
+    }
+
+    private static X509TrustManager pickTrustManager(TrustManager[] trustManagers) throws GeneralSecurityException
+    {
+        for (TrustManager trustManager : trustManagers)
+            if (trustManager instanceof X509TrustManager)
+                return (X509TrustManager)trustManager;
+        throw new GeneralSecurityException("No X509TrustManager available");
+    }
+
+    private boolean maybeEnableLegacyTrustCompatibility(Throwable t)
+    {
+        if (this.legacyTrustCompatEnabled || !isLegacyTrustFailure(t) || this.legacyTrustCompatPrompted)
+            return false;
+        this.legacyTrustCompatPrompted = true;
+        LOG.warn("Detected TLS trust-store failure while talking to VRChat; offering compatibility certificates", t);
+        boolean enable = this.scarlet.settings.requireConfirmYesNo(
+            "Scarlet detected that this Java runtime cannot validate VRChat's HTTPS certificate chain.\n\n"
+            + "This usually happens on older Windows and Java installs with outdated root certificates.\n\n"
+            + "Would you like Scarlet to enable Scarlet's built-in VRChat compatibility certificates on next launch?\n\n"
+            + "This only affects Scarlet's VRChat HTTPS client.\n"
+            + "It does NOT modify your Windows certificate store or Java installation.",
+            "Enable VRChat TLS compatibility?");
+        if (!enable)
+            return false;
+        this.scarlet.settings.setObject(LEGACY_TLS_COMPAT_SETTING, Boolean.class, Boolean.TRUE);
+        if (!GraphicsEnvironment.isHeadless())
+        {
+            JOptionPane.showMessageDialog(null,
+                "Scarlet saved the VRChat TLS compatibility setting.\nPlease restart Scarlet and try logging in again.",
+                "Restart Scarlet",
+                JOptionPane.INFORMATION_MESSAGE);
+        }
+        else
+        {
+            LOG.warn("Scarlet saved the VRChat TLS compatibility setting. Restart Scarlet and try logging in again.");
+        }
+        return true;
+    }
+
+    private static boolean isLegacyTrustFailure(Throwable t)
+    {
+        for (Throwable cur = t; cur != null; cur = cur.getCause())
+        {
+            if (cur instanceof SSLHandshakeException)
+                return true;
+            String msg = cur.getMessage();
+            if (msg != null && (msg.contains("PKIX path building failed")
+                || msg.contains("unable to find valid certification path")
+                || msg.contains("unable to find valid certification path to requested target")))
+                return true;
+        }
+        return false;
+    }
+
+    private static final class CompositeX509TrustManager implements X509TrustManager
+    {
+        private final X509TrustManager primary;
+        private final X509TrustManager fallback;
+        private final X509Certificate[] issuers;
+        CompositeX509TrustManager(X509TrustManager primary, X509TrustManager fallback)
+        {
+            this.primary = primary;
+            this.fallback = fallback;
+            X509Certificate[] a = primary.getAcceptedIssuers(),
+                              b = fallback.getAcceptedIssuers();
+            this.issuers = Arrays.copyOf(a, a.length + b.length);
+            System.arraycopy(b, 0, this.issuers, a.length, b.length);
+        }
+        @Override
+        public void checkClientTrusted(X509Certificate[] chain, String authType) throws java.security.cert.CertificateException
+        {
+            this.primary.checkClientTrusted(chain, authType);
+        }
+        @Override
+        public void checkServerTrusted(X509Certificate[] chain, String authType) throws java.security.cert.CertificateException
+        {
+            try
+            {
+                this.primary.checkServerTrusted(chain, authType);
+            }
+            catch (java.security.cert.CertificateException ex)
+            {
+                this.fallback.checkServerTrusted(chain, authType);
+            }
+        }
+        @Override
+        public X509Certificate[] getAcceptedIssuers()
+        {
+            return this.issuers.clone();
+        }
     }
 
     public long getLocalDriftMillis()
@@ -355,6 +524,8 @@ try
         }
         catch (ApiException apiex)
         {
+            if (this.maybeEnableLegacyTrustCompatibility(apiex))
+                return;
             LOG.error("Exception calculating drift", apiex);
         }
         {
@@ -396,6 +567,8 @@ try
             }
             catch (ApiException apiex)
             {
+                if (this.maybeEnableLegacyTrustCompatibility(apiex))
+                    return;
                 if (!isRefresh) LOG.info("Auth discovered invalid", apiex);
             }
             JsonObject data;
@@ -411,6 +584,8 @@ try
             }
             catch (Exception ex)
             {
+                if (this.maybeEnableLegacyTrustCompatibility(ex))
+                    return;
                 if (!isRefresh) LOG.info("Cached auth not valid", ex);
                 do try
                 {
@@ -442,6 +617,8 @@ try
                 }
                 catch (ApiException apiex)
                 {
+                    if (this.maybeEnableLegacyTrustCompatibility(apiex))
+                        return;
                     this.username.set(null);
                     this.password.set(null);
                     LOG.error("Invalid credentials");
@@ -641,6 +818,8 @@ finally
                 }
                 catch (ApiException apiex)
                 {
+                    if (this.maybeEnableLegacyTrustCompatibility(apiex))
+                        return null;
                     if (!isRefresh) LOG.info("Auth discovered invalid; alt: "+context, apiex);
                 }
                 JsonObject data;
@@ -659,6 +838,8 @@ finally
                 }
                 catch (Exception ex)
                 {
+                    if (this.maybeEnableLegacyTrustCompatibility(ex))
+                        return null;
                     if (!isRefresh) LOG.info("Cached auth not valid: "+context, ex);
                     do try
                     {
@@ -690,12 +871,14 @@ finally
                                 alt.transferTo(altUserId);
                             return altUserId;
                         }
-                    }
-                    catch (ApiException apiex)
-                    {
-                        if (alt.altUsername != null)
-                            alt.altUsername.set(null);
-                        if (alt.altPassword != null)
+                      }
+                      catch (ApiException apiex)
+                      {
+                          if (this.maybeEnableLegacyTrustCompatibility(apiex))
+                              return null;
+                          if (alt.altUsername != null)
+                              alt.altUsername.set(null);
+                          if (alt.altPassword != null)
                             alt.altPassword.set(null);
                         data = null;
                         if ((username == null || username.isEmpty()) && (password == null || password.isEmpty()))
@@ -836,8 +1019,16 @@ finally
             LOG.warn("Cannot update group info: currentUserId is null (login may have failed)");
             return;
         }
-        
-        Group group = this.getGroup(this.groupId, Boolean.TRUE);
+        Group group;
+        try
+        {
+            group = this.getGroup(this.groupId, Boolean.TRUE);
+        }
+        catch (RuntimeException ex)
+        {
+            LOG.error("Cannot update group info because VRChat returned an unexpected group payload", ex);
+            return;
+        }
         if (group != null)
         {
             this.groupOwnerId = group.getOwnerId();
@@ -1209,6 +1400,65 @@ CurrentUser getCurrentUser(AuthenticationApi auth) throws ApiException
                 LOG.error("Error during get group: "+apiex.getMessage());
             return null;
         }
+        catch (RuntimeException rex)
+        {
+            LOG.warn("VRChat returned an unexpected payload shape for group `{}`; attempting raw response normalization", groupId, rex);
+            Group recovered = this.getGroupFromUnexpectedPayload(groups, groupId, includeRoles);
+            if (recovered != null)
+            {
+                this.cachedGroups.put(groupId, recovered);
+                return recovered;
+            }
+            LOG.error("Error during get group: unexpected VRChat response while resolving group `{}`", groupId, rex);
+            return null;
+        }
+    }
+    private Group getGroupFromUnexpectedPayload(GroupsApi groups, String groupId, Boolean includeRoles)
+    {
+        try
+        {
+            JsonElement element = this.client.<JsonElement>execute(groups.getGroupCall(groupId, includeRoles, null), JsonElement.class).getData();
+            JsonObject normalized = this.normalizeGroupPayload(groupId, element);
+            if (normalized == null)
+                return null;
+            return JSON.getGson().fromJson(normalized, Group.class);
+        }
+        catch (Exception ex)
+        {
+            LOG.error("Failed to recover group `{}` from unexpected VRChat payload", groupId, ex);
+            return null;
+        }
+    }
+    private JsonObject normalizeGroupPayload(String groupId, JsonElement element)
+    {
+        if (element == null || element.isJsonNull())
+            return null;
+        if (element.isJsonObject())
+            return element.getAsJsonObject();
+        if (element.isJsonArray())
+        {
+            JsonArray array = element.getAsJsonArray();
+            if (array.size() == 1 && array.get(0).isJsonObject())
+            {
+                LOG.warn("Recovered group `{}` from a single-element array payload", groupId);
+                return array.get(0).getAsJsonObject();
+            }
+            for (JsonElement child : array)
+                if (child != null && child.isJsonObject())
+                {
+                    JsonObject object = child.getAsJsonObject();
+                    JsonPrimitive id = object.getAsJsonPrimitive("id");
+                    if (id != null && groupId.equals(id.getAsString()))
+                    {
+                        LOG.warn("Recovered group `{}` from an array payload containing multiple objects", groupId);
+                        return object;
+                    }
+                }
+            LOG.error("Unexpected array payload while resolving group `{}`: {}", groupId, element);
+            return null;
+        }
+        LOG.error("Unexpected non-object payload while resolving group `{}`: {}", groupId, element);
+        return null;
     }
 
     public List<GroupInstance> getGroupInstances(String groupId)

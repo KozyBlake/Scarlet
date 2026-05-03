@@ -2,7 +2,11 @@
 # Changelog
 
 ## Unreleased
-  - No unreleased entries yet.
+  - Added `scarlet-android/` Maven module producing a standalone APK (`scarlet-android-<ver>.apk`) that captures VRChat log output from the official VRChat Android app via an embedded ADB client over Wireless Debugging and writes a VRChat-formatted `output_log_<ts>.txt` that Scarlet's existing tailer consumes
+  - Added one-time Wireless-Debugging pairing flow in `MainActivity` / `AdbPairingService` using NSD discovery of `_adb-tls-pairing._tcp` + a 6-digit pairing code; no USB, no root, no terminal commands
+  - Added `ScarletLogService` foreground service that owns the dadb session + logcat tail and auto-reconnects when Wireless Debugging drops
+  - Added `AndroidLogcatTail.rewrite(...)` translator that reformats `logcat -v year -s Unity:V VRCApplication:V` lines into the `yyyy.MM.dd HH:mm:ss Log - …` shape expected by `ScarletVRChatLogs.VRChatLogTail`
+  - Added `scarlet.vrcAppData.dir` / `SCARLET_VRC_APPDATA_DIR` override in `VrcAppData.resolve(...)` so the Scarlet core tailer can be pointed at any directory — including the path where scarlet-android writes its `output_log_*.txt` — without patching VrcAppData on Android
 
 ## 0.4.16-b5
   - Added a third `minimal` edition built alongside full and lite; `mvn clean package` now produces `scarlet-0.4.16-b5-minimal.jar`

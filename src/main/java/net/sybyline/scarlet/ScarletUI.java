@@ -103,6 +103,7 @@ import net.sybyline.scarlet.util.HttpURLInputStream;
 import net.sybyline.scarlet.util.MiscUtils;
 import net.sybyline.scarlet.util.PropsTable;
 import net.sybyline.scarlet.util.VrcWeb;
+import net.sybyline.scarlet.util.VrchatApiVersionChecker;
 import net.sybyline.scarlet.util.tts.WinSapiTtsProvider;
 import net.sybyline.scarlet.util.VersionedFile;
 
@@ -127,6 +128,11 @@ public class ScarletUI implements IScarletUI
         this.jpanel_settings = new JPanel();
         this.jlabel_lastSavedAt = new JLabel("", JLabel.LEFT);
         this.jlabel_status = new JLabel(" Ready", JLabel.LEFT);
+        this.jlabel_vrchatApiStatus = new JLabel("Checking bundled VRChat API status...");
+        this.jbutton_vrchatApiCheck = new JButton("Check now");
+        this.jbutton_vrchatApiOpen = new JButton("Open API page");
+        this.jbutton_vrchatApiCheck.addActionListener($ -> this.checkVrchatApiStatusManual());
+        this.jbutton_vrchatApiOpen.addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.VRCHAT_API_RELEASES_URL)));
         this.ssettings = Collections.synchronizedList(new ArrayList<>());
         this.propstableColumsDirty = false;
         this.connectedPlayers = new HashMap<>();
@@ -379,6 +385,9 @@ public class ScarletUI implements IScarletUI
     private final JPanel jpanel_settings;
     private final JLabel jlabel_lastSavedAt;
     private final JLabel jlabel_status;
+    private final JLabel jlabel_vrchatApiStatus;
+    private final JButton jbutton_vrchatApiCheck;
+    private final JButton jbutton_vrchatApiOpen;
     private final List<GUISetting<?>> ssettings;
     private boolean propstableColumsDirty;
     private final Map<String, ConnectedPlayer> connectedPlayers;
@@ -668,6 +677,7 @@ public class ScarletUI implements IScarletUI
                     jmenu_help.add("Scarlet (Original): VRChat Group").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.SCARLET_VRCHAT_GROUP_URL)));
                     jmenu_help.add("Scarlet: License").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.LICENSE_URL)));
                     jmenu_help.add("Scarlet: Credits").addActionListener($ -> this.infoCredits());
+                    jmenu_help.add("VRChat API: Check Status").addActionListener($ -> this.checkVrchatApiStatusManual());
                     jmenu_help.addSeparator();
                     jmenu_help.add("Text-to-Speech: Natural Voices (Windows)").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(WinSapiTtsProvider.NaturalVoiceSAPIAdapter_URL)));
                     jmenu_help.addSeparator();
@@ -938,7 +948,7 @@ public class ScarletUI implements IScarletUI
 
                 java.util.function.Consumer<String> submitCmd = cmd ->
                 {
-                    if (cmd == null || cmd.isBlank())
+                    if (cmd == null || cmd.trim().isEmpty())
                         return;
                     String trimmed = cmd.trim();
                     this.appendCliOutput("> " + trimmed);
@@ -1126,6 +1136,118 @@ public class ScarletUI implements IScarletUI
     private void messageModalAsyncInfo(Component component, Object message, String title)
     {
         this.scarlet.execModal.execute(() -> JOptionPane.showMessageDialog(component != null ? component : this.jframe, message, title, JOptionPane.INFORMATION_MESSAGE));
+    }
+
+    @Override
+    public void refreshVrchatApiStatus()
+    {
+        Swing.invokeLater(() ->
+        {
+            VrchatApiVersionChecker.Report report = this.scarlet.vrchatApiPreflightReport;
+            if (report == null)
+            {
+                this.jlabel_vrchatApiStatus.setText("<html><b>VRChat API status:</b> Not checked yet.</html>");
+                this.jlabel_vrchatApiStatus.setForeground(new Color(180, 180, 195));
+                this.jlabel_vrchatApiStatus.setToolTipText("Scarlet has not checked the bundled VRChat API version yet.");
+                this.jbutton_vrchatApiOpen.setEnabled(false);
+                return;
+            }
+
+            String bundled = report.bundledVersion == null ? "unknown" : report.bundledVersion;
+            String latest = report.latestVersion == null ? "unavailable" : report.latestVersion;
+            StringBuilder tooltip = new StringBuilder("<html>");
+            tooltip.append(report.message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"));
+            tooltip.append("<br>Bundled: ").append(bundled);
+            tooltip.append("<br>Latest upstream: ").append(latest);
+            if (report.updateAvailable)
+            {
+                tooltip.append("<br><br>If this is causing problems, please open a ticket in the Scarlet Discord");
+                tooltip.append("<br>and ping BlakeBelladonna or Vinyarion.");
+            }
+            tooltip.append("</html>");
+
+            if (report.updateAvailable)
+            {
+                this.jlabel_vrchatApiStatus.setText("<html><b>VRChat API status:</b> Update available. Bundled "
+                    + bundled + ", latest " + latest + ".</html>");
+                this.jlabel_vrchatApiStatus.setForeground(new Color(230, 190, 90));
+                this.jbutton_vrchatApiOpen.setEnabled(true);
+            }
+            else if (report.level == VrchatApiVersionChecker.Level.WARNING)
+            {
+                this.jlabel_vrchatApiStatus.setText("<html><b>VRChat API status:</b> "
+                    + report.message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") + "</html>");
+                this.jlabel_vrchatApiStatus.setForeground(new Color(230, 140, 120));
+                this.jbutton_vrchatApiOpen.setEnabled(true);
+            }
+            else if (report.level == VrchatApiVersionChecker.Level.INFO)
+            {
+                this.jlabel_vrchatApiStatus.setText("<html><b>VRChat API status:</b> Bundled "
+                    + bundled + ". Online check unavailable.</html>");
+                this.jlabel_vrchatApiStatus.setForeground(new Color(170, 190, 220));
+                this.jbutton_vrchatApiOpen.setEnabled(true);
+            }
+            else
+            {
+                this.jlabel_vrchatApiStatus.setText("<html><b>VRChat API status:</b> Up to date (" + bundled + ").</html>");
+                this.jlabel_vrchatApiStatus.setForeground(new Color(120, 205, 135));
+                this.jbutton_vrchatApiOpen.setEnabled(true);
+            }
+            this.jlabel_vrchatApiStatus.setToolTipText(tooltip.toString());
+        });
+    }
+
+    private void checkVrchatApiStatusManual()
+    {
+        this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_500L, "Checking VRChat API", "Fetching upstream version info", Color.WHITE);
+        this.jbutton_vrchatApiCheck.setEnabled(false);
+        this.scarlet.exec.execute(() ->
+        {
+            VrchatApiVersionChecker.Report report = VrchatApiVersionChecker.check();
+            this.scarlet.vrchatApiPreflightReport = report;
+            if (report.failure != null)
+                LOG.debug("Manual VRChat API status check issue", report.failure);
+            this.refreshVrchatApiStatus();
+            Swing.invokeLater(() ->
+            {
+                this.jbutton_vrchatApiCheck.setEnabled(true);
+                this.showVrchatApiStatusDialog(report);
+            });
+        });
+    }
+
+    private void showVrchatApiStatusDialog(VrchatApiVersionChecker.Report report)
+    {
+        String bundled = report.bundledVersion == null ? "unknown" : report.bundledVersion;
+        String latest = report.latestVersion == null ? "unavailable" : report.latestVersion;
+        StringBuilder message = new StringBuilder();
+        message.append("Bundled VRChat API: ").append(bundled);
+        message.append("\nLatest upstream VRChat API: ").append(latest);
+        message.append("\n\n").append(report.message);
+        if (report.updateAvailable)
+        {
+            message.append("\n\nSome systems may keep working fine while others start failing when");
+            message.append("\nVRChat's upstream API drifts away from the version bundled in Scarlet.");
+            message.append("\n\nIf this is causing problems, please open a ticket in the Scarlet Discord");
+            message.append("\nserver and ping BlakeBelladonna or Vinyarion.");
+            int choice = JOptionPane.showOptionDialog(
+                this.jframe,
+                message.toString(),
+                "VRChat API Status",
+                JOptionPane.DEFAULT_OPTION,
+                JOptionPane.WARNING_MESSAGE,
+                null,
+                new Object[] { "OK", "Open API Page" },
+                "OK"
+            );
+            if (choice == 1)
+                MiscUtils.AWTDesktop.browse(URI.create(Scarlet.VRCHAT_API_RELEASES_URL));
+            return;
+        }
+        int messageType = report.level == VrchatApiVersionChecker.Level.WARNING
+            ? JOptionPane.WARNING_MESSAGE
+            : JOptionPane.INFORMATION_MESSAGE;
+        JOptionPane.showMessageDialog(this.jframe, message.toString(), "VRChat API Status", messageType);
     }
 
     private void importWG(boolean isFile)
@@ -1736,6 +1858,88 @@ public class ScarletUI implements IScarletUI
 
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.gridy = 0;
+
+        JPanel vrchatApiCard = new JPanel(new GridBagLayout())
+        {
+            private static final long serialVersionUID = 1L;
+            @Override
+            protected void paintComponent(java.awt.Graphics g)
+            {
+                java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+                try
+                {
+                    g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                                        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                    java.awt.Shape viewportClip = g2.getClip();
+                    java.awt.Shape cardShape = new java.awt.geom.RoundRectangle2D.Float(
+                        0, 0, getWidth(), getHeight(), 10, 10);
+                    if (viewportClip == null)
+                    {
+                        g2.setClip(cardShape);
+                    }
+                    else
+                    {
+                        java.awt.geom.Area clipped = new java.awt.geom.Area(viewportClip);
+                        clipped.intersect(new java.awt.geom.Area(cardShape));
+                        g2.setClip(clipped);
+                    }
+                    g2.setColor(CARD_BG);
+                    g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
+                    g2.setColor(Swing.ACCENT);
+                    g2.fillRect(0, 0, 4, getHeight());
+                    g2.setClip(viewportClip);
+                    g2.setColor(CARD_BORDER);
+                    g2.setStroke(new java.awt.BasicStroke(1f));
+                    g2.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 10, 10);
+                }
+                finally
+                {
+                    g2.dispose();
+                }
+            }
+        };
+        vrchatApiCard.setOpaque(false);
+        vrchatApiCard.setBorder(BorderFactory.createEmptyBorder(10, 16, 12, 16));
+
+        GridBagConstraints apigbc = new GridBagConstraints();
+        apigbc.gridy = 0;
+        apigbc.gridx = 0;
+        apigbc.gridwidth = GridBagConstraints.REMAINDER;
+        apigbc.fill = GridBagConstraints.HORIZONTAL;
+        apigbc.anchor = GridBagConstraints.WEST;
+        apigbc.weightx = 1.0;
+        apigbc.insets = new Insets(0, 0, 8, 0);
+        JLabel apiTitle = new JLabel("VRCHAT API".toUpperCase());
+        apiTitle.setFont(apiTitle.getFont().deriveFont(java.awt.Font.BOLD, 10f));
+        apiTitle.setForeground(CARD_HDR_FG);
+        vrchatApiCard.add(apiTitle, apigbc);
+
+        apigbc.gridy++;
+        apigbc.insets = new Insets(2, 0, 10, 0);
+        this.jlabel_vrchatApiStatus.setForeground(LABEL_FG);
+        vrchatApiCard.add(this.jlabel_vrchatApiStatus, apigbc);
+
+        JPanel apiButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        apiButtons.setOpaque(false);
+        apiButtons.add(this.jbutton_vrchatApiCheck);
+        apiButtons.add(this.jbutton_vrchatApiOpen);
+        apigbc.gridy++;
+        apigbc.insets = new Insets(0, 0, 0, 0);
+        apigbc.gridwidth = GridBagConstraints.REMAINDER;
+        vrchatApiCard.add(apiButtons, apigbc);
+
+        gbc.gridx = 0;
+        gbc.gridwidth = GridBagConstraints.REMAINDER;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.anchor = GridBagConstraints.NORTH;
+        gbc.weightx = 1.0;
+        gbc.weighty = 0.0;
+        gbc.insets = new Insets(10, 12, 0, 12);
+        this.jpanel_settings.add(vrchatApiCard, gbc);
+        gbc.gridy++;
+        this.settingsCardPanels.add(vrchatApiCard);
+        this.settingsCardSearchText.add("vrchat api status update version compatibility ticket blakebelladonna vinyarion");
+        this.refreshVrchatApiStatus();
 
         java.util.Set<String> placed = new java.util.HashSet<>();
 

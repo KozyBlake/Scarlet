@@ -10,6 +10,7 @@ import java.util.function.Consumer;
 import javax.swing.JFrame;
 
 import net.sybyline.scarlet.ScarletUI.ConnectedPlayer;
+import net.sybyline.scarlet.util.Platform;
 import net.sybyline.scarlet.util.Func;
 import net.sybyline.scarlet.util.Func.V1.NE;
 
@@ -18,7 +19,9 @@ public interface IScarletUI extends Closeable
 
     static IScarletUI create(Scarlet scarlet)
     {
-        return GraphicsEnvironment.isHeadless() ? new ScarletUIHeadless() : new ScarletUI(scarlet);
+        return Platform.forceHeadlessUi() || GraphicsEnvironment.isHeadless()
+            ? new ScarletUIHeadless()
+            : new ScarletUI(scarlet);
     }
 
     /**
@@ -30,6 +33,7 @@ public interface IScarletUI extends Closeable
     void jframe(Consumer<JFrame> edit);
     void setUIScale();
     void loadSettings();
+    void refreshVrchatApiStatus();
 
     void fireSort();
     void clearInstance();
@@ -49,6 +53,7 @@ class ScarletUIHeadless implements IScarletUI
     public void jframe(Consumer<JFrame> edit) {}
     public void setUIScale() {}
     public void loadSettings() {}
+    public void refreshVrchatApiStatus() {}
     public void fireSort() {}
     public void clearInstance() {}
     public void playerJoin(boolean initialPreamble, String id, String name, LocalDateTime joined, String advisory, Color text_color, int priority, boolean isRejoinFromPrev) {}

@@ -1495,12 +1495,12 @@ public class ScarletDiscordUI
             : event.getUser().getName();
 
         // Build audit log reason
-        String auditReason = reason != null && !reason.isBlank()
+        String auditReason = reason != null && !reason.trim().isEmpty()
             ? String.format("Kicked via Scarlet by %s. Reason: %s", actor, reason)
             : "Kicked via Scarlet by " + actor;
 
         // Build DM message
-        String dmMessage = reason != null && !reason.isBlank()
+        String dmMessage = reason != null && !reason.trim().isEmpty()
             ? String.format("You have been kicked from **%s** by %s.\n**Reason:** %s",
                 guild.getName(), actor, reason)
             : String.format("You have been kicked from **%s** by %s.",
@@ -1634,12 +1634,12 @@ public class ScarletDiscordUI
             : event.getUser().getName();
 
         // Build audit log reason
-        String auditReason = reason != null && !reason.isBlank()
+        String auditReason = reason != null && !reason.trim().isEmpty()
             ? String.format("Banned via Scarlet by %s. Reason: %s", actor, reason)
             : "Banned via Scarlet by " + actor;
 
         // Build DM message
-        String dmMessage = reason != null && !reason.isBlank()
+        String dmMessage = reason != null && !reason.trim().isEmpty()
             ? String.format("You have been banned from **%s**.\n**Reason:** %s",
                 guild.getName(), reason)
             : String.format("You have been banned from **%s**.",
