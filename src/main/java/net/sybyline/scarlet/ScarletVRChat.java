@@ -294,7 +294,7 @@ public class ScarletVRChat implements Closeable
     volatile String pendingUsername = null;
     /** Mirrors the last value passed to client.setPassword() for use in the UTF-8 Auth interceptor. */
     volatile String pendingPassword = null;
-    final String groupId;
+    String groupId;
     String groupOwnerId;
     Group group;
     GroupMember groupLimitedMember;
@@ -498,7 +498,7 @@ public class ScarletVRChat implements Closeable
         this.scarlet.splash.splashSubtext("Opening secure credential store");
         LOG.info("Opening secure credential store");
         this.cookies.load();
-        this.scarlet.settings.setNamespace(this.groupId);
+        this.scarlet.settings.setNamespace(MiscUtils.blank(this.groupId) ? "" : this.groupId);
         this.secureStoreReady = true;
         LOG.info("Secure credential store ready");
     }
@@ -1019,6 +1019,12 @@ finally
             LOG.warn("Cannot update group info: currentUserId is null (login may have failed)");
             return;
         }
+        this.resolveActiveGroupId();
+        if (MiscUtils.blank(this.groupId))
+        {
+            LOG.error("Cannot update group info: no valid VRChat group id is configured or could be auto-resolved for user `{}`", this.currentUserId);
+            return;
+        }
         Group group;
         try
         {
@@ -1061,6 +1067,72 @@ finally
         catch (Exception ex)
         {
             LOG.warn("Failed to get group permissions: {}", ex.getMessage());
+        }
+    }
+
+    private void resolveActiveGroupId()
+    {
+        if (!MiscUtils.blank(this.groupId))
+            return;
+        String resolvedGroupId = this.getRepresentedGroupId(this.currentUserId);
+        if (MiscUtils.blank(resolvedGroupId))
+        {
+            List<LimitedUserGroups> userGroups = this.getUserGroups(this.currentUserId);
+            if (userGroups != null)
+            {
+                resolvedGroupId = userGroups.stream()
+                    .filter(Objects::nonNull)
+                    .filter(group -> Boolean.TRUE.equals(group.getIsRepresenting()))
+                    .map(LimitedUserGroups::getGroupId)
+                    .filter(groupId -> !MiscUtils.blank(groupId))
+                    .findFirst()
+                    .orElseGet(() -> userGroups.size() == 1 ? userGroups.get(0).getGroupId() : null);
+            }
+        }
+        if (!MiscUtils.blank(resolvedGroupId))
+        {
+            this.groupId = MiscUtils.extractTypedUuid("grp", "", resolvedGroupId);
+            ExtendedUserAgent.setCurrentGroupId(this.groupId);
+            this.scarlet.settings.setString("vrchat_group_id", this.groupId);
+            this.scarlet.settings.setNamespace(this.groupId);
+            LOG.warn("Recovered missing VRChat group id from the logged-in user's group context: `{}`", this.groupId);
+        }
+    }
+
+    private String getRepresentedGroupId(String userId)
+    {
+        if (MiscUtils.blank(userId))
+            return null;
+        try
+        {
+            Map<String, String> headers = new HashMap<>();
+            headers.put("Accept", "application/json");
+            JsonObject represented = this.client.<JsonObject>execute(
+                this.client.buildCall(
+                    null,
+                    "/users/"+userId+"/groups/represented",
+                    "GET",
+                    new ArrayList<>(),
+                    new ArrayList<>(),
+                    null,
+                    headers,
+                    new HashMap<>(),
+                    new HashMap<>(),
+                    new String[]{"authCookie"},
+                    null
+                ),
+                JsonObject.class
+            ).getData();
+            if (represented == null)
+                return null;
+            JsonElement groupId = represented.get("groupId");
+            return groupId == null || groupId.isJsonNull() ? null : groupId.getAsString();
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            LOG.warn("Unable to resolve represented VRChat group for `{}`: {}", userId, apiex.getMessage());
+            return null;
         }
     }
     public boolean checkGroupHasAdminTag(GroupAdminTag adminTag)
@@ -1211,6 +1283,12 @@ CurrentUser getCurrentUser(AuthenticationApi auth) throws ApiException
         catch (ApiException apiex)
         {
             this.scarlet.checkVrcRefresh(apiex);
+            if (this.isAuditEndpointNotImplemented(apiex))
+            {
+                List<GroupAuditLogEntry> fallback = this.auditQueryFallback(from, to, actorIds, eventTypes, targetIds);
+                if (fallback != null)
+                    return fallback;
+            }
             LOG.error("Error during audit query: "+apiex.getMessage());
             return null;
         }
@@ -1225,8 +1303,147 @@ CurrentUser getCurrentUser(AuthenticationApi auth) throws ApiException
         catch (ApiException apiex)
         {
             this.scarlet.checkVrcRefresh(apiex);
+            if (this.isAuditEndpointNotImplemented(apiex))
+            {
+                Integer fallback = this.auditQueryCountFallback(from, to, actorIds, eventTypes, targetIds);
+                if (fallback != null)
+                    return fallback;
+            }
             LOG.error("Error during audit query: "+apiex.getMessage());
             return null;
+        }
+    }
+
+    private boolean isAuditEndpointNotImplemented(ApiException apiex)
+    {
+        if (apiex == null || apiex.getCode() != 404)
+            return false;
+        String message = apiex.getMessage();
+        return message != null && message.toLowerCase().contains("not implemented by our system");
+    }
+
+    private List<GroupAuditLogEntry> auditQueryFallback(OffsetDateTime from, OffsetDateTime to, String actorIds, String eventTypes, String targetIds)
+    {
+        for (AuditFallbackMode mode : AuditFallbackMode.values())
+        {
+            try
+            {
+                LOG.warn("VRChat rejected the generated audit-log request for group `{}`; retrying with Scarlet audit fallback mode `{}`", this.groupId, mode.name());
+                List<GroupAuditLogEntry> audits = new ArrayList<>();
+                int offset = 0, batchSize = 100;
+                PaginatedGroupAuditLogEntryList page = this.getGroupAuditLogsRaw(batchSize, offset, from, to, actorIds, eventTypes, targetIds, mode);
+                if (page == null)
+                    return Collections.emptyList();
+                while (Boolean.TRUE.equals(page.getHasNext()))
+                {
+                    if (page.getResults() != null)
+                        audits.addAll(page.getResults());
+                    offset += batchSize;
+                    MiscUtils.sleep(250L);
+                    page = this.getGroupAuditLogsRaw(batchSize, offset, from, to, actorIds, eventTypes, targetIds, mode);
+                    if (page == null)
+                        break;
+                }
+                if (page != null && page.getResults() != null)
+                    audits.addAll(page.getResults());
+                audits.sort(OLDEST_TO_NEWEST);
+                LOG.warn("Scarlet audit fallback mode `{}` succeeded for group `{}` with {} entrie(s)", mode.name(), this.groupId, Integer.valueOf(audits.size()));
+                return audits;
+            }
+            catch (ApiException apiex)
+            {
+                if (!this.isAuditEndpointNotImplemented(apiex))
+                {
+                    LOG.error("Scarlet audit fallback mode `{}` failed", mode.name(), apiex);
+                    return null;
+                }
+                LOG.warn("Scarlet audit fallback mode `{}` still hit VRChat's `not implemented` response", mode.name());
+            }
+            catch (Exception ex)
+            {
+                LOG.error("Scarlet audit fallback mode `{}` failed", mode.name(), ex);
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private Integer auditQueryCountFallback(OffsetDateTime from, OffsetDateTime to, String actorIds, String eventTypes, String targetIds)
+    {
+        for (AuditFallbackMode mode : AuditFallbackMode.values())
+        {
+            try
+            {
+                PaginatedGroupAuditLogEntryList page = this.getGroupAuditLogsRaw(1, 0, from, to, actorIds, eventTypes, targetIds, mode);
+                if (page != null)
+                    return page.getTotalCount();
+            }
+            catch (ApiException apiex)
+            {
+                if (!this.isAuditEndpointNotImplemented(apiex))
+                {
+                    LOG.error("Scarlet audit-count fallback mode `{}` failed", mode.name(), apiex);
+                    return null;
+                }
+            }
+            catch (Exception ex)
+            {
+                LOG.error("Scarlet audit-count fallback mode `{}` failed", mode.name(), ex);
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private PaginatedGroupAuditLogEntryList getGroupAuditLogsRaw(int n, int offset, OffsetDateTime from, OffsetDateTime to, String actorIds, String eventTypes, String targetIds, AuditFallbackMode mode) throws ApiException
+    {
+        Map<String, String> headers = new HashMap<>();
+        headers.put("Accept", "application/json");
+
+        List<io.github.vrchatapi.Pair> query = new ArrayList<>();
+        query.addAll(this.client.parameterToPair("n", Integer.valueOf(n)));
+        query.addAll(this.client.parameterToPair("offset", Integer.valueOf(offset)));
+
+        if (mode.includeDates && from != null)
+            query.addAll(this.client.parameterToPair("startDate", from));
+        if (mode.includeDates && to != null)
+            query.addAll(this.client.parameterToPair("endDate", to));
+        if (mode.includeFilters && !MiscUtils.blank(actorIds))
+            query.addAll(this.client.parameterToPair("actorIds", actorIds));
+        if (mode.includeFilters && !MiscUtils.blank(eventTypes))
+            query.addAll(this.client.parameterToPair("eventTypes", eventTypes));
+        if (mode.includeFilters && !MiscUtils.blank(targetIds))
+            query.addAll(this.client.parameterToPair("targetIds", targetIds));
+
+        okhttp3.Call call = this.client.buildCall(
+            null,
+            "/groups/"+this.groupId+"/auditLogs",
+            "GET",
+            query,
+            new ArrayList<>(),
+            null,
+            headers,
+            new HashMap<>(),
+            new HashMap<>(),
+            new String[]{"authCookie"},
+            null
+        );
+        return this.client.<PaginatedGroupAuditLogEntryList>execute(call, PaginatedGroupAuditLogEntryList.class).getData();
+    }
+
+    private enum AuditFallbackMode
+    {
+        FULL_FILTERS(true, true),
+        NO_OPTIONAL_FILTERS(true, false),
+        NO_DATES_OR_FILTERS(false, false);
+
+        final boolean includeDates;
+        final boolean includeFilters;
+
+        AuditFallbackMode(boolean includeDates, boolean includeFilters)
+        {
+            this.includeDates = includeDates;
+            this.includeFilters = includeFilters;
         }
     }
     public List<LimitedUserSearch> searchUsers(String name, Integer n, Integer offset)
@@ -1718,7 +1935,35 @@ CurrentUser getCurrentUser(AuthenticationApi auth) throws ApiException
 
     public boolean checkSelfUserHasVRChatPermission(GroupPermissions vrchatPermission)
     {
-        return this.allGroupPermissions.has(this.groupId, vrchatPermission);
+        if (vrchatPermission == null || this.groupId == null || this.groupId.isEmpty())
+            return false;
+
+        if (this.allGroupPermissions.has(this.groupId, vrchatPermission))
+            return true;
+
+        if (this.currentUserId != null && this.currentUserId.equals(this.groupOwnerId))
+        {
+            LOG.debug("VRChat permission `{}` granted by group owner fallback for `{}` in group `{}`", vrchatPermission.getValue(), this.currentUserId, this.groupId);
+            return true;
+        }
+
+        GroupMember selfMembership = this.groupLimitedMember;
+        if (selfMembership == null && this.currentUserId != null)
+        {
+            selfMembership = this.getGroupMembership(this.groupId, this.currentUserId);
+            if (selfMembership != null)
+                this.groupLimitedMember = selfMembership;
+        }
+        if (selfMembership != null && this.checkUserHasVRChatPermission(selfMembership, vrchatPermission))
+        {
+            LOG.debug("VRChat permission `{}` granted by local role fallback for `{}` in group `{}`", vrchatPermission.getValue(), this.currentUserId, this.groupId);
+            return true;
+        }
+
+        if (!this.allGroupPermissions.hasGroup(this.groupId))
+            LOG.warn("VRChat permission cache did not contain group `{}` for `{}`; local role fallback also did not confirm `{}`", this.groupId, this.currentUserId, vrchatPermission.getValue());
+
+        return false;
     }
     public boolean checkUserHasVRChatPermission(GroupPermissions vrchatPermission, String userId)
     {
@@ -2125,6 +2370,21 @@ CurrentUser getCurrentUser(AuthenticationApi auth) throws ApiException
             return true;
         LOG.error(String.format("The bot VRChat account `%s` is missing the necessary permission `%s`", this.currentUserId, perms.getValue()));
         return false;
+    }
+
+    public boolean hasValidGroupId()
+    {
+        return !MiscUtils.blank(this.groupId);
+    }
+
+    public void modalNeedGroupId()
+    {
+        this.scarlet.settings.requireConfirmYesNoAsync(
+            "Scarlet could not determine a valid VRChat group ID for the logged-in account `"+this.currentUserId+"`.\n\n"
+          + "Please set the correct `vrchat_group_id` in Scarlet's settings, or make sure the account is representing the intended group before launching Scarlet.",
+            "Missing group ID",
+            () -> MiscUtils.AWTDesktop.browse(URI.create("https://vrchat.com/home/groups")),
+            null);
     }
 
     public void save()

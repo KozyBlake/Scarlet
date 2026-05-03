@@ -615,7 +615,11 @@ public class Scarlet implements Closeable
             LOG.error("Failed to authenticate with VRChat", ex);
             return;
         }
-        if (!this.vrc.checkSelfUserHasVRChatPermission(GroupPermissions.group_audit_view))
+        if (!this.vrc.hasValidGroupId())
+        {
+            this.vrc.modalNeedGroupId();
+        }
+        else if (!this.vrc.checkSelfUserHasVRChatPermission(GroupPermissions.group_audit_view))
         {
             this.vrc.modalNeedPerms(GroupPermissions.group_audit_view);
         }

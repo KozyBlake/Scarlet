@@ -45,6 +45,11 @@ public final class VrcAllGroupPermissions
     private static final long ALL_SHIFT = 1L << GroupPermissions.group_all.ordinal();
     private final Map<String, Long> allPermissions;
 
+    public boolean hasGroup(String groupId)
+    {
+        return groupId != null && this.allPermissions.containsKey(groupId);
+    }
+
     public boolean has(String groupId, GroupPermissions perm)
     {
         return (this.allPermissions.getOrDefault(groupId, 0L).longValue() & (ALL_SHIFT | (1L << perm.ordinal()))) != 0L;
