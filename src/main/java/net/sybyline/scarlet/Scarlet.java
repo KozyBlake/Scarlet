@@ -117,7 +117,7 @@ public class Scarlet implements Closeable
         GROUP = "KozyBlake",
         LEGACY_GROUP = legacyGroupName(),
         NAME = "Scarlet",
-        VERSION = "0.4.17",
+        VERSION = "0.4.17-b1",
         FORK_GROUP = GROUP,
         FORK_REPOSITORY = NAME,
         FORK_NOTE = "Fork by KozyBlake \u2014 Windows & Linux",
@@ -1650,7 +1650,7 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
     void maybeCheckUpdate()
     {
         OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-        if (now.isAfter(this.settings.lastUpdateCheck.getOrSupply().plusHours(3)))
+        if (now.isAfter(this.settings.lastUpdateCheck.getOrSupply().plusHours(1)))
         {
             this.settings.lastUpdateCheck.set(now);
             this.checkUpdate();
@@ -1725,7 +1725,28 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
         });
     }
 
-    void checkUpdate()
+    /**
+     * Result of an update probe against {@link #META_URL}. Returned by
+     * {@link #pollMeta()} so both the periodic background check and the manual
+     * "Check for updates" UI control can share the same logic.
+     */
+    public static final class UpdateCheckResult
+    {
+        /** Version reported by meta.json — null when the check failed. */
+        public final String latestVersion;
+        /** Non-null when the meta probe failed (network, parse, etc.). */
+        public final String error;
+        /** True when {@link #latestVersion} is strictly newer than {@link #VERSION}. */
+        public final boolean updateAvailable;
+        UpdateCheckResult(String latestVersion, String error, boolean updateAvailable)
+        {
+            this.latestVersion = latestVersion;
+            this.error = error;
+            this.updateAvailable = updateAvailable;
+        }
+    }
+
+    UpdateCheckResult pollMeta()
     {
         try
         {
@@ -1734,26 +1755,30 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             {
                 meta = GSON_PRETTY.fromJson(new InputStreamReader(in), ScarletMeta.class);
             }
+            if (meta == null)
+                return new UpdateCheckResult(null, "meta.json was empty or could not be parsed", false);
             String cmp_version = this.alertForPreviewUpdates.get() || MiscUtils.isPreviewVersion(VERSION) ? meta.latest_build : meta.latest_release;
-            if (!Objects.equals(this.newerVersion, cmp_version) && MiscUtils.compareSemVer(VERSION, cmp_version) < 0)
-            {
-                LOG.info(NAME+" version "+cmp_version+" available");
-                if (this.alertForUpdates.get())
-                {
-                    this.settings.requireConfirmYesNoAsync(NAME+" version "+cmp_version+" is available. You are running "+VERSION+". Open the download page?", "Update available",
-                        () -> MiscUtils.AWTDesktop.browse(URI.create(GITHUB_URL+"/releases/tag/"+cmp_version)), null);
-                }
-                this.newerVersion = cmp_version;
-            }
+            if (cmp_version == null)
+                return new UpdateCheckResult(null, "meta.json did not include a usable version field", false);
+            // Use Scarlet's flipped comparator: 0.4.17-b1 is treated as newer
+            // than 0.4.17 (an iteration ahead, not a pre-release).
+            boolean newer = MiscUtils.compareScarletVersion(VERSION, cmp_version) < 0;
+            return new UpdateCheckResult(cmp_version, null, newer);
         }
         catch (FileNotFoundException ex)
         {
             LOG.warn("Update metadata not found at {}; skipping update notice", META_URL);
+            return new UpdateCheckResult(null, "Update metadata not found at " + META_URL, false);
         }
         catch (Exception ex)
         {
             LOG.error("Failed to download meta", ex);
+            return new UpdateCheckResult(null, "Failed to download meta: " + ex, false);
         }
+    }
+
+    void refreshAllVersions()
+    {
         String[] release_names = GithubApi.release_names(FORK_GROUP, FORK_REPOSITORY);
         if (release_names == null)
         {
@@ -1761,9 +1786,43 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
         }
         else
         {
-            Arrays.sort(release_names, MiscUtils.SEMVER_CMP_NEWEST_FIRST);
+            // Sort with the Scarlet-flavoured comparator so suffixed builds
+            // (e.g. 0.4.17-b1) sort newer than the bare release.
+            Arrays.sort(release_names, MiscUtils.SCARLET_VERSION_CMP_NEWEST_FIRST);
             this.allVersions = release_names;
         }
+    }
+
+    void checkUpdate()
+    {
+        UpdateCheckResult result = this.pollMeta();
+        if (result.updateAvailable && !Objects.equals(this.newerVersion, result.latestVersion))
+        {
+            String latest = result.latestVersion;
+            LOG.info(NAME+" version "+latest+" available");
+            if (this.alertForUpdates.get())
+            {
+                this.settings.requireConfirmYesNoAsync("Hey, your release is "+VERSION+", there is a new release of "+latest+". Open the download page?", "Update available",
+                    () -> MiscUtils.AWTDesktop.browse(URI.create(GITHUB_URL+"/releases/tag/"+latest)), null);
+            }
+            this.newerVersion = latest;
+        }
+        this.refreshAllVersions();
+    }
+
+    /**
+     * Manual update check entry point invoked by the UI. Runs the full
+     * meta + GitHub-releases probe synchronously on the calling thread and
+     * returns the result so the UI can display it. Callers should dispatch
+     * this onto {@link #exec} instead of running it on the EDT.
+     */
+    public UpdateCheckResult checkUpdateNow()
+    {
+        UpdateCheckResult result = this.pollMeta();
+        this.refreshAllVersions();
+        if (result.updateAvailable)
+            this.newerVersion = result.latestVersion;
+        return result;
     }
 
     void maybeCheckInstances()

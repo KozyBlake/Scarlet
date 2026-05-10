@@ -435,6 +435,14 @@ public interface MiscUtils
     static Pattern SEMVER = Pattern.compile("(?<major>\\d+)\\.(?<minor>\\d+)\\.(?<patch>\\d+)([\\.\\-_]?(?<kind>\\w+))?([\\.\\-_]?(?<build>\\d+))?");
     static Comparator<String> SEMVER_CMP_OLDEST_FIRST = MiscUtils::compareSemVer,
                               SEMVER_CMP_NEWEST_FIRST = SEMVER_CMP_OLDEST_FIRST.reversed();
+    /**
+     * Comparator pair using {@link #compareScarletVersion(String, String)} —
+     * a suffixed version (e.g. "0.4.17-b1") is treated as <em>newer</em> than
+     * the bare release ("0.4.17"), the convention used by Scarlet for its own
+     * fork builds.
+     */
+    public static final Comparator<String> SCARLET_VERSION_CMP_OLDEST_FIRST = MiscUtils::compareScarletVersion,
+                                           SCARLET_VERSION_CMP_NEWEST_FIRST = SCARLET_VERSION_CMP_OLDEST_FIRST.reversed();
     static boolean isValidVersion(String v)
     {
         return v != null && SEMVER.matcher(v).matches();
@@ -497,6 +505,77 @@ public interface MiscUtils
         catch (RuntimeException rex)
         {
             // ignore
+        }
+        return 0;
+    }
+
+    /**
+     * Scarlet-specific version comparison. Standard semver (see
+     * {@link #compareSemVer(String, String)}) treats "0.4.17-b1" as a
+     * pre-release of "0.4.17" and therefore older. For the KozyBlake fork's
+     * own update notifications we instead want the suffix to mean "iteration
+     * ahead of the bare release" — so "0.4.17-b1" is <em>newer</em> than
+     * "0.4.17", and "0.4.17-b2" is newer than "0.4.17-b1".
+     *
+     * <p>Returns a value &lt; 0 when {@code l} is older than {@code r}, &gt; 0
+     * when newer, 0 when equal. Suitable for direct use as a {@link Comparator}
+     * (oldest first); reverse it for newest-first.
+     */
+    public static int compareScarletVersion(String l, String r)
+    {
+        try
+        {
+            if (l == null)
+                return r == null ? 0 : -1;
+            if (r == null)
+                return 1;
+            Matcher lm = SEMVER.matcher(l),
+                    rm = SEMVER.matcher(r);
+            if (!lm.matches())
+                return !rm.matches() ? l.compareTo(r) : -1;
+            if (!rm.matches())
+                return 1;
+
+            int li, ri, cmp;
+
+            li = Integer.parseInt(lm.group("major"));
+            ri = Integer.parseInt(rm.group("major"));
+            if ((cmp = Integer.compare(li, ri)) != 0) return cmp;
+
+            li = Integer.parseInt(lm.group("minor"));
+            ri = Integer.parseInt(rm.group("minor"));
+            if ((cmp = Integer.compare(li, ri)) != 0) return cmp;
+
+            li = Integer.parseInt(lm.group("patch"));
+            ri = Integer.parseInt(rm.group("patch"));
+            if ((cmp = Integer.compare(li, ri)) != 0) return cmp;
+
+            String lx = lm.group("kind"),
+                   rx = rm.group("kind");
+            // Inverted vs. compareSemVer: a suffix means "ahead of the
+            // bare release" instead of "pre-release of it".
+            cmp = lx == null
+                ? rx == null
+                    ? 0
+                    : -1
+                : rx == null
+                    ? 1
+                    : lx.compareTo(rx);
+            if (cmp != 0) return cmp;
+
+            lx = lm.group("build");
+            rx = rm.group("build");
+            // When parsed as kind only ("b1" → kind="b1", build=null) the
+            // comparison above already covered things; this branch handles
+            // versions where the regex split out a numeric build group.
+            li = lx == null ? 0 : Integer.parseInt(lx);
+            ri = rx == null ? 0 : Integer.parseInt(rx);
+            if ((cmp = Integer.compare(li, ri)) != 0) return cmp;
+        }
+        catch (RuntimeException rex)
+        {
+            // ignore — fall through to "equal" so a malformed version never
+            // produces a spurious update prompt
         }
         return 0;
     }

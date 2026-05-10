@@ -1,25 +1,64 @@
 
 # Changelog
 
-## 0.4.17
-  - Bumped Scarlet release/version metadata to `0.4.17` and pointed update/download release checks at the KozyBlake fork.
-  - Fixed the fork update metadata URL to use GitHub's raw endpoint and downgraded missing metadata to a warning instead of a startup error stack trace
-  - Added a desktop UI wizard for creating VRChat group instances from Scarlet, with simple world/access/region/gate questions and an option to launch the new instance in the VRChat client in VR or Desktop mode
-  - Added new instance-creation functionality backed by the newer VRChat group instance APIs, including more complete support for recent VRChat API additions
-  - Added avatar performance gating to group instance creation, using the live VRChat API `minimumAvatarPerformance` field with Poor, Medium, and Good-or-better presets
-  - Added modern VRChat group API commands under `/vrchat-group` for audit-type discovery, member search, ban/invite/join-request lists, group posts, group announcements, and confirmed owner-level transfer actions
-  - Added `/discord-warn` plus `/set-discord-action-log-channel` so Discord warn/kick/ban actions can be logged to a server-selected channel
-  - Added Discord member join logging with invite-use detection when the bot has Manage Server permission; Discord IP addresses remain unavailable because Discord does not expose them to bots
-  - Moved default Scarlet data directories and user-agent branding from the legacy upstream owner name to `KozyBlake`, with a one-time opt-in prompt before copying data from the old default folder
-  - Added a startup data-folder warning that explains the KozyBlake/Scarlet folder is separate, the legacy folder is left in place, and switching back to the original repo may require setup again
-  - Added a hidden `popup-test` CLI dispatcher for dry-run popup testing without performing the confirmed action
-  - Rebranded Scarlet log categories and direct console log prefixes to `KozyBlake/Scarlet`
-  - Removed the avatarrecovery provider from default and configured avatar search provider use
-  - Added `scarlet-android/` Maven module producing a standalone APK (`scarlet-android-<ver>.apk`) that captures VRChat log output from the official VRChat Android app via an embedded ADB client over Wireless Debugging and writes a VRChat-formatted `output_log_<ts>.txt` that Scarlet's existing tailer consumes
-  - Added one-time Wireless-Debugging pairing flow in `MainActivity` / `AdbPairingService` using NSD discovery of `_adb-tls-pairing._tcp` + a 6-digit pairing code; no USB, no root, no terminal commands
-  - Added `ScarletLogService` foreground service that owns the dadb session + logcat tail and auto-reconnects when Wireless Debugging drops
-  - Added `AndroidLogcatTail.rewrite(...)` translator that reformats `logcat -v year -s Unity:V VRCApplication:V` lines into the `yyyy.MM.dd HH:mm:ss Log - …` shape expected by `ScarletVRChatLogs.VRChatLogTail`
-  - Added `scarlet.vrcAppData.dir` / `SCARLET_VRC_APPDATA_DIR` override in `VrcAppData.resolve(...)` so the Scarlet core tailer can be pointed at any directory — including the path where scarlet-android writes its `output_log_*.txt` — without patching VrcAppData on Android
+## 0.4.17-b1
+
+First tagged release of the KozyBlake fork. Highlights:
+
+- **Scarlet on Android.** A new `scarlet-android` Maven module produces a standalone APK that tails VRChat logs from the official VRChat Android app over Wireless Debugging — no USB, no root, no terminal.
+- **Group instance wizard.** A desktop UI for spinning up VRChat group instances with world / access / region / age-gate / avatar-performance prompts, and an option to launch straight into the new instance in VR or Desktop mode.
+- **Discord warn + action-log channel.** A new `/discord-warn` command and a configurable action-log channel so warn / kick / ban events get a paper trail.
+- **Faster, friendlier self-updates.** Hourly update polls, a manual *Help → Scarlet: Check for updates* entry, a fork-aware metadata URL, and a comparator that recognises `-b1` suffixes as iterations ahead of the bare release.
+
+### Added
+
+#### Scarlet on Android (new `scarlet-android/` module)
+
+- New `scarlet-android/` Maven module producing a standalone APK (`scarlet-android-<ver>.apk`) that captures VRChat log output from the official VRChat Android app via an embedded ADB client over Wireless Debugging and writes a VRChat-formatted `output_log_<ts>.txt` that Scarlet's existing tailer consumes.
+- One-time Wireless Debugging pairing flow in `MainActivity` / `AdbPairingService` using NSD discovery of `_adb-tls-pairing._tcp` plus a 6-digit pairing code — no USB, no root, no terminal commands.
+- `ScarletLogService` foreground service that owns the `dadb` session + logcat tail and auto-reconnects when Wireless Debugging drops.
+- `AndroidLogcatTail.rewrite(...)` translator that reformats `logcat -v year -s Unity:V VRCApplication:V` lines into the `yyyy.MM.dd HH:mm:ss Log - …` shape expected by `ScarletVRChatLogs.VRChatLogTail`.
+- `scarlet.vrcAppData.dir` / `SCARLET_VRC_APPDATA_DIR` override in `VrcAppData.resolve(...)` so the Scarlet core tailer can be pointed at any directory — including the path where `scarlet-android` writes its `output_log_*.txt` — without patching `VrcAppData` on Android.
+
+#### VRChat group instance creation
+
+- Desktop UI wizard for creating VRChat group instances directly from Scarlet, with simple world / access / region / age-gate questions and an option to launch the new instance in the VRChat client in VR or Desktop mode.
+- Instance-creation flow backed by the newer VRChat group instance APIs, with more complete support for recent VRChat API additions.
+- Avatar performance gating in group instance creation, using the live VRChat API `minimumAvatarPerformance` field with Poor, Medium, and Good-or-better presets.
+
+#### Discord
+
+- `/vrchat-group` modern group API commands: audit-type discovery, member search, ban / invite / join-request lists, group posts, group announcements, and confirmed owner-level transfer actions.
+- `/discord-warn` plus `/set-discord-action-log-channel` so Discord warn / kick / ban actions can be logged to a server-selected channel.
+- Discord member join logging with invite-use detection when the bot has Manage Server permission. (Discord IP addresses remain unavailable because Discord does not expose them to bots.)
+
+#### Self-update flow
+
+- *Help → Scarlet: Check for updates* menu entry for an on-demand check that reports up-to-date / update-available / probe-failed results.
+- `MiscUtils.compareScarletVersion` so a `-b1` suffix is treated as an iteration **newer** than the bare release — `0.4.17` → `0.4.17-b1` is now a recognised update.
+- Public `Scarlet.checkUpdateNow()` entry point + `UpdateCheckResult` so the UI shares parsing and version-comparison logic with the periodic background check.
+
+#### Misc
+
+- Startup data-folder warning explaining that the `KozyBlake/Scarlet` data folder is separate, the legacy folder is left in place, and switching back to the original repo may require setup again.
+- Hidden `popup-test` CLI dispatcher for dry-run popup testing without performing the confirmed action.
+
+### Changed
+
+- Bumped Scarlet release / version metadata to `0.4.17-b1` and pointed update / download release checks at the KozyBlake fork.
+- Periodic update poll runs **hourly** instead of every 3 hours.
+- Update prompt rewording: "Hey, your release is *X*, there is a new release of *Y*. Open the download page?" (in both the auto-prompt and the new manual dialog).
+- Default Scarlet data directories and user-agent branding moved from the legacy upstream owner name to `KozyBlake`, with a one-time opt-in prompt before copying data from the old default folder.
+- Log categories and direct console log prefixes rebranded to `KozyBlake/Scarlet`.
+
+### Fixed
+
+- `meta.json` was missing a comma between its two fields, so the update probe failed JSON parsing every run; the file now parses cleanly.
+- Fork update metadata URL now uses GitHub's raw endpoint, and a missing `meta.json` is downgraded to a warning instead of producing a startup error stack trace.
+
+### Removed
+
+- `avatarrecovery` provider dropped from the default and configured avatar search providers.
 
 ## 0.4.16-b5
   - Added a third `minimal` edition built alongside full and lite; `mvn clean package` now produces `scarlet-0.4.16-b5-minimal.jar`

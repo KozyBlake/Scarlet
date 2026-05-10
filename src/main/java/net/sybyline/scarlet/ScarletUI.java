@@ -689,6 +689,7 @@ public class ScarletUI implements IScarletUI
                     jmenu_help.addSeparator();
                     jmenu_help.add("Scarlet: License").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.LICENSE_URL)));
                     jmenu_help.add("Scarlet: Credits").addActionListener($ -> this.infoCredits());
+                    jmenu_help.add("Scarlet: Check for updates").addActionListener($ -> this.checkScarletUpdateManual());
                     jmenu_help.add("VRChat API: Check Status").addActionListener($ -> this.checkVrchatApiStatusManual());
                     jmenu_help.addSeparator();
                     jmenu_help.add("Text-to-Speech: Natural Voices (Windows)").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(WinSapiTtsProvider.NaturalVoiceSAPIAdapter_URL)));
@@ -1620,6 +1621,59 @@ public class ScarletUI implements IScarletUI
                 this.showVrchatApiStatusDialog(report);
             });
         });
+    }
+
+    /**
+     * Help-menu action: probe the fork's meta.json + GitHub releases right now
+     * and report back to the user. Uses {@link Scarlet#checkUpdateNow()} so we
+     * share parsing/comparison logic with the periodic background check.
+     */
+    private void checkScarletUpdateManual()
+    {
+        this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_500L, "Checking for Scarlet updates", "Fetching meta.json from " + Scarlet.FORK_GROUP + "/" + Scarlet.FORK_REPOSITORY, Color.WHITE);
+        this.scarlet.exec.execute(() ->
+        {
+            Scarlet.UpdateCheckResult result = this.scarlet.checkUpdateNow();
+            Swing.invokeLater(() -> this.showScarletUpdateDialog(result));
+        });
+    }
+
+    private void showScarletUpdateDialog(Scarlet.UpdateCheckResult result)
+    {
+        if (result.error != null)
+        {
+            JOptionPane.showMessageDialog(
+                this.jframe,
+                "Could not check for updates:\n\n" + result.error,
+                "Scarlet Update Check",
+                JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+        if (result.updateAvailable && result.latestVersion != null)
+        {
+            String latest = result.latestVersion;
+            int choice = JOptionPane.showOptionDialog(
+                this.jframe,
+                "Hey, your release is " + Scarlet.VERSION + ", there is a new release of " + latest + ".\n\nOpen the download page?",
+                "Scarlet Update Available",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.INFORMATION_MESSAGE,
+                null,
+                new Object[] { "Open download page", "Later" },
+                "Open download page"
+            );
+            if (choice == JOptionPane.YES_OPTION)
+                MiscUtils.AWTDesktop.browse(URI.create(Scarlet.GITHUB_URL + "/releases/tag/" + latest));
+            return;
+        }
+        String latest = result.latestVersion == null ? "unknown" : result.latestVersion;
+        JOptionPane.showMessageDialog(
+            this.jframe,
+            "You're up to date.\n\nRunning: " + Scarlet.VERSION + "\nLatest reported: " + latest,
+            "Scarlet Update Check",
+            JOptionPane.INFORMATION_MESSAGE
+        );
     }
 
     private void showVrchatApiStatusDialog(VrchatApiVersionChecker.Report report)
