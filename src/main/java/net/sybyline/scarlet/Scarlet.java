@@ -117,7 +117,8 @@ public class Scarlet implements Closeable
         GROUP = "KozyBlake",
         LEGACY_GROUP = legacyGroupName(),
         NAME = "Scarlet",
-        VERSION = "0.4.17-b1",
+        VERSION = appVersion(),
+        APP_NAME = GROUP+"/"+NAME,
         FORK_GROUP = GROUP,
         FORK_REPOSITORY = NAME,
         FORK_NOTE = "Fork by KozyBlake \u2014 Windows & Linux",
@@ -153,6 +154,18 @@ public class Scarlet implements Closeable
         API_HOST_2 = "api.vrchat.cloud",
         API_URL_2  = "https://"+API_HOST_2+"/",
         API_BASE_2 = API_URL_2+API_VERSION;
+
+    private static String appVersion()
+    {
+        Package pkg = Scarlet.class.getPackage();
+        if (pkg != null)
+        {
+            String implementationVersion = pkg.getImplementationVersion();
+            if (implementationVersion != null && !implementationVersion.trim().isEmpty())
+                return implementationVersion.trim();
+        }
+        return "0.4.17-b1_hotfix";
+    }
 
     public static void main(String[] args) throws Exception
     {
@@ -464,7 +477,7 @@ public class Scarlet implements Closeable
         GsonBuilder gb = JsonAdapters.gson();
         GSON = gb.create();
         GSON_PRETTY = gb.setPrettyPrinting().create();
-        LOG.info(String.format("App: %s/%s %s", GROUP, NAME, VERSION));
+        LOG.info(String.format("App: %s %s", APP_NAME, VERSION));
         LOG.info(String.format("OS: %s (%s)", System.getProperty("os.name"), System.getProperty("os.arch")));
         LOG.info(String.format("VM: %s %s (%s) %s-bit", System.getProperty("java.version"), System.getProperty("java.vendor"), System.getProperty("java.vm.name"), System.getProperty("sun.arch.data.model")));
         LOG.info(String.format("Platform: %s", Platform.describe()));
@@ -964,7 +977,7 @@ public class Scarlet implements Closeable
     public void run()
     {
         System.out.println("===========================================");
-        System.out.println("  KozyBlake/Scarlet " + VERSION);
+        System.out.println("  " + APP_NAME + " " + VERSION);
         System.out.println("  Type 'help' for available CLI commands.");
         System.out.println("===========================================");
         this.ui.loadSettings();
@@ -1760,8 +1773,8 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             String cmp_version = this.alertForPreviewUpdates.get() || MiscUtils.isPreviewVersion(VERSION) ? meta.latest_build : meta.latest_release;
             if (cmp_version == null)
                 return new UpdateCheckResult(null, "meta.json did not include a usable version field", false);
-            // Use Scarlet's flipped comparator: 0.4.17-b1 is treated as newer
-            // than 0.4.17 (an iteration ahead, not a pre-release).
+            // Use Scarlet's flipped comparator: suffixed builds are treated as
+            // iterations ahead of the bare release, not pre-releases.
             boolean newer = MiscUtils.compareScarletVersion(VERSION, cmp_version) < 0;
             return new UpdateCheckResult(cmp_version, null, newer);
         }
@@ -1787,7 +1800,7 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
         else
         {
             // Sort with the Scarlet-flavoured comparator so suffixed builds
-            // (e.g. 0.4.17-b1) sort newer than the bare release.
+            // sort newer than the bare release.
             Arrays.sort(release_names, MiscUtils.SCARLET_VERSION_CMP_NEWEST_FIRST);
             this.allVersions = release_names;
         }

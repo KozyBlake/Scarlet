@@ -107,7 +107,7 @@ public class ScarletVRChatReportTemplate
         public String tags = MISSING;
         public String description = MISSING;
         public String auditId = MISSING;
-        public String appName = Scarlet.NAME;
+        public String appName = Scarlet.APP_NAME;
         public String appVersion = Scarlet.VERSION;
         public FormatParams group(ScarletVRChat vrc, String groupId, Group group)
         {

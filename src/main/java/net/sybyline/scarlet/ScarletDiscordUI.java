@@ -1016,7 +1016,7 @@ public class ScarletDiscordUI
                 reportDesc.append("<br><br>");
             }
             reportDesc.append("Partially autofilled with ")
-                      .append(Scarlet.NAME)
+                      .append(Scarlet.APP_NAME)
                       .append(" version ")
                       .append(Scarlet.VERSION)
                       .append("<br>")

@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>net.sybyline</groupId>
   <artifactId>scarlet</artifactId>
-  <version>0.4.17-b1</version><!--scarlet-version-->
+  <version>0.4.17-b1_hotfix</version><!--scarlet-version-->
   <name>Scarlet</name>
   <build>
     <plugins>
@@ -26,6 +26,9 @@
             </manifest>
             <manifestEntries>
               <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
+              <Implementation-Title>${project.artifactId}</Implementation-Title>
+              <Implementation-Version>${project.version}</Implementation-Version>
+              <Implementation-Vendor>${project.groupId}</Implementation-Vendor>
             </manifestEntries>
           </archive>
         </configuration>
@@ -54,6 +57,9 @@
                   <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
                   <manifestEntries>
                     <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
+                    <Implementation-Title>${project.artifactId}</Implementation-Title>
+                    <Implementation-Version>${project.version}</Implementation-Version>
+                    <Implementation-Vendor>${project.groupId}</Implementation-Vendor>
                   </manifestEntries>
                 </transformer>
               </transformers>
@@ -101,6 +107,9 @@
                   <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
                   <manifestEntries>
                     <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
+                    <Implementation-Title>${project.artifactId}</Implementation-Title>
+                    <Implementation-Version>${project.version}</Implementation-Version>
+                    <Implementation-Vendor>${project.groupId}</Implementation-Vendor>
                   </manifestEntries>
                 </transformer>
               </transformers>
@@ -202,6 +211,9 @@
                   <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
                   <manifestEntries>
                     <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
+                    <Implementation-Title>${project.artifactId}</Implementation-Title>
+                    <Implementation-Version>${project.version}</Implementation-Version>
+                    <Implementation-Vendor>${project.groupId}</Implementation-Vendor>
                   </manifestEntries>
                 </transformer>
                 <transformer implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
@@ -279,6 +291,9 @@
                   <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
                   <manifestEntries>
                     <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
+                    <Implementation-Title>${project.artifactId}</Implementation-Title>
+                    <Implementation-Version>${project.version}</Implementation-Version>
+                    <Implementation-Vendor>${project.groupId}</Implementation-Vendor>
                   </manifestEntries>
                 </transformer>
               </transformers>
@@ -518,6 +533,14 @@
       <groupId>com.google.code.gson</groupId>
       <artifactId>gson</artifactId>
       <version>2.12.1</version>
+    </dependency>
+    <dependency>
+      <!-- Used by VRChatHelpDeskURLs.normalizeSubject as the cross-script
+           transliteration fallback (Cyrillic, Greek, CJK, Hebrew, Arabic, ...)
+           after the JDK's NFKD pass folds styled Latin to plain ASCII. -->
+      <groupId>net.gcardone.junidecode</groupId>
+      <artifactId>junidecode</artifactId>
+      <version>0.5.2</version>
     </dependency>
     <dependency>
       <groupId>com.j256.two-factor-auth</groupId>

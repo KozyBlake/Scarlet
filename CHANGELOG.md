@@ -1,9 +1,20 @@
 
 # Changelog
 
-## 0.4.17-b1
+## 0.4.17-b1_hotfix
 
-First tagged release of the KozyBlake fork. Highlights:
+Hotfix update for the first KozyBlake fork release.
+
+Credit to ChanAurora for reporting both the help-desk report issue with custom-font usernames and the stale Scarlet version shown in generated reports.
+
+Hotfix highlights:
+
+- **Readable help-desk reports for stylized usernames.** Report URLs now use a normalized ASCII subject while preserving the exact VRChat display name in the report description so staff can identify the reported user.
+- **Correct report versioning.** Report footers, Discord embed footers, UI labels, startup output, and packaged JAR metadata now report `KozyBlake/Scarlet 0.4.17-b1_hotfix`.
+- **Fork update metadata.** `meta.json` now advertises `0.4.17-b1_hotfix` for both release and build update checks.
+- **Fork branding polish.** Remaining plain `Scarlet` version labels, startup text, and log prefixes now use `KozyBlake/Scarlet` where user-facing fork identity matters.
+
+Original 0.4.17-b1 highlights still included:
 
 - **Scarlet on Android.** A new `scarlet-android` Maven module produces a standalone APK that tails VRChat logs from the official VRChat Android app over Wireless Debugging — no USB, no root, no terminal.
 - **Group instance wizard.** A desktop UI for spinning up VRChat group instances with world / access / region / age-gate / avatar-performance prompts, and an option to launch straight into the new instance in VR or Desktop mode.
@@ -45,7 +56,7 @@ First tagged release of the KozyBlake fork. Highlights:
 
 ### Changed
 
-- Bumped Scarlet release / version metadata to `0.4.17-b1` and pointed update / download release checks at the KozyBlake fork.
+- Bumped Scarlet release / version metadata to `0.4.17-b1_hotfix` and pointed update / download release checks at the KozyBlake fork.
 - Periodic update poll runs **hourly** instead of every 3 hours.
 - Update prompt rewording: "Hey, your release is *X*, there is a new release of *Y*. Open the download page?" (in both the auto-prompt and the new manual dialog).
 - Default Scarlet data directories and user-agent branding moved from the legacy upstream owner name to `KozyBlake`, with a one-time opt-in prompt before copying data from the old default folder.
@@ -55,6 +66,11 @@ First tagged release of the KozyBlake fork. Highlights:
 
 - `meta.json` was missing a comma between its two fields, so the update probe failed JSON parsing every run; the file now parses cleanly.
 - Fork update metadata URL now uses GitHub's raw endpoint, and a missing `meta.json` is downgraded to a warning instead of producing a startup error stack trace.
+- Help-desk report subjects now normalize custom-font / stylized Unicode usernames into URL-safe ASCII, while the report description includes the exact original display name whenever normalization changes it.
+- The custom-font username fix covers Latin-Extended stroke/bar glyphs like the `༒808 ȼɍᵾsȺđɇɍ༒` case (`tf_subject=808+crUsAder`), fullwidth and mathematical styled Latin, combining marks, CJK, Cyrillic, Greek, Hebrew, Arabic, Devanagari, and decorative Unicode flair.
+- Version reporting now reads the packaged implementation version at runtime instead of relying on a compile-time-inlined constant, preventing report footers from showing an older build after partial recompiles.
+- All primary packaged JAR variants now receive manifest implementation metadata so report/version text can resolve the correct build from the artifact itself.
+- Report footer branding now uses `KozyBlake/Scarlet` instead of plain `Scarlet`.
 
 ### Removed
 

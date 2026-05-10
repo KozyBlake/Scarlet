@@ -4,7 +4,7 @@
   <groupId>net.sybyline</groupId>
   <artifactId>scarlet</artifactId>
   <name>Scarlet</name>
-  <version>0.4.17-b1</version>
+  <version>0.4.17-b1_hotfix</version>
   <build>
     <plugins>
       <plugin>
@@ -26,6 +26,9 @@
             </manifest>
             <manifestEntries>
               <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
+              <Implementation-Title>${project.artifactId}</Implementation-Title>
+              <Implementation-Version>${project.version}</Implementation-Version>
+              <Implementation-Vendor>${project.groupId}</Implementation-Vendor>
             </manifestEntries>
           </archive>
         </configuration>
@@ -46,6 +49,9 @@
                   <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
                   <manifestEntries>
                     <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
+                    <Implementation-Title>${project.artifactId}</Implementation-Title>
+                    <Implementation-Version>${project.version}</Implementation-Version>
+                    <Implementation-Vendor>${project.groupId}</Implementation-Vendor>
                   </manifestEntries>
                 </transformer>
               </transformers>
@@ -82,6 +88,9 @@
                   <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
                   <manifestEntries>
                     <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
+                    <Implementation-Title>${project.artifactId}</Implementation-Title>
+                    <Implementation-Version>${project.version}</Implementation-Version>
+                    <Implementation-Vendor>${project.groupId}</Implementation-Vendor>
                   </manifestEntries>
                 </transformer>
               </transformers>
@@ -133,6 +142,9 @@
                   <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
                   <manifestEntries>
                     <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
+                    <Implementation-Title>${project.artifactId}</Implementation-Title>
+                    <Implementation-Version>${project.version}</Implementation-Version>
+                    <Implementation-Vendor>${project.groupId}</Implementation-Vendor>
                   </manifestEntries>
                 </transformer>
                 <transformer>
@@ -183,6 +195,9 @@
                   <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
                   <manifestEntries>
                     <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
+                    <Implementation-Title>${project.artifactId}</Implementation-Title>
+                    <Implementation-Version>${project.version}</Implementation-Version>
+                    <Implementation-Vendor>${project.groupId}</Implementation-Vendor>
                   </manifestEntries>
                 </transformer>
               </transformers>

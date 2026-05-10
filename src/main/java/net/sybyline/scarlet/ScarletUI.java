@@ -133,7 +133,7 @@ public class ScarletUI implements IScarletUI
     public ScarletUI(Scarlet scarlet)
     {
         this.scarlet = scarlet;
-        this.jframe = new JFrame(Scarlet.NAME + " " + Scarlet.VERSION + " \u2014 " + Scarlet.FORK_NOTE);
+        this.jframe = new JFrame(Scarlet.APP_NAME + " " + Scarlet.VERSION + " \u2014 " + Scarlet.FORK_NOTE);
         this.jtabs = new JTabbedPane(JTabbedPane.TOP, JTabbedPane.SCROLL_TAB_LAYOUT);
         // FlatLaf's scroll-tab layout can bleed the tab strip into the header panel
         // above it. A small top inset on the tabbed pane itself prevents the overlap.
@@ -1043,7 +1043,7 @@ public class ScarletUI implements IScarletUI
 
             statusBar.add(leftSide, BorderLayout.WEST);
 
-            JLabel version_label = new JLabel(Scarlet.NAME + " " + Scarlet.VERSION, JLabel.RIGHT);
+            JLabel version_label = new JLabel(Scarlet.APP_NAME + " " + Scarlet.VERSION, JLabel.RIGHT);
             version_label.setFont(version_label.getFont().deriveFont(10.0f));
             version_label.setForeground(new java.awt.Color(80, 80, 100));
             statusBar.add(version_label, BorderLayout.EAST);

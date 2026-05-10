@@ -25,7 +25,7 @@ public interface ScarletDiscord extends Closeable
 {
 
     // U+2727 White Four Pointed Star (the character separating the footer and timestamp differs by client platform...)
-    String FOOTER_PREFIX = String.format("%s %s \u2727 ", Scarlet.NAME, Scarlet.VERSION);
+    String FOOTER_PREFIX = String.format("%s %s \u2727 ", Scarlet.APP_NAME, Scarlet.VERSION);
 
     static final Logger LOG = LoggerFactory.getLogger("Scarlet/Discord");
 
