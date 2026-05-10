@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>net.sybyline</groupId>
   <artifactId>scarlet</artifactId>
-  <version>0.4.16-b5</version><!--scarlet-version-->
+  <version>0.4.17</version><!--scarlet-version-->
   <name>Scarlet</name>
   <build>
     <plugins>
@@ -59,6 +59,15 @@
               </transformers>
               <filters>
                 <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.EC</exclude>
+                  </excludes>
+                </filter>
+                <filter>
                   <artifact>moe.kyokobot.libdave:libdave-jvm-impl</artifact>
                   <excludes>
                     <exclude>moe/kyokobot/libdave/natives/DaveNativeBindings.class</exclude>
@@ -101,6 +110,10 @@
                        natives exclusive to the dedicated -android artifact. -->
                   <artifact>*:*</artifact>
                   <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.EC</exclude>
                     <exclude>native/android/**</exclude>
                     <exclude>android-aarch64/libdave-jvm.so</exclude>
                     <exclude>natives/android-aarch64/libdave-jvm.so</exclude>
@@ -200,6 +213,10 @@
                 <filter>
                   <artifact>*:*</artifact>
                   <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.EC</exclude>
                     <!-- Flip Features flags + strip the Python bridge. -->
                     <exclude>scarlet-features.properties</exclude>
                     <exclude>rvc/**</exclude>
@@ -275,6 +292,10 @@
                 <filter>
                   <artifact>*:*</artifact>
                   <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.EC</exclude>
                     <!-- Desktop-only DAVE JNA natives. -->
                     <exclude>linux-*/libdave.so</exclude>
                     <exclude>win32-*/libdave.dll</exclude>
@@ -294,6 +315,7 @@
               </filters>
             </configuration>
           </execution>
+
         </executions>
       </plugin>
     </plugins>
@@ -311,6 +333,7 @@
     </repository>
   </repositories>
   <properties>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <vrchatapi.version>1.20.8-nightly.15</vrchatapi.version>
     <JDA.version>6.3.0</JDA.version>
     <concentus.version>master-3885c4e465-1</concentus.version>

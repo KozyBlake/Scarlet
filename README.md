@@ -71,6 +71,13 @@ Since there is no automatic synchronization of data between groups running Scarl
   Lists internal and audit information for a specific VRChat user.  
   Example: `/vrchat-user-info "usr_00000000-0000-0000-0000-000000000000"`
 
+- **`vrchat-group`**  
+  Manages group operations such as member search, ban/invite/request lists, posts, announcements, audit-type discovery, instance tools, role assignment, and owner-level transfer checks. Instance creation includes queue, age gate, content, and avatar performance gate presets.  
+  Examples: `/vrchat-group search-members "display name"`, `/vrchat-group list-bans`, `/vrchat-group audit-types`, `/vrchat-group create-post`
+
+- **Desktop instance wizard**  
+  Use **Create Instance** in Scarlet's top action bar, or **File -> Create VRChat group instance...**, to create a group instance from a world URL/id and optionally open it in the VRChat client in VR or Desktop mode.
+
 - **`discord-user-info <discord-user:user>`**  
   Lists internal information for a specific Discord user.  
   Example: `/discord-user-info <@123456789123456789>`
@@ -279,7 +286,7 @@ All such actions (e.g., kicking or banning a user) must be performed manually, b
 
 ### Installing the Scarlet Desktop Application
 
-1. Download the latest release (`zip` is recommended): https://github.com/SybylineNetwork/Scarlet/releases/latest  
+1. Download the latest release (`zip` is recommended): https://github.com/KozyBlake/Scarlet/releases/latest  
 2. Copy or extract the files into the directory of your choosing.  
 3. If you have Java 8 installed to the system PATH, skip this step.  
     - Download and extract a Java 8 JDK, such as this one from [Adoptium](https://adoptium.net/temurin/releases/?os=windows&arch=x64&package=jdk&version=8).  
@@ -289,4 +296,3 @@ All such actions (e.g., kicking or banning a user) must be performed manually, b
     - Create (or overwrite) the file `scarlet.home` next to `run.bat`.  
     - Copy-paste etc. path of the desired directory to the **first line** of `scarlet.home` and save the file.  
 5. Run the `run.bat`.
-

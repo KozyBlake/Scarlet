@@ -102,6 +102,8 @@ public class MavenDepsLoader
         
         String cpEntriesString = mf.getMainAttributes().getValue("Class-Path");
 //        System.out.println(String.format("net.sybyline.scarlet.util.MavenDepsLoader: Class-Path: %s", cpEntriesString));
+        if (cpEntriesString == null || cpEntriesString.trim().isEmpty())
+            return;
         
         String[] cpEntries = cpEntriesString.split(" ");
         

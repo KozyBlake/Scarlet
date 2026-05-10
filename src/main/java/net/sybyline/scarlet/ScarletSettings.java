@@ -29,6 +29,7 @@ import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -117,7 +118,7 @@ public class ScarletSettings
                 ScarletSettings.this.globalPreferences = prefs;
                 ScarletSettings.this.preferences = prefs;
                 ScarletSettings.this.prefsInitStage = "opening encrypted preference wrapper";
-                EncryptedPrefs enc = new EncryptedPrefs(prefs, globalPW);
+                EncryptedPrefs enc = ScarletSettings.this.createSecurePrefs(prefs, "");
                 ScarletSettings.this.prefsInitStage = "publishing preference handles";
                 ScarletSettings.this.globalPreferences = prefs;
                 ScarletSettings.this.globalEncrypted = enc;
@@ -135,9 +136,16 @@ public class ScarletSettings
                         ScarletSettings.this.globalPreferences = prefs;
                         ScarletSettings.this.preferences = prefs;
                     }
+                }
+                catch (Throwable preferencesError)
+                {
+                    LOG.error("Exception opening Java Preferences fallback", preferencesError);
+                }
+                try
+                {
                     if (ScarletSettings.this.globalEncrypted == null)
                     {
-                        EncryptedPrefs fallback = new EncryptedPrefs(ScarletSettings.this.globalPreferences, globalPW);
+                        EncryptedPrefs fallback = ScarletSettings.this.createSecurePrefs(ScarletSettings.this.globalPreferences, "");
                         ScarletSettings.this.globalEncrypted = fallback;
                         ScarletSettings.this.encrypted = fallback;
                     }
@@ -360,15 +368,39 @@ public class ScarletSettings
     public void setNamespace(String namespace)
     {
         this.awaitPrefs("setting VRChat group namespace");
-        this.preferences = this.globalPreferences.node(namespace);
+        String ns = namespace == null ? "" : namespace;
+        if (this.globalPreferences == null)
+        {
+            throw new IllegalStateException("Java Preferences are unavailable");
+        }
+        this.preferences = ns.length() == 0 ? this.globalPreferences : this.globalPreferences.node(ns);
         try
         {
-            this.encrypted = new EncryptedPrefs(this.preferences, globalPW);
+            this.encrypted = this.createSecurePrefs(this.preferences, ns);
         }
         catch (Throwable t)
         {
             LOG.error("Exception initializing namespace secure preference wrapper; reusing global compatibility store", t);
             this.encrypted = this.globalEncrypted;
+        }
+    }
+
+    private EncryptedPrefs createSecurePrefs(Preferences prefs, String namespace)
+    {
+        return new EncryptedPrefs(prefs, globalPW);
+    }
+
+    private static void flushPreferences(Preferences prefs, String reason)
+    {
+        if (prefs == null)
+            return;
+        try
+        {
+            prefs.flush();
+        }
+        catch (BackingStoreException | RuntimeException ex)
+        {
+            LOG.warn("Failed to flush Java Preferences while {}", reason, ex);
         }
     }
 
@@ -722,6 +754,7 @@ public class ScarletSettings
         {
             ScarletSettings.this.awaitPrefs("writing preference " + this.name);
             ScarletSettings.this.preferences.put(this.name, string);
+            flushPreferences(ScarletSettings.this.preferences, "writing preference " + this.name);
         }
         public void set(T value_)
         {
@@ -746,6 +779,9 @@ public class ScarletSettings
             {
                 ScarletSettings.this.preferences.remove(this.name);
                 ScarletSettings.this.globalPreferences.remove(this.name);
+                flushPreferences(ScarletSettings.this.preferences, "clearing preference " + this.name);
+                if (ScarletSettings.this.globalPreferences != ScarletSettings.this.preferences)
+                    flushPreferences(ScarletSettings.this.globalPreferences, "clearing global preference " + this.name);
             }
         }
     }
@@ -891,6 +927,11 @@ public class ScarletSettings
         }
     }
 
+    synchronized void clearCachedJson()
+    {
+        this.json = null;
+    }
+
     public synchronized String getString(String key)
     {
         JsonObject json = this.getJson();
@@ -998,6 +1039,10 @@ public class ScarletSettings
                     return jtf.getText();
             }
         }
+        return requireConsoleInput(display, sensitive);
+    }
+    private String requireConsoleInput(String display, boolean sensitive)
+    {
         Console console = System.console();
         if (console != null)
             return sensitive

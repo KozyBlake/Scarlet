@@ -129,7 +129,7 @@ public class ScarletLogger extends LegacyAbstractLogger
                                file = m.group("file"),
                                line = m.group("line");
 //                        $ = ws + pkg + "." + cls + "." + mth + "(" + file + ":" + line + ")";
-                        $ = ws + pkg + "." + cls + "." + mth + "([" + file + ":" + line + "](https://github.com/SybylineNetwork/Scarlet/tree/" + Scarlet.VERSION + "/src/main/java/" + pkg.replace('.', '/') + "/" + file + "#L" + line + "))";
+                        $ = ws + pkg + "." + cls + "." + mth + "([" + file + ":" + line + "](" + Scarlet.GITHUB_URL + "/tree/" + Scarlet.VERSION + "/src/main/java/" + pkg.replace('.', '/') + "/" + file + "#L" + line + "))";
                     }
                     return $;
                 })

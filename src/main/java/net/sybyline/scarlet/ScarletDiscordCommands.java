@@ -45,17 +45,26 @@ import io.github.vrchatapi.model.Avatar;
 import io.github.vrchatapi.model.CalendarEventAccess;
 import io.github.vrchatapi.model.CalendarEventPlatform;
 import io.github.vrchatapi.model.CreateCalendarEventRequest;
+import io.github.vrchatapi.model.CreateGroupAnnouncementRequest;
+import io.github.vrchatapi.model.CreateGroupPostRequest;
 import io.github.vrchatapi.model.Group;
+import io.github.vrchatapi.model.GroupAnnouncement;
 import io.github.vrchatapi.model.GroupAuditLogEntry;
 import io.github.vrchatapi.model.GroupGallery;
 import io.github.vrchatapi.model.GroupGalleryImage;
 import io.github.vrchatapi.model.GroupMember;
+import io.github.vrchatapi.model.GroupMemberLimitedUser;
 import io.github.vrchatapi.model.GroupMemberStatus;
 import io.github.vrchatapi.model.GroupPermissions;
+import io.github.vrchatapi.model.GroupPost;
+import io.github.vrchatapi.model.GroupPostVisibility;
 import io.github.vrchatapi.model.GroupRole;
+import io.github.vrchatapi.model.GroupTransferable;
+import io.github.vrchatapi.model.GroupTransferableRequirements;
 import io.github.vrchatapi.model.Instance;
 import io.github.vrchatapi.model.LimitedUserSearch;
 import io.github.vrchatapi.model.LimitedWorld;
+import io.github.vrchatapi.model.PerformanceRatings;
 import io.github.vrchatapi.model.User;
 import io.github.vrchatapi.model.World;
 
@@ -2085,6 +2094,42 @@ public class ScarletDiscordCommands
     @DefaultPerms(Permission.USE_APPLICATION_COMMANDS)
     public class VrchatGroups
     {
+        public final SlashOption<String> _memberSearch = SlashOption.ofString("member-search", "Name or user id to search within this group", true, null).with($ -> $.setRequiredLength(1, 100));
+        public final SlashOption<Integer> _resultLimit = SlashOption.ofInt("result-limit", "Maximum results to fetch", false, 25).with($ -> $.setRequiredRange(1L, 100L));
+        public final SlashOption<Boolean> _blockedRequests = SlashOption.ofBool("blocked-requests", "Show blocked requests instead of pending requests", false, Boolean.FALSE);
+        public final SlashOption<Boolean> _publicOnly = SlashOption.ofBool("public-only", "Only show public posts", false, Boolean.FALSE);
+        public final SlashOption<String> _announcementTitle = SlashOption.ofString("announcement-title", "Announcement title", true, null).with($ -> $.setRequiredLength(1, 100));
+        public final SlashOption<String> _announcementText = SlashOption.ofString("announcement-text", "Announcement body", true, null).with($ -> $.setRequiredLength(1, 1000));
+        public final SlashOption<String> _postTitle = SlashOption.ofString("post-title", "Post title", true, null).with($ -> $.setRequiredLength(1, 100));
+        public final SlashOption<String> _postText = SlashOption.ofString("post-text", "Post body", true, null).with($ -> $.setRequiredLength(1, 2000));
+        public final SlashOption<Boolean> _sendNotification = SlashOption.ofBool("send-notification", "Notify group members", false, Boolean.FALSE);
+        public final SlashOption<String> _imageFileId = SlashOption.ofString("image-file-id", "Optional VRChat file id for an image", false, null);
+        public final SlashOption<GroupPostVisibility> _postVisibility = SlashOption.ofDOptionEnum(DOptionEnum.of("post-visibility", "Who can see the post", GroupPostVisibility.class, GroupPostVisibility::getValue, "Group Members", "Public"), true);
+        public final SlashOption<String> _postRoleId = SlashOption.ofString("post-role", "Optional role that can see a group-only post", false, null, this::_postRoleId);
+        public final SlashOption<String> _postId = SlashOption.ofString("post-id", "The group post id", true, null, this::_postId);
+        public final SlashOption<String> _confirmDelete = SlashOption.ofString("confirm-delete", "Type DELETE to confirm", true, null).with($ -> $.setRequiredLength(6, 6));
+        public final SlashOption<String> _confirmGroupId = SlashOption.ofString("confirm-group-id", "Type the group id to confirm this owner-level action", true, null);
+
+        void _postRoleId(CommandAutoCompleteInteractionEvent event)
+        {
+            DInteractions.SlashOptionsChoicesUnsanitized.autocomplete(event, ScarletDiscordCommands.this.discord.scarlet.vrc.groupRoles
+                .values()
+                .stream()
+                .map(role -> new Command.Choice(role.getName(), role.getId()))
+                .toArray(Command.Choice[]::new), false);
+        }
+
+        void _postId(CommandAutoCompleteInteractionEvent event)
+        {
+            List<GroupPost> posts = ScarletDiscordCommands.this.discord.scarlet.vrc.getGroupPosts(ScarletDiscordCommands.this.discord.scarlet.vrc.groupId, false, 25);
+            if (posts == null || posts.isEmpty())
+            {
+                event.replyChoices().queue();
+                return;
+            }
+            event.replyChoices(posts.stream().map(post -> new Command.Choice(this.choiceLabel(post.getTitle(), post.getId()), post.getId())).limit(25L).collect(Collectors.toList())).queue();
+        }
+
         private io.github.vrchatapi.model.User actor(SlashCommandInteractionEvent event, InteractionHook hook)
         {
             long within1day = System.currentTimeMillis() - 86400_000L;
@@ -2103,6 +2148,405 @@ public class ScarletDiscordCommands
             }
             return sc;
         }
+
+        private String linkedActorId(SlashCommandInteractionEvent event, InteractionHook hook)
+        {
+            String vrcActorId = ScarletDiscordCommands.this.discord.scarlet.data.globalMetadata_getSnowflakeId(event.getUser().getId());
+            if (vrcActorId == null)
+            {
+                hook.sendMessage(ScarletDiscordCommands.this.discord.linkedIdsReply(event.getUser())).setEphemeral(true).queue();
+                return null;
+            }
+            return vrcActorId;
+        }
+
+        private boolean checkMemberAndSelfPerms(SlashCommandInteractionEvent event, InteractionHook hook, GroupPermissions permission, String action)
+        {
+            String vrcActorId = this.linkedActorId(event, hook);
+            if (vrcActorId == null)
+                return false;
+            boolean memberAllowed = Objects.equals(vrcActorId, ScarletDiscordCommands.this.discord.scarlet.vrc.groupOwnerId)
+                || ScarletDiscordCommands.this.discord.checkMemberHasVRChatPermission(permission, event.getMember());
+            if (!memberAllowed)
+            {
+                hook.sendMessage("You need the VRChat group permission `"+permission.getValue()+"` to "+action+".").setEphemeral(true).queue();
+                return false;
+            }
+            return ScarletDiscordCommands.this.discord.checkSelfRespondVrcPerms(permission, hook);
+        }
+
+        private String choiceLabel(String title, String id)
+        {
+            String label = MiscUtils.blank(title) ? id : title + " (" + id + ")";
+            return MiscUtils.maybeEllipsis(100, label);
+        }
+
+        private String displayName(GroupMember member)
+        {
+            GroupMemberLimitedUser user = member == null ? null : member.getUser();
+            String displayName = user == null ? null : user.getDisplayName();
+            return MiscUtils.blank(displayName) ? this.userId(member) : displayName;
+        }
+
+        private String userId(GroupMember member)
+        {
+            if (member == null)
+                return "unknown";
+            GroupMemberLimitedUser user = member.getUser();
+            if (user != null && !MiscUtils.blank(user.getId()))
+                return user.getId();
+            if (!MiscUtils.blank(member.getUserId()))
+                return member.getUserId();
+            if (!MiscUtils.blank(member.getId()) && member.getId().startsWith("usr_"))
+                return member.getId();
+            return "unknown";
+        }
+
+        private String avatarUrl(GroupMember member)
+        {
+            GroupMemberLimitedUser user = member == null ? null : member.getUser();
+            if (user == null)
+                return null;
+            if (!MiscUtils.blank(user.getProfilePicOverride()))
+                return user.getProfilePicOverride();
+            if (!MiscUtils.blank(user.getIconUrl()))
+                return user.getIconUrl();
+            if (!MiscUtils.blank(user.getThumbnailUrl()))
+                return user.getThumbnailUrl();
+            return MiscUtils.blank(user.getCurrentAvatarThumbnailImageUrl()) ? null : user.getCurrentAvatarThumbnailImageUrl();
+        }
+
+        private String when(OffsetDateTime time)
+        {
+            if (time == null)
+                return "Unknown";
+            String epoch = Long.toUnsignedString(time.toEpochSecond());
+            return "<t:"+epoch+":f> (<t:"+epoch+":R>)";
+        }
+
+        private String roleNames(List<String> roleIds)
+        {
+            if (roleIds == null || roleIds.isEmpty())
+                return "None";
+            return MiscUtils.maybeEllipsis(1024, roleIds.stream().map(roleId -> {
+                GroupRole role = ScarletDiscordCommands.this.discord.scarlet.vrc.groupRoles.get(roleId);
+                return role == null || MiscUtils.blank(role.getName()) ? roleId : role.getName();
+            }).collect(Collectors.joining(", ")));
+        }
+
+        private MessageEmbed memberEmbed(String heading, GroupMember member)
+        {
+            String userId = this.userId(member);
+            String displayName = this.displayName(member);
+            EmbedBuilder builder = new EmbedBuilder()
+                .setTitle(MiscUtils.maybeEllipsis(256, heading + ": " + displayName), "unknown".equals(userId) ? null : VrcWeb.Home.user(userId))
+                .setThumbnail(this.avatarUrl(member))
+                .addField("User ID", "`"+userId+"`", false)
+                .addField("Status", member.getMembershipStatus() == null ? "Unknown" : member.getMembershipStatus().getValue(), true)
+                .addField("Roles", this.roleNames(member.getRoleIds()), false);
+            if (member.getJoinedAt() != null)
+                builder.addField("Joined", this.when(member.getJoinedAt()), true);
+            if (member.getCreatedAt() != null)
+                builder.addField("Created", this.when(member.getCreatedAt()), true);
+            if (member.getBannedAt() != null)
+                builder.addField("Banned", this.when(member.getBannedAt()), true);
+            if (!MiscUtils.blank(member.getAcceptedByDisplayName()))
+                builder.addField("Accepted By", MarkdownSanitizer.escape(member.getAcceptedByDisplayName()), true);
+            if (!MiscUtils.blank(member.getManagerNotes()))
+                builder.addField("Manager Notes", MiscUtils.maybeEllipsis(1024, MarkdownSanitizer.escape(member.getManagerNotes())), false);
+            return builder.build();
+        }
+
+        private MessageEmbed announcementEmbed(GroupAnnouncement announcement)
+        {
+            if (announcement == null)
+                return new EmbedBuilder().setTitle("No group announcement").setDescription("This group does not currently have an announcement.").build();
+            EmbedBuilder builder = new EmbedBuilder()
+                .setTitle(MiscUtils.maybeEllipsis(256, MiscUtils.blank(announcement.getTitle()) ? "Group Announcement" : announcement.getTitle()))
+                .setDescription(MiscUtils.blank(announcement.getText()) ? null : MiscUtils.maybeEllipsis(4096, announcement.getText()))
+                .setImage(MiscUtils.blank(announcement.getImageUrl()) ? null : announcement.getImageUrl());
+            if (announcement.getCreatedAt() != null)
+                builder.addField("Created", this.when(announcement.getCreatedAt()), true);
+            if (announcement.getUpdatedAt() != null)
+                builder.addField("Updated", this.when(announcement.getUpdatedAt()), true);
+            if (!MiscUtils.blank(announcement.getAuthorId()))
+                builder.addField("Author", MarkdownUtil.maskedLink(announcement.getAuthorId(), VrcWeb.Home.user(announcement.getAuthorId())), false);
+            return builder.build();
+        }
+
+        private MessageEmbed postEmbed(GroupPost post)
+        {
+            EmbedBuilder builder = new EmbedBuilder()
+                .setTitle(MiscUtils.maybeEllipsis(256, MiscUtils.blank(post.getTitle()) ? post.getId() : post.getTitle()), VrcWeb.Home.groupPosts(post.getGroupId()))
+                .setDescription(MiscUtils.blank(post.getText()) ? null : MiscUtils.maybeEllipsis(4096, post.getText()))
+                .setImage(MiscUtils.blank(post.getImageUrl()) ? null : post.getImageUrl())
+                .addField("Post ID", "`"+post.getId()+"`", false)
+                .addField("Visibility", post.getVisibility() == null ? "Unknown" : post.getVisibility().getValue(), true);
+            if (post.getCreatedAt() != null)
+                builder.addField("Created", this.when(post.getCreatedAt()), true);
+            if (post.getUpdatedAt() != null)
+                builder.addField("Updated", this.when(post.getUpdatedAt()), true);
+            if (!MiscUtils.blank(post.getAuthorId()))
+                builder.addField("Author", MarkdownUtil.maskedLink(post.getAuthorId(), VrcWeb.Home.user(post.getAuthorId())), false);
+            if (post.getRoleId() != null && !post.getRoleId().isEmpty())
+                builder.addField("Roles", this.roleNames(post.getRoleId()), false);
+            return builder.build();
+        }
+
+        private void paginateMembers(SlashCommandInteractionEvent event, InteractionHook hook, List<GroupMember> members, String emptyMessage, String heading, int entriesPerPage)
+        {
+            if (members == null)
+            {
+                hook.sendMessage("VRChat did not return results for that request.").setEphemeral(true).queue();
+                return;
+            }
+            if (members.isEmpty())
+            {
+                hook.sendMessage(emptyMessage).setEphemeral(true).queue();
+                return;
+            }
+            MessageEmbed[] embeds = members.stream().map(member -> this.memberEmbed(heading, member)).toArray(MessageEmbed[]::new);
+            ScarletDiscordCommands.this.discord.interactions.new Pagination(event.getId(), embeds, entriesPerPage).queue(hook);
+        }
+
+        @SlashCmd("audit-types")
+        @Desc("Lists audit event types currently present in this group")
+        public void auditTypes(SlashCommandInteractionEvent event, InteractionHook hook)
+        {
+            if (!this.checkMemberAndSelfPerms(event, hook, GroupPermissions.group_audit_view, "view audit event types"))
+                return;
+            List<String> types = ScarletDiscordCommands.this.discord.scarlet.vrc.getGroupAuditLogEntryTypes(ScarletDiscordCommands.this.discord.scarlet.vrc.groupId);
+            if (types == null)
+            {
+                hook.sendMessage("Failed to fetch audit event types from VRChat.").setEphemeral(true).queue();
+                return;
+            }
+            if (types.isEmpty())
+            {
+                hook.sendMessage("No audit event types were returned for this group.").setEphemeral(true).queue();
+                return;
+            }
+            StringBuilder sb = new StringBuilder("### Group audit event types\n");
+            types.stream().sorted().forEach(type -> sb.append("\n- `").append(type).append("` - ").append(GroupAuditType.title(type)));
+            ScarletDiscordCommands.this.discord.interactions.new Pagination(event.getId(), sb).queue(hook);
+        }
+
+        @SlashCmd("search-members")
+        @Desc("Searches this group's members")
+        public void searchMembers(SlashCommandInteractionEvent event, InteractionHook hook, @SlashOpt("member-search") String memberSearch, @SlashOpt("result-limit") int resultLimit, @SlashOpt("entries-per-page") int entriesPerPage)
+        {
+            if (!this.checkMemberAndSelfPerms(event, hook, GroupPermissions.group_members_viewall, "search group members"))
+                return;
+            List<GroupMember> members = ScarletDiscordCommands.this.discord.scarlet.vrc.searchGroupMembers(ScarletDiscordCommands.this.discord.scarlet.vrc.groupId, memberSearch, resultLimit);
+            this.paginateMembers(event, hook, members, "No group members matched that search.", "Group Member", entriesPerPage);
+        }
+
+        @SlashCmd("list-bans")
+        @Desc("Lists banned users in this group")
+        public void listBans(SlashCommandInteractionEvent event, InteractionHook hook, @SlashOpt("result-limit") int resultLimit, @SlashOpt("entries-per-page") int entriesPerPage)
+        {
+            if (!this.checkMemberAndSelfPerms(event, hook, GroupPermissions.group_bans_manage, "list group bans"))
+                return;
+            List<GroupMember> bans = ScarletDiscordCommands.this.discord.scarlet.vrc.getGroupBans(ScarletDiscordCommands.this.discord.scarlet.vrc.groupId, resultLimit);
+            this.paginateMembers(event, hook, bans, "No banned users were returned.", "Group Ban", entriesPerPage);
+        }
+
+        @SlashCmd("list-invites")
+        @Desc("Lists pending invites sent by this group")
+        public void listInvites(SlashCommandInteractionEvent event, InteractionHook hook, @SlashOpt("result-limit") int resultLimit, @SlashOpt("entries-per-page") int entriesPerPage)
+        {
+            if (!this.checkMemberAndSelfPerms(event, hook, GroupPermissions.group_invites_manage, "list group invites"))
+                return;
+            List<GroupMember> invites = ScarletDiscordCommands.this.discord.scarlet.vrc.getGroupInvites(ScarletDiscordCommands.this.discord.scarlet.vrc.groupId, resultLimit);
+            this.paginateMembers(event, hook, invites, "No pending group invites were returned.", "Group Invite", entriesPerPage);
+        }
+
+        @SlashCmd("list-join-requests")
+        @Desc("Lists pending or blocked join requests for this group")
+        public void listJoinRequests(SlashCommandInteractionEvent event, InteractionHook hook, @SlashOpt("blocked-requests") boolean blockedRequests, @SlashOpt("result-limit") int resultLimit, @SlashOpt("entries-per-page") int entriesPerPage)
+        {
+            if (!this.checkMemberAndSelfPerms(event, hook, GroupPermissions.group_invites_manage, "list group join requests"))
+                return;
+            List<GroupMember> requests = ScarletDiscordCommands.this.discord.scarlet.vrc.getGroupJoinRequests(ScarletDiscordCommands.this.discord.scarlet.vrc.groupId, blockedRequests, resultLimit);
+            this.paginateMembers(event, hook, requests, blockedRequests ? "No blocked join requests were returned." : "No pending join requests were returned.", blockedRequests ? "Blocked Join Request" : "Join Request", entriesPerPage);
+        }
+
+        @SlashCmd("view-announcement")
+        @Desc("Shows the current group announcement")
+        public void viewAnnouncement(SlashCommandInteractionEvent event, InteractionHook hook)
+        {
+            if (!this.checkMemberAndSelfPerms(event, hook, GroupPermissions.group_announcement_manage, "view group announcements"))
+                return;
+            GroupAnnouncement announcement = ScarletDiscordCommands.this.discord.scarlet.vrc.getGroupAnnouncement(ScarletDiscordCommands.this.discord.scarlet.vrc.groupId);
+            hook.sendMessageEmbeds(this.announcementEmbed(announcement)).setEphemeral(true).queue();
+        }
+
+        @SlashCmd("create-announcement")
+        @Desc("Creates or replaces the group announcement")
+        public void createAnnouncement(SlashCommandInteractionEvent event, InteractionHook hook,
+                @SlashOpt("announcement-title") String announcementTitle,
+                @SlashOpt("announcement-text") String announcementText,
+                @SlashOpt("send-notification") boolean sendNotification,
+                @SlashOpt("image-file-id") String imageFileId)
+        {
+            if (!this.checkMemberAndSelfPerms(event, hook, GroupPermissions.group_announcement_manage, "create group announcements"))
+                return;
+            CreateGroupAnnouncementRequest request = new CreateGroupAnnouncementRequest()
+                .title(announcementTitle)
+                .text(announcementText)
+                .sendNotification(Boolean.valueOf(sendNotification));
+            if (!MiscUtils.blank(imageFileId))
+                request.imageId(imageFileId);
+            GroupAnnouncement announcement = ScarletDiscordCommands.this.discord.scarlet.vrc.createGroupAnnouncement(ScarletDiscordCommands.this.discord.scarlet.vrc.groupId, request);
+            if (announcement == null)
+            {
+                hook.sendMessage("Failed to create the group announcement.").setEphemeral(true).queue();
+                return;
+            }
+            hook.sendMessageEmbeds(this.announcementEmbed(announcement)).setContent("Created group announcement.").setEphemeral(true).queue();
+        }
+
+        @SlashCmd("delete-announcement")
+        @Desc("Deletes the current group announcement")
+        public void deleteAnnouncement(SlashCommandInteractionEvent event, InteractionHook hook, @SlashOpt("confirm-delete") String confirmDelete)
+        {
+            if (!"DELETE".equals(confirmDelete))
+            {
+                hook.sendMessage("Deletion cancelled. Type `DELETE` exactly in the confirmation option to delete the announcement.").setEphemeral(true).queue();
+                return;
+            }
+            if (!this.checkMemberAndSelfPerms(event, hook, GroupPermissions.group_announcement_manage, "delete group announcements"))
+                return;
+            boolean deleted = ScarletDiscordCommands.this.discord.scarlet.vrc.deleteGroupAnnouncement(ScarletDiscordCommands.this.discord.scarlet.vrc.groupId);
+            hook.sendMessage(deleted ? "Deleted the group announcement." : "Failed to delete the group announcement.").setEphemeral(true).queue();
+        }
+
+        @SlashCmd("list-posts")
+        @Desc("Lists recent group posts")
+        public void listPosts(SlashCommandInteractionEvent event, InteractionHook hook, @SlashOpt("public-only") boolean publicOnly, @SlashOpt("result-limit") int resultLimit, @SlashOpt("entries-per-page") int entriesPerPage)
+        {
+            if (!this.checkMemberAndSelfPerms(event, hook, GroupPermissions.group_announcement_manage, "list group posts"))
+                return;
+            List<GroupPost> posts = ScarletDiscordCommands.this.discord.scarlet.vrc.getGroupPosts(ScarletDiscordCommands.this.discord.scarlet.vrc.groupId, publicOnly, resultLimit);
+            if (posts == null)
+            {
+                hook.sendMessage("Failed to fetch group posts from VRChat.").setEphemeral(true).queue();
+                return;
+            }
+            if (posts.isEmpty())
+            {
+                hook.sendMessage("No group posts were returned.").setEphemeral(true).queue();
+                return;
+            }
+            ScarletDiscordCommands.this.discord.interactions.new Pagination(event.getId(), posts.stream().map(this::postEmbed).toArray(MessageEmbed[]::new), entriesPerPage).queue(hook);
+        }
+
+        @SlashCmd("create-post")
+        @Desc("Creates a group post")
+        public void createPost(SlashCommandInteractionEvent event, InteractionHook hook,
+                @SlashOpt("post-title") String postTitle,
+                @SlashOpt("post-text") String postText,
+                @SlashOpt("post-visibility") GroupPostVisibility postVisibility,
+                @SlashOpt("send-notification") boolean sendNotification,
+                @SlashOpt("image-file-id") String imageFileId,
+                @SlashOpt("post-role") String postRoleId)
+        {
+            if (!this.checkMemberAndSelfPerms(event, hook, GroupPermissions.group_announcement_manage, "create group posts"))
+                return;
+            CreateGroupPostRequest request = new CreateGroupPostRequest()
+                .title(postTitle)
+                .text(postText)
+                .visibility(postVisibility)
+                .sendNotification(Boolean.valueOf(sendNotification));
+            if (!MiscUtils.blank(imageFileId))
+                request.imageId(imageFileId);
+            if (!MiscUtils.blank(postRoleId))
+                request.roleIds(Collections.singletonList(postRoleId));
+            GroupPost post = ScarletDiscordCommands.this.discord.scarlet.vrc.createGroupPost(ScarletDiscordCommands.this.discord.scarlet.vrc.groupId, request);
+            if (post == null)
+            {
+                hook.sendMessage("Failed to create the group post.").setEphemeral(true).queue();
+                return;
+            }
+            hook.sendMessageEmbeds(this.postEmbed(post)).setContent("Created group post.").setEphemeral(true).queue();
+        }
+
+        @SlashCmd("delete-post")
+        @Desc("Deletes a group post")
+        public void deletePost(SlashCommandInteractionEvent event, InteractionHook hook, @SlashOpt("post-id") String postId, @SlashOpt("confirm-delete") String confirmDelete)
+        {
+            if (!"DELETE".equals(confirmDelete))
+            {
+                hook.sendMessage("Deletion cancelled. Type `DELETE` exactly in the confirmation option to delete the post.").setEphemeral(true).queue();
+                return;
+            }
+            if (!this.checkMemberAndSelfPerms(event, hook, GroupPermissions.group_announcement_manage, "delete group posts"))
+                return;
+            boolean deleted = ScarletDiscordCommands.this.discord.scarlet.vrc.deleteGroupPost(ScarletDiscordCommands.this.discord.scarlet.vrc.groupId, postId);
+            hook.sendMessage(deleted ? "Deleted group post `" + postId + "`." : "Failed to delete group post `" + postId + "`.").setEphemeral(true).queue();
+        }
+
+        @SlashCmd("transfer-check")
+        @Desc("Checks whether a user can receive group ownership")
+        public void transferCheck(SlashCommandInteractionEvent event, InteractionHook hook, @SlashOpt("vrchat-user") io.github.vrchatapi.model.User vrchatUser)
+        {
+            if (!this.checkMemberAndSelfPerms(event, hook, GroupPermissions.group_all, "check group transfer eligibility"))
+                return;
+            GroupTransferable transferable = ScarletDiscordCommands.this.discord.scarlet.vrc.getGroupTransferability(ScarletDiscordCommands.this.discord.scarlet.vrc.groupId, vrchatUser.getId());
+            if (transferable == null || transferable.getRequirements() == null)
+            {
+                hook.sendMessage("VRChat did not return transfer eligibility details.").setEphemeral(true).queue();
+                return;
+            }
+            GroupTransferableRequirements req = transferable.getRequirements();
+            EmbedBuilder builder = new EmbedBuilder()
+                .setTitle("Group Transfer Check", VrcWeb.Home.user(vrchatUser.getId()))
+                .setDescription("Target: ["+MarkdownSanitizer.escape(vrchatUser.getDisplayName())+"]("+VrcWeb.Home.user(vrchatUser.getId())+")")
+                .addField("Group not monetized", this.yesNo(req.getGroupNotMonetized()), true)
+                .addField("Target has VRC+", this.yesNo(req.getHasVRCPlus()), true)
+                .addField("Target has verified email", this.yesNo(req.getHasVerifiedEmail()), true)
+                .addField("Target can own more groups", this.yesNo(req.getTargetCanOwnMoreGroups()), true)
+                .addField("Target is group member", this.yesNo(req.getTargetIsGroupMember()), true);
+            hook.sendMessageEmbeds(builder.build()).setEphemeral(true).queue();
+        }
+
+        private String yesNo(Boolean value)
+        {
+            return value == null ? "Unknown" : value.booleanValue() ? "Yes" : "No";
+        }
+
+        @SlashCmd("transfer-start")
+        @Desc("Starts or accepts group ownership transfer")
+        public void transferStart(SlashCommandInteractionEvent event, InteractionHook hook, @SlashOpt("vrchat-user") io.github.vrchatapi.model.User vrchatUser, @SlashOpt("confirm-group-id") String confirmGroupId)
+        {
+            String groupId = ScarletDiscordCommands.this.discord.scarlet.vrc.groupId;
+            if (!Objects.equals(groupId, confirmGroupId))
+            {
+                hook.sendMessage("Transfer cancelled. The confirmation must exactly match this group id: `"+groupId+"`").setEphemeral(true).queue();
+                return;
+            }
+            if (!this.checkMemberAndSelfPerms(event, hook, GroupPermissions.group_all, "transfer group ownership"))
+                return;
+            boolean transferred = ScarletDiscordCommands.this.discord.scarlet.vrc.initiateOrAcceptGroupTransfer(groupId, vrchatUser.getId());
+            hook.sendMessage(transferred ? "Submitted the group transfer request for " + MarkdownSanitizer.escape(vrchatUser.getDisplayName()) + "." : "Failed to submit the group transfer request.").setEphemeral(true).queue();
+        }
+
+        @SlashCmd("transfer-cancel")
+        @Desc("Cancels an active group ownership transfer")
+        public void transferCancel(SlashCommandInteractionEvent event, InteractionHook hook, @SlashOpt("confirm-group-id") String confirmGroupId)
+        {
+            String groupId = ScarletDiscordCommands.this.discord.scarlet.vrc.groupId;
+            if (!Objects.equals(groupId, confirmGroupId))
+            {
+                hook.sendMessage("Transfer cancellation skipped. The confirmation must exactly match this group id: `"+groupId+"`").setEphemeral(true).queue();
+                return;
+            }
+            if (!this.checkMemberAndSelfPerms(event, hook, GroupPermissions.group_all, "cancel group ownership transfer"))
+                return;
+            boolean cancelled = ScarletDiscordCommands.this.discord.scarlet.vrc.cancelGroupTransfer(groupId);
+            hook.sendMessage(cancelled ? "Cancelled the active group transfer." : "Failed to cancel the group transfer.").setEphemeral(true).queue();
+        }
+
         @SlashCmd("open-instance")
         @Desc("Opens an instance")
         public void openInstance(SlashCommandInteractionEvent event, InteractionHook hook, @SlashOpt("vrchat-world") io.github.vrchatapi.model.World vrchatWorld) throws Exception
@@ -2124,7 +2568,7 @@ public class ScarletDiscordCommands
             
             List<GroupRole> roles = ScarletDiscordCommands.this.discord.scarlet.vrc.getGroupRoles(groupId);
             
-            hook.sendMessageFormat("Create a new [%s](%s) instance:", vrchatWorld.getName(), VrcWeb.Home.world(vrchatWorld.getId()))
+            hook.sendMessageFormat("Create a new [%s](%s) instance:\nLeave avatar gate unchecked for no limit; select one Poor, Medium, or Good preset to set the minimum avatar performance.", vrchatWorld.getName(), VrcWeb.Home.world(vrchatWorld.getId()))
                 .addComponents(ActionRow.of(StringSelectMenu.create("new-instance-access-type:"+ictoken)
                     .addOption("Group Public", "public")
                     .addOption("Group Plus", "plus")
@@ -2154,12 +2598,15 @@ public class ScarletDiscordCommands
 //                    .addOption("Instance persistence (state persists when empty)", "instancePersistenceEnabled")
                     .addOption("Content: drones", "contentSettings.drones")
                     .addOption("Content: emoji", "contentSettings.emoji")
-                    .addOption("Content: items", "contentSettings.items")
+                    .addOption("Content: items", "contentSettings.props")
                     .addOption("Content: pedestals", "contentSettings.pedestals")
                     .addOption("Content: prints", "contentSettings.prints")
                     .addOption("Content: stickers", "contentSettings.stickers")
-                    .setRequiredRange(0, 11)
-                    .setDefaultValues("queueEnabled", "contentSettings.drones", "contentSettings.emoji", "contentSettings.items", "contentSettings.pedestals", "contentSettings.prints", "contentSettings.stickers")
+                    .addOption("Avatar gate: Poor or better", "minimumAvatarPerformance."+PerformanceRatings.POOR.getValue())
+                    .addOption("Avatar gate: Medium or better", "minimumAvatarPerformance."+PerformanceRatings.MEDIUM.getValue())
+                    .addOption("Avatar gate: Good or better", "minimumAvatarPerformance."+PerformanceRatings.GOOD.getValue())
+                    .setRequiredRange(0, 14)
+                    .setDefaultValues("queueEnabled", "contentSettings.drones", "contentSettings.emoji", "contentSettings.props", "contentSettings.pedestals", "contentSettings.prints", "contentSettings.stickers")
                     .build()))
                 .addComponents(ActionRow.of(
                     Button.success("new-instance-create:"+ictoken, "Create"),

@@ -19,9 +19,9 @@ public interface IScarletUI extends Closeable
 
     static IScarletUI create(Scarlet scarlet)
     {
-        return Platform.forceHeadlessUi() || GraphicsEnvironment.isHeadless()
-            ? new ScarletUIHeadless()
-            : new ScarletUI(scarlet);
+        if (Platform.forceHeadlessUi() || GraphicsEnvironment.isHeadless())
+            return new ScarletUIHeadless();
+        return new ScarletUI(scarlet);
     }
 
     /**

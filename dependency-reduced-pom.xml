@@ -4,7 +4,7 @@
   <groupId>net.sybyline</groupId>
   <artifactId>scarlet</artifactId>
   <name>Scarlet</name>
-  <version>0.4.16-b5</version>
+  <version>0.4.17</version>
   <build>
     <plugins>
       <plugin>
@@ -51,6 +51,15 @@
               </transformers>
               <filters>
                 <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.EC</exclude>
+                  </excludes>
+                </filter>
+                <filter>
                   <artifact>moe.kyokobot.libdave:libdave-jvm-impl</artifact>
                   <excludes>
                     <exclude>moe/kyokobot/libdave/natives/DaveNativeBindings.class</exclude>
@@ -80,6 +89,10 @@
                 <filter>
                   <artifact>*:*</artifact>
                   <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.EC</exclude>
                     <exclude>native/android/**</exclude>
                     <exclude>android-aarch64/libdave-jvm.so</exclude>
                     <exclude>natives/android-aarch64/libdave-jvm.so</exclude>
@@ -131,6 +144,10 @@
                 <filter>
                   <artifact>*:*</artifact>
                   <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.EC</exclude>
                     <exclude>scarlet-features.properties</exclude>
                     <exclude>rvc/**</exclude>
                     <exclude>linux-*/libdave.so</exclude>
@@ -179,6 +196,10 @@
                 <filter>
                   <artifact>*:*</artifact>
                   <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.EC</exclude>
                     <exclude>linux-*/libdave.so</exclude>
                     <exclude>win32-*/libdave.dll</exclude>
                     <exclude>darwin-*/libdave.dylib</exclude>
@@ -339,6 +360,7 @@
     <vrchatapi.version>1.20.8-nightly.15</vrchatapi.version>
     <scarlet.androidDaveAbi>arm64-v8a</scarlet.androidDaveAbi>
     <scarlet.androidDaveToolchainFile>${scarlet.androidDaveNdk}/build/cmake/android.toolchain.cmake</scarlet.androidDaveToolchainFile>
+    <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <JDA.version>6.3.0</JDA.version>
     <libdave.version>1.0.0</libdave.version>
     <scarlet.androidDaveLibrary>${scarlet.androidDaveBuildDir}/libdave-jvm.so</scarlet.androidDaveLibrary>

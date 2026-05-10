@@ -24,16 +24,44 @@ public interface VrcLaunch
 
     // vrchat://launch?ref=<Organization>&id=<Location>&shortName=<ShortName|SecureName>&attach=<integer>
 
+    enum LaunchMode
+    {
+        VR(false),
+        DESKTOP(true);
+
+        LaunchMode(boolean noVr)
+        {
+            this.noVr = noVr;
+        }
+        final boolean noVr;
+    }
+
     static void launch(String userId, Location location) throws Exception
     {
         launch(userId, location.world+':'+location.instance);
     }
+    static void launch(String userId, Location location, boolean noVr) throws Exception
+    {
+        launch(userId, location.world+':'+location.instance, noVr);
+    }
+    static void launch(String userId, Location location, LaunchMode mode) throws Exception
+    {
+        launch(userId, location.world+':'+location.instance, mode);
+    }
     static void launch(String userId, String location) throws Exception
     {
+        launch(userId, location, LaunchMode.DESKTOP);
+    }
+    static void launch(String userId, String location, boolean noVr) throws Exception
+    {
+        launch(userId, location, noVr ? LaunchMode.DESKTOP : LaunchMode.VR);
+    }
+    static void launch(String userId, String location, LaunchMode mode) throws Exception
+    {
         if (Platform.CURRENT.isNT())
-            launch_win(userId, location);
+            launch_win(userId, location, mode);
         else
-            launch_linux(userId, location);
+            launch_linux(userId, location, mode);
     }
 
     /**
@@ -44,13 +72,15 @@ public interface VrcLaunch
      *   2. steam steam://rungameid/438100    — works when steam binary is present but arg passing is unreliable
      *   3. xdg-open vrchat://...            — original behaviour, relies on URI handler registration
      */
-    static void launch_linux(String userId, String location) throws Exception
+    static void launch_linux(String userId, String location, LaunchMode mode) throws Exception
     {
+        if (mode == null)
+            mode = LaunchMode.DESKTOP;
         String vrchatUri = "vrchat://launch?ref=SybylineNetworkScarlet&id=" + location;
 
         // Build the VRChat launch arguments (mirrors what launch_win passes on Windows)
         java.util.List<String> vrcArgs = new java.util.ArrayList<>();
-        vrcArgs.add("--no-vr");
+        if (mode.noVr) { vrcArgs.add("--no-vr"); }
         vrcArgs.add("--enable-sdk-log-levels");
         vrcArgs.add("--enable-udon-debug-logging");
         vrcArgs.add("--enable-verbose-logging");
@@ -99,8 +129,10 @@ public interface VrcLaunch
         LOG.info("Launching VRChat via URI handler: {}", vrchatUri);
         MiscUtils.AWTDesktop.browse(URI.create(vrchatUri));
     }
-    static void launch_win(String userId, String location) throws Exception
+    static void launch_win(String userId, String location, LaunchMode mode) throws Exception
     {
+        if (mode == null)
+            mode = LaunchMode.DESKTOP;
         String path;
         {
             IntByReference pType = new IntByReference(),
@@ -139,10 +171,13 @@ public interface VrcLaunch
             ;
         }
         
-        sb
-        .append(' ')
-        .append("--no-vr")
-        ;
+        if (mode.noVr)
+        {
+            sb
+            .append(' ')
+            .append("--no-vr")
+            ;
+        }
         
         sb
         .append(' ')

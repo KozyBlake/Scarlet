@@ -17,7 +17,11 @@ public interface GithubApi
         {
             return null;
         }
-        return ja.asList().stream().map(JsonElement::getAsJsonObject).map($ -> $.get("name")).map(JsonElement::getAsString).toArray(String[]::new);
+        return ja.asList().stream()
+            .map(JsonElement::getAsJsonObject)
+            .map($ -> $.has("tag_name") && !$.get("tag_name").isJsonNull() ? $.get("tag_name") : $.get("name"))
+            .map(JsonElement::getAsString)
+            .toArray(String[]::new);
     }
 
 }

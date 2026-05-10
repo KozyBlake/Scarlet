@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
 
 import javax.crypto.Cipher;
@@ -62,7 +63,7 @@ public final class EncryptedPrefs
                 return 128;
             return Math.max(0, max);
         }
-        catch (GeneralSecurityException e)
+        catch (Throwable e)
         {
             LOG.warn("Could not detect maximum AES key size; encrypted preferences will fall back to plain storage", e);
             return 0;
@@ -74,7 +75,7 @@ public final class EncryptedPrefs
         {
             return Cipher.getInstance(CIPHER_METHOD);
         }
-        catch (GeneralSecurityException e)
+        catch (Throwable e)
         {
             LOG.warn("Cipher {} is unavailable; encrypted preferences will fall back to plain storage", CIPHER_METHOD, e);
             return null;
@@ -128,12 +129,14 @@ public final class EncryptedPrefs
         if (SUPPORTED_KEY_SIZE < 128)
         {
             prefs.put(FALLBACK_PREFIX + masterPasswordKey(prefs.absolutePath(), globalPassword), localPassword);
+            flushPrefs(prefs, "installing local fallback password");
             return;
         }
         String absolutePath = prefs.absolutePath(),
                hash = masterPasswordKey(absolutePath, globalPassword);
         SecretKey initKey = derive(globalPassword.toCharArray(), absolutePath);
         prefs.putByteArray(hash, encrypt(initKey, localPassword));
+        flushPrefs(prefs, "installing local encrypted password");
     }
     public static String masterPasswordKey(String absolutePath, String globalPassword)
     {
@@ -152,6 +155,7 @@ public final class EncryptedPrefs
             rand.nextBytes(bytes);
             String localPassword = new String(Base64.getUrlEncoder().encode(bytes), StandardCharsets.UTF_8);
             prefs.put(FALLBACK_PREFIX + hash, localPassword);
+            flushPrefs(prefs, "initializing local fallback password");
             return localPassword.toCharArray();
         }
         byte[] localPasswordBytes = prefs.getByteArray(hash, null);
@@ -175,6 +179,7 @@ public final class EncryptedPrefs
         {
             prefs.putByteArray(hash, encrypted);
         }
+        flushPrefs(prefs, "initializing local encrypted password");
         return localPassword.toCharArray();
     }
 
@@ -188,7 +193,12 @@ public final class EncryptedPrefs
         if (value == null)
             this.remove(key);
         else if (this.plaintextFallback)
+        {
+            if (this.prefs == null)
+                return;
             this.prefs.put(FALLBACK_PREFIX + hash(key), value);
+            this.flushPrefs("writing plain preference " + key);
+        }
         else
         {
             byte[] encrypted = encrypt(this.getOrDerive(key), value);
@@ -196,13 +206,18 @@ public final class EncryptedPrefs
                 this.prefs.put(FALLBACK_PREFIX + hash(key), value);
             else
                 this.prefs.putByteArray(hash(key), encrypted);
+            this.flushPrefs("writing encrypted preference " + key);
         }
     }
 
     public String get(String key)
     {
         if (this.plaintextFallback)
+        {
+            if (this.prefs == null)
+                return null;
             return this.prefs.get(FALLBACK_PREFIX + hash(key), null);
+        }
         String plain = this.prefs.get(FALLBACK_PREFIX + hash(key), null);
         if (plain != null)
             return plain;
@@ -211,14 +226,38 @@ public final class EncryptedPrefs
 
     public void remove(String key)
     {
+        if (this.prefs == null)
+            return;
         this.prefs.remove(hash(key));
         this.prefs.remove(FALLBACK_PREFIX + hash(key));
+        this.flushPrefs("removing preference " + key);
     }
 
     public boolean contains(String key)
     {
+        if (this.prefs == null)
+            return false;
         return this.prefs.getByteArray(hash(key), null) != null
             || this.prefs.get(FALLBACK_PREFIX + hash(key), null) != null;
+    }
+
+    private void flushPrefs(String reason)
+    {
+        flushPrefs(this.prefs, reason);
+    }
+
+    private static void flushPrefs(Preferences prefs, String reason)
+    {
+        if (prefs == null)
+            return;
+        try
+        {
+            prefs.flush();
+        }
+        catch (BackingStoreException | RuntimeException ex)
+        {
+            LOG.warn("Failed to flush Java Preferences while {}", reason, ex);
+        }
     }
 
     private SecretKey getOrDerive(String salt)
@@ -240,7 +279,7 @@ public final class EncryptedPrefs
             }
             catch (GeneralSecurityException legacy)
             {
-                throw new IllegalStateException("Derrivation failed", legacy);
+                throw new IllegalStateException("Derivation failed", legacy);
             }
         }
     }

@@ -75,12 +75,16 @@ import io.github.vrchatapi.api.WorldsApi;
 import io.github.vrchatapi.model.Avatar;
 import io.github.vrchatapi.model.BanGroupMemberRequest;
 import io.github.vrchatapi.model.CalendarEvent;
+import io.github.vrchatapi.model.CreateGroupAnnouncementRequest;
 import io.github.vrchatapi.model.CreateCalendarEventRequest;
+import io.github.vrchatapi.model.CreateGroupPostRequest;
 import io.github.vrchatapi.model.CreateGroupInviteRequest;
 import io.github.vrchatapi.model.CreateInstanceRequest;
 import io.github.vrchatapi.model.CurrentUser;
 import io.github.vrchatapi.model.FileAnalysis;
+import io.github.vrchatapi.model.GetGroupPosts200Response;
 import io.github.vrchatapi.model.Group;
+import io.github.vrchatapi.model.GroupAnnouncement;
 import io.github.vrchatapi.model.GroupAuditLogEntry;
 import io.github.vrchatapi.model.GroupGalleryImage;
 import io.github.vrchatapi.model.GroupInstance;
@@ -88,7 +92,9 @@ import io.github.vrchatapi.model.GroupJoinRequestAction;
 import io.github.vrchatapi.model.GroupMember;
 import io.github.vrchatapi.model.GroupMemberStatus;
 import io.github.vrchatapi.model.GroupPermissions;
+import io.github.vrchatapi.model.GroupPost;
 import io.github.vrchatapi.model.GroupRole;
+import io.github.vrchatapi.model.GroupTransferable;
 import io.github.vrchatapi.model.Instance;
 import io.github.vrchatapi.model.InventoryItem;
 import io.github.vrchatapi.model.LimitedUserGroups;
@@ -100,7 +106,10 @@ import io.github.vrchatapi.model.PaginatedGroupAuditLogEntryList;
 import io.github.vrchatapi.model.Print;
 import io.github.vrchatapi.model.Prop;
 import io.github.vrchatapi.model.RespondGroupJoinRequest;
+import io.github.vrchatapi.model.SearchGroupMembers200Response;
 import io.github.vrchatapi.model.SortOption;
+import io.github.vrchatapi.model.Success;
+import io.github.vrchatapi.model.TransferGroupRequest;
 import io.github.vrchatapi.model.TwoFactorAuthCode;
 import io.github.vrchatapi.model.TwoFactorEmailCode;
 import io.github.vrchatapi.model.UpdateGroupMemberRequest;
@@ -294,7 +303,7 @@ public class ScarletVRChat implements Closeable
     volatile String pendingUsername = null;
     /** Mirrors the last value passed to client.setPassword() for use in the UTF-8 Auth interceptor. */
     volatile String pendingPassword = null;
-    String groupId;
+    volatile String groupId;
     String groupOwnerId;
     Group group;
     GroupMember groupLimitedMember;
@@ -350,12 +359,22 @@ public class ScarletVRChat implements Closeable
 
     private static X509TrustManager defaultTrustManager() throws GeneralSecurityException
     {
-        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        return defaultTrustManager(null);
+    }
+
+    private static X509TrustManager defaultTrustManager(String provider) throws GeneralSecurityException
+    {
+        TrustManagerFactory tmf = trustManagerFactory(provider);
         tmf.init((KeyStore)null);
         return pickTrustManager(tmf.getTrustManagers());
     }
 
     private static X509TrustManager compatTrustManager() throws GeneralSecurityException, IOException
+    {
+        return compatTrustManager(null);
+    }
+
+    private static X509TrustManager compatTrustManager(String provider) throws GeneralSecurityException, IOException
     {
         KeyStore ks = KeyStore.getInstance(KeyStore.getDefaultType());
         try
@@ -382,9 +401,16 @@ public class ScarletVRChat implements Closeable
                 ks.setCertificateEntry("scarlet-compat-" + i, cert);
             }
         }
-        TrustManagerFactory tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        TrustManagerFactory tmf = trustManagerFactory(provider);
         tmf.init(ks);
         return pickTrustManager(tmf.getTrustManagers());
+    }
+
+    private static TrustManagerFactory trustManagerFactory(String provider) throws GeneralSecurityException
+    {
+        if (provider == null)
+            return TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+        return TrustManagerFactory.getInstance("PKIX", provider);
     }
 
     private static X509TrustManager pickTrustManager(TrustManager[] trustManagers) throws GeneralSecurityException
@@ -429,12 +455,17 @@ public class ScarletVRChat implements Closeable
     {
         for (Throwable cur = t; cur != null; cur = cur.getCause())
         {
-            if (cur instanceof SSLHandshakeException)
-                return true;
             String msg = cur.getMessage();
-            if (msg != null && (msg.contains("PKIX path building failed")
-                || msg.contains("unable to find valid certification path")
-                || msg.contains("unable to find valid certification path to requested target")))
+            if (msg == null)
+                continue;
+            String lower = msg.toLowerCase(java.util.Locale.ROOT);
+            if (lower.contains("pkix path building failed")
+                || lower.contains("unable to find valid certification path")
+                || lower.contains("unable to find valid certification path to requested target")
+                || lower.contains("certificate_unknown")
+                || lower.contains("sun.security.validator.validatorexception"))
+                return true;
+            if (cur instanceof SSLHandshakeException && lower.contains("trust"))
                 return true;
         }
         return false;
@@ -638,7 +669,7 @@ try
                             + "This safely removes them from the encrypted store\n"
                             + "so you can enter them fresh on the next attempt.\n\n"
                             + "(You do NOT need to touch the Registry or AppData.)",
-                            "Invalid credentials \u2014 reset?");
+                            "Invalid credentials - reset?");
                         if (reset)
                             this.clearCredentials();
                     }
@@ -901,7 +932,7 @@ finally
                                 + "This safely removes them from the encrypted store\n"
                                 + "so you can enter them fresh on the next attempt.\n\n"
                                 + "(You do NOT need to touch the Registry or AppData.)",
-                                "Invalid credentials \u2014 reset?");
+                                "Invalid credentials - reset?");
                             if (reset)
                                 this.clearCredentials();
                         }
@@ -1240,6 +1271,11 @@ CurrentUser getCurrentUser(AuthenticationApi auth) throws ApiException
         {
             this.scarlet.checkVrcRefresh(apiex);
             LOG.error("Error during audit query: "+apiex.getMessage());
+            return null;
+        }
+        catch (Throwable t)
+        {
+            LOG.warn("VRChat config language options unavailable; continuing without spoken-language command choices", t);
             return null;
         }
     }
@@ -1840,6 +1876,294 @@ CurrentUser getCurrentUser(AuthenticationApi auth) throws ApiException
             this.scarlet.checkVrcRefresh(apiex);
             LOG.error("Error getting group roles: "+apiex.getMessage());
             return null;
+        }
+    }
+
+    public List<String> getGroupAuditLogEntryTypes(String groupId)
+    {
+        GroupsApi groups = new GroupsApi(this.client);
+        try
+        {
+            return groups.getGroupAuditLogEntryTypes(groupId);
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            LOG.error("Error getting group audit log entry types: "+apiex.getMessage());
+            return null;
+        }
+    }
+
+    public List<GroupMember> searchGroupMembers(String groupId, String query, int limit)
+    {
+        GroupsApi groups = new GroupsApi(this.client);
+        try
+        {
+            List<GroupMember> members = new ArrayList<>();
+            int offset = 0, batchSize = Math.max(1, Math.min(100, limit));
+            while (members.size() < limit)
+            {
+                int n = Math.min(batchSize, limit - members.size());
+                SearchGroupMembers200Response response = groups.searchGroupMembers(groupId, query, n, offset);
+                List<GroupMember> page = response == null ? null : response.getResults();
+                if (page == null || page.isEmpty())
+                    break;
+                members.addAll(page);
+                offset += page.size();
+                Integer total = response.getTotal();
+                if (page.size() < n || (total != null && members.size() >= total.intValue()))
+                    break;
+                MiscUtils.sleep(250L);
+            }
+            return members;
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            LOG.error("Error searching group members: "+apiex.getMessage());
+            return null;
+        }
+    }
+
+    public List<GroupMember> getGroupBans(String groupId, int limit)
+    {
+        GroupsApi groups = new GroupsApi(this.client);
+        try
+        {
+            List<GroupMember> bans = new ArrayList<>();
+            int offset = 0, batchSize = Math.max(1, Math.min(100, limit));
+            while (bans.size() < limit)
+            {
+                int n = Math.min(batchSize, limit - bans.size());
+                List<GroupMember> page = groups.getGroupBans(groupId, n, offset);
+                if (page == null || page.isEmpty())
+                    break;
+                bans.addAll(page);
+                offset += page.size();
+                if (page.size() < n)
+                    break;
+                MiscUtils.sleep(250L);
+            }
+            return bans;
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            LOG.error("Error getting group bans: "+apiex.getMessage());
+            return null;
+        }
+    }
+
+    public List<GroupMember> getGroupInvites(String groupId, int limit)
+    {
+        GroupsApi groups = new GroupsApi(this.client);
+        try
+        {
+            List<GroupMember> invites = new ArrayList<>();
+            int offset = 0, batchSize = Math.max(1, Math.min(100, limit));
+            while (invites.size() < limit)
+            {
+                int n = Math.min(batchSize, limit - invites.size());
+                List<GroupMember> page = groups.getGroupInvites(groupId, n, offset);
+                if (page == null || page.isEmpty())
+                    break;
+                invites.addAll(page);
+                offset += page.size();
+                if (page.size() < n)
+                    break;
+                MiscUtils.sleep(250L);
+            }
+            return invites;
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            LOG.error("Error getting group invites: "+apiex.getMessage());
+            return null;
+        }
+    }
+
+    public List<GroupMember> getGroupJoinRequests(String groupId, boolean blocked, int limit)
+    {
+        GroupsApi groups = new GroupsApi(this.client);
+        try
+        {
+            List<GroupMember> requests = new ArrayList<>();
+            int offset = 0, batchSize = Math.max(1, Math.min(100, limit));
+            while (requests.size() < limit)
+            {
+                int n = Math.min(batchSize, limit - requests.size());
+                List<GroupMember> page = groups.getGroupRequests(groupId, n, offset, Boolean.valueOf(blocked));
+                if (page == null || page.isEmpty())
+                    break;
+                requests.addAll(page);
+                offset += page.size();
+                if (page.size() < n)
+                    break;
+                MiscUtils.sleep(250L);
+            }
+            return requests;
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            LOG.error("Error getting group join requests: "+apiex.getMessage());
+            return null;
+        }
+    }
+
+    public GroupAnnouncement getGroupAnnouncement(String groupId)
+    {
+        GroupsApi groups = new GroupsApi(this.client);
+        try
+        {
+            return groups.getGroupAnnouncements(groupId);
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            if (apiex.getCode() != 404)
+                LOG.error("Error getting group announcement: "+apiex.getMessage());
+            return null;
+        }
+    }
+
+    public GroupAnnouncement createGroupAnnouncement(String groupId, CreateGroupAnnouncementRequest request)
+    {
+        GroupsApi groups = new GroupsApi(this.client);
+        try
+        {
+            return groups.createGroupAnnouncement(groupId, request);
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            LOG.error("Error creating group announcement: "+apiex.getMessage());
+            return null;
+        }
+    }
+
+    public boolean deleteGroupAnnouncement(String groupId)
+    {
+        GroupsApi groups = new GroupsApi(this.client);
+        try
+        {
+            groups.deleteGroupAnnouncement(groupId);
+            return true;
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            LOG.error("Error deleting group announcement: "+apiex.getMessage());
+            return false;
+        }
+    }
+
+    public List<GroupPost> getGroupPosts(String groupId, boolean publicOnly, int limit)
+    {
+        GroupsApi groups = new GroupsApi(this.client);
+        try
+        {
+            List<GroupPost> posts = new ArrayList<>();
+            int offset = 0, batchSize = Math.max(1, Math.min(100, limit));
+            while (posts.size() < limit)
+            {
+                int n = Math.min(batchSize, limit - posts.size());
+                GetGroupPosts200Response response = groups.getGroupPosts(groupId, n, offset, Boolean.valueOf(publicOnly));
+                List<GroupPost> page = response == null ? null : response.getPosts();
+                if (page == null || page.isEmpty())
+                    break;
+                posts.addAll(page);
+                offset += page.size();
+                if (page.size() < n)
+                    break;
+                MiscUtils.sleep(250L);
+            }
+            return posts;
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            LOG.error("Error getting group posts: "+apiex.getMessage());
+            return null;
+        }
+    }
+
+    public GroupPost createGroupPost(String groupId, CreateGroupPostRequest request)
+    {
+        GroupsApi groups = new GroupsApi(this.client);
+        try
+        {
+            return groups.addGroupPost(groupId, request);
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            LOG.error("Error creating group post: "+apiex.getMessage());
+            return null;
+        }
+    }
+
+    public boolean deleteGroupPost(String groupId, String postId)
+    {
+        GroupsApi groups = new GroupsApi(this.client);
+        try
+        {
+            groups.deleteGroupPost(groupId, postId);
+            return true;
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            LOG.error("Error deleting group post: "+apiex.getMessage());
+            return false;
+        }
+    }
+
+    public GroupTransferable getGroupTransferability(String groupId, String targetUserId)
+    {
+        GroupsApi groups = new GroupsApi(this.client);
+        try
+        {
+            return groups.getGroupTransferability(groupId, targetUserId);
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            LOG.error("Error getting group transferability: "+apiex.getMessage());
+            return null;
+        }
+    }
+
+    public boolean initiateOrAcceptGroupTransfer(String groupId, String targetUserId)
+    {
+        GroupsApi groups = new GroupsApi(this.client);
+        try
+        {
+            Success success = groups.initiateOrAcceptGroupTransfer(groupId, new TransferGroupRequest().transferTargetId(targetUserId));
+            return success != null;
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            LOG.error("Error initiating or accepting group transfer: "+apiex.getMessage());
+            return false;
+        }
+    }
+
+    public boolean cancelGroupTransfer(String groupId)
+    {
+        GroupsApi groups = new GroupsApi(this.client);
+        try
+        {
+            Success success = groups.cancelGroupTransfer(groupId);
+            return success != null;
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            LOG.error("Error cancelling group transfer: "+apiex.getMessage());
+            return false;
         }
     }
 

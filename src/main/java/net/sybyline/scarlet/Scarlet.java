@@ -3,6 +3,7 @@ package net.sybyline.scarlet;
 import java.awt.GraphicsEnvironment;
 import java.io.Closeable;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStream;
@@ -109,7 +110,9 @@ public class Scarlet implements Closeable
     public static final String
         GROUP = "SybylineNetwork",
         NAME = "Scarlet",
-        VERSION = "0.4.16-b5",
+        VERSION = "0.4.17",
+        FORK_GROUP = "KozyBlake",
+        FORK_REPOSITORY = NAME,
         FORK_NOTE = "Fork by KozyBlake \u2014 Windows & Linux",
         DEV_DISCORD = "Discord:@vinyarion/Vinyarion#0292/393412191547555841",
         SCARLET_DISCORD_URL = "https://discord.gg/CP3AyhypBF",
@@ -117,7 +120,7 @@ public class Scarlet implements Closeable
         // ── Fork repository (KozyBlake) ────────────────────────────────────────
         // This is the maintained fork. GITHUB_URL points here so update checks,
         // licence links, and help menu entries reflect the active repository.
-        FORK_GITHUB_URL = "https://github.com/KozyBlake/Scarlet",
+        FORK_GITHUB_URL = "https://github.com/"+FORK_GROUP+"/"+FORK_REPOSITORY,
         GITHUB_URL = FORK_GITHUB_URL,
 
         // ── Original upstream repository (SybylineNetwork) ────────────────────
@@ -138,7 +141,7 @@ public class Scarlet implements Closeable
         USER_AGENT_NAME = "Sybyline-Network-"+NAME,
         USER_AGENT = USER_AGENT_NAME+"/"+VERSION+" "+DEV_DISCORD+"; "+SCARLET_DISCORD_URL+"; "+GITHUB_URL,
         LICENSE_URL = ORIGINAL_GITHUB_URL+"?tab=MIT-1-ov-file",
-        META_URL = FORK_GITHUB_URL+"/blob/main/meta.json?raw=true",
+        META_URL = "https://raw.githubusercontent.com/"+FORK_GROUP+"/"+FORK_REPOSITORY+"/main/meta.json",
         
         COMMUNITY_URL = "https://vrchat.community/",
         COMMUNITY_GITHUB_URL = "https://github.com/vrchatapi",
@@ -251,6 +254,7 @@ public class Scarlet implements Closeable
         LOG.info(String.format("App: %s %s", NAME, VERSION));
         LOG.info(String.format("OS: %s (%s)", System.getProperty("os.name"), System.getProperty("os.arch")));
         LOG.info(String.format("VM: %s %s (%s) %s-bit", System.getProperty("java.version"), System.getProperty("java.vendor"), System.getProperty("java.vm.name"), System.getProperty("sun.arch.data.model")));
+        LOG.info(String.format("Platform: %s", Platform.describe()));
     }
 
     public Scarlet() throws IOException
@@ -610,7 +614,7 @@ public class Scarlet implements Closeable
             this.staffList.populateStaffNames(this.vrc);
             this.secretStaffList.populateSecretStaffNames(this.vrc);
         }
-        catch (Exception ex)
+        catch (Throwable ex)
         {
             LOG.error("Failed to authenticate with VRChat", ex);
             return;
@@ -1303,20 +1307,24 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
                 LOG.info(NAME+" version "+cmp_version+" available");
                 if (this.alertForUpdates.get())
                 {
-                    this.settings.requireConfirmYesNoAsync(NAME+" version "+cmp_version+" available, open in browser?", "Update available",
+                    this.settings.requireConfirmYesNoAsync(NAME+" version "+cmp_version+" is available. You are running "+VERSION+". Open the download page?", "Update available",
                         () -> MiscUtils.AWTDesktop.browse(URI.create(GITHUB_URL+"/releases/tag/"+cmp_version)), null);
                 }
                 this.newerVersion = cmp_version;
             }
         }
+        catch (FileNotFoundException ex)
+        {
+            LOG.warn("Update metadata not found at {}; skipping update notice", META_URL);
+        }
         catch (Exception ex)
         {
             LOG.error("Failed to download meta", ex);
         }
-        String[] release_names = GithubApi.release_names(GROUP, NAME);
+        String[] release_names = GithubApi.release_names(FORK_GROUP, FORK_REPOSITORY);
         if (release_names == null)
         {
-            LOG.error("Failed to fetch release names");
+            LOG.error("Failed to fetch release names from {}/{}", FORK_GROUP, FORK_REPOSITORY);
         }
         else
         {

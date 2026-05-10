@@ -72,6 +72,7 @@ import io.github.vrchatapi.model.InstanceType;
 import io.github.vrchatapi.model.InventoryItem;
 import io.github.vrchatapi.model.LimitedUserGroups;
 import io.github.vrchatapi.model.ModelFile;
+import io.github.vrchatapi.model.PerformanceRatings;
 import io.github.vrchatapi.model.Print;
 import io.github.vrchatapi.model.Prop;
 import io.github.vrchatapi.model.User;
@@ -1097,6 +1098,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
         Boolean instancePersistenceEnabled = null;
         String displayName = null;
         String calendarEntryId = null;
+        PerformanceRatings minimumAvatarPerformance = null;
         
         boolean contentSettings_drones = true;
         boolean contentSettings_emoji = true;
@@ -1138,6 +1140,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
             JsonObject cir = JSON.getGson().toJsonTree(this.createRequest()).getAsJsonObject();
             if (this.playerPersistenceEnabled != null) cir.addProperty("playerPersistenceEnabled", this.playerPersistenceEnabled);
             if (this.calendarEntryId != null) cir.addProperty("calendarEntryId", this.calendarEntryId);
+            if (this.minimumAvatarPerformance != null) cir.addProperty("minimumAvatarPerformance", this.minimumAvatarPerformance.getValue());
             return cir;
         }
     }

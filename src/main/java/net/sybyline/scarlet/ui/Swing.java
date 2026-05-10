@@ -120,22 +120,42 @@ public class Swing
     // ── Default accent ────────────────────────────────────────────────────────
     static final Color DEFAULT_ACCENT = new Color(200, 55, 65);
 
+    /** True when FlatLaf could not be installed and Swing fell back to a classic look and feel. */
+    public static final boolean CLASSIC_MODE;
+
     static
     {
+        boolean classic = false;
         try
         {
             UIManager.setLookAndFeel(new FlatDarkLaf());
         }
-        catch (Exception ex)
+        catch (Throwable ex)
         {
-            LOG.error("Exception setting system look and feel", ex);
+            LOG.error("Exception setting FlatLaf look and feel (falling back to system L&F)", ex);
+            // FlatLaf may throw Error subclasses (NoClassDefFoundError,
+            // UnsatisfiedLinkError) on platforms where its native components
+            // cannot load. Fall back gracefully.
+            classic = true;
+            try
+            {
+                UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+            }
+            catch (Exception fallbackEx)
+            {
+                // Metal (cross-platform) is the ultimate fallback and always works
+            }
         }
+        CLASSIC_MODE = classic;
 
-        // Read saved accent from settings.json before building the theme.
-        // Scarlet.dir is a static final set before any Scarlet instance is
-        // constructed, so it is safe to read here.
-        Color savedAccent = loadSavedAccent();
-        applyTheme(savedAccent != null ? savedAccent : DEFAULT_ACCENT);
+        if (!CLASSIC_MODE)
+        {
+            // Read saved accent from settings.json before building the theme.
+            // Scarlet.dir is a static final set before any Scarlet instance is
+            // constructed, so it is safe to read here.
+            Color savedAccent = loadSavedAccent();
+            applyTheme(savedAccent != null ? savedAccent : DEFAULT_ACCENT);
+        }
     }
 
     /**
@@ -199,6 +219,9 @@ public class Swing
      */
     public static void applyTheme(Color accent)
     {
+        // Skip theming in classic mode because these UIManager keys are FlatLaf-specific.
+        if (CLASSIC_MODE)
+            return;
         // Derive companion colours from the accent
         Color accentDark = new Color(
             Math.max(0, accent.getRed()   - 50),
@@ -337,6 +360,8 @@ public class Swing
     public static void pickAccentColor(java.awt.Component parentComponent,
                                        net.sybyline.scarlet.Scarlet scarlet)
     {
+        if (CLASSIC_MODE)
+            return;
         Color current = ACCENT != null ? ACCENT : DEFAULT_ACCENT;
         Color chosen = javax.swing.JColorChooser.showDialog(
             parentComponent,

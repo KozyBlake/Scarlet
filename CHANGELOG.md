@@ -1,7 +1,13 @@
 
 # Changelog
 
-## Unreleased
+## 0.4.17
+  - Bumped Scarlet release/version metadata to `0.4.17` and pointed update/download release checks at the KozyBlake fork.
+  - Fixed the fork update metadata URL to use GitHub's raw endpoint and downgraded missing metadata to a warning instead of a startup error stack trace
+  - Added a desktop UI wizard for creating VRChat group instances from Scarlet, with simple world/access/region/gate questions and an option to launch the new instance in the VRChat client in VR or Desktop mode
+  - Added new instance-creation functionality backed by the newer VRChat group instance APIs, including more complete support for recent VRChat API additions
+  - Added avatar performance gating to group instance creation, using the live VRChat API `minimumAvatarPerformance` field with Poor, Medium, and Good-or-better presets
+  - Added modern VRChat group API commands under `/vrchat-group` for audit-type discovery, member search, ban/invite/join-request lists, group posts, group announcements, and confirmed owner-level transfer actions
   - Added `scarlet-android/` Maven module producing a standalone APK (`scarlet-android-<ver>.apk`) that captures VRChat log output from the official VRChat Android app via an embedded ADB client over Wireless Debugging and writes a VRChat-formatted `output_log_<ts>.txt` that Scarlet's existing tailer consumes
   - Added one-time Wireless-Debugging pairing flow in `MainActivity` / `AdbPairingService` using NSD discovery of `_adb-tls-pairing._tcp` + a 6-digit pairing code; no USB, no root, no terminal commands
   - Added `ScarletLogService` foreground service that owns the dadb session + logcat tail and auto-reconnects when Wireless Debugging drops

@@ -32,6 +32,7 @@ import io.github.vrchatapi.model.GroupPermissions;
 import io.github.vrchatapi.model.Instance;
 import io.github.vrchatapi.model.InstanceRegion;
 import io.github.vrchatapi.model.LimitedUserGroups;
+import io.github.vrchatapi.model.PerformanceRatings;
 import io.github.vrchatapi.model.User;
 
 import net.dv8tion.jda.api.EmbedBuilder;
@@ -873,6 +874,7 @@ public class ScarletDiscordUI
             ic.contentSettings_pedestals = event.getValues().contains("contentSettings.pedestals");
             ic.contentSettings_prints = event.getValues().contains("contentSettings.prints");
             ic.contentSettings_stickers = event.getValues().contains("contentSettings.stickers");
+            ic.minimumAvatarPerformance = this.minimumAvatarPerformance(event.getValues());
             event.deferEdit().queue();
             return;
         }
@@ -880,6 +882,17 @@ public class ScarletDiscordUI
         {
         }
         event.reply("Interaction timed out").setEphemeral(true).queue($ -> $.deleteOriginal().queueAfter(3_000L, TimeUnit.MILLISECONDS));
+    }
+
+    PerformanceRatings minimumAvatarPerformance(List<String> values)
+    {
+        if (values.contains("minimumAvatarPerformance."+PerformanceRatings.GOOD.getValue()))
+            return PerformanceRatings.GOOD;
+        if (values.contains("minimumAvatarPerformance."+PerformanceRatings.MEDIUM.getValue()))
+            return PerformanceRatings.MEDIUM;
+        if (values.contains("minimumAvatarPerformance."+PerformanceRatings.POOR.getValue()))
+            return PerformanceRatings.POOR;
+        return null;
     }
 
     @ButtonClk("edit-desc")

@@ -163,7 +163,7 @@ public class ScarletBuild
             bat.append("        echo Targeting version !TARGET_VERSION!, jar present").println();
             bat.append("        set \"SCARLET_VERSION=!TARGET_VERSION!\"").println();
             bat.append("    ) else (").println();
-            bat.append("        set \"TARGET_URL=https://github.com/").append(Scarlet.GROUP).append("/").append(Scarlet.NAME).append("/releases/download/!TARGET_VERSION!/scarlet-!TARGET_VERSION!.jar\"").println();
+            bat.append("        set \"TARGET_URL=https://github.com/").append(Scarlet.FORK_GROUP).append("/").append(Scarlet.FORK_REPOSITORY).append("/releases/download/!TARGET_VERSION!/scarlet-!TARGET_VERSION!.jar\"").println();
             bat.append("        set \"TARGET_FILE=%CD%\\scarlet-!TARGET_VERSION!.jar\"").println();
             bat.append("        echo Downloading from !TARGET_URL! to !TARGET_FILE!").println();
             bat.append("        curl -L -o \"%CD%\\scarlet-!TARGET_VERSION!.jar\" \"!TARGET_URL!\"").println();

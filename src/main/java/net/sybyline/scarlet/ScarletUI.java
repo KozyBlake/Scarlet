@@ -84,24 +84,38 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.gson.JsonObject;
 import com.google.gson.reflect.TypeToken;
 
+import io.github.vrchatapi.ApiException;
+import io.github.vrchatapi.JSON;
 import io.github.vrchatapi.model.AgeVerificationStatus;
+import io.github.vrchatapi.model.CreateInstanceRequest;
 import io.github.vrchatapi.model.FileAnalysis;
 import io.github.vrchatapi.model.FileAnalysisAvatarStats;
+import io.github.vrchatapi.model.GroupAccessType;
 import io.github.vrchatapi.model.GroupJoinRequestAction;
 import io.github.vrchatapi.model.GroupMemberStatus;
+import io.github.vrchatapi.model.GroupPermissions;
+import io.github.vrchatapi.model.Instance;
+import io.github.vrchatapi.model.InstanceContentSettings;
+import io.github.vrchatapi.model.InstanceRegion;
+import io.github.vrchatapi.model.InstanceType;
 import io.github.vrchatapi.model.ModelFile;
+import io.github.vrchatapi.model.PerformanceRatings;
 import io.github.vrchatapi.model.User;
+import io.github.vrchatapi.model.World;
 
 import net.sybyline.scarlet.ScarletSettings.FileValued;
 import net.sybyline.scarlet.ext.AvatarBundleInfo;
+import net.sybyline.scarlet.ext.VrcLaunch;
 import net.sybyline.scarlet.ui.Swing;
 import net.sybyline.scarlet.util.Credits;
 import net.sybyline.scarlet.util.Func;
 import net.sybyline.scarlet.util.HttpURLInputStream;
 import net.sybyline.scarlet.util.MiscUtils;
 import net.sybyline.scarlet.util.PropsTable;
+import net.sybyline.scarlet.util.VrcIds;
 import net.sybyline.scarlet.util.VrcWeb;
 import net.sybyline.scarlet.util.VrchatApiVersionChecker;
 import net.sybyline.scarlet.util.tts.WinSapiTtsProvider;
@@ -636,6 +650,7 @@ public class ScarletUI implements IScarletUI
                 JMenu jmenu_file = new JMenu("File");
                 {
                     jmenu_file.add("Browse data folder").addActionListener($ -> MiscUtils.AWTDesktop.browseDirectory(Scarlet.dir));
+                    jmenu_file.add("Create VRChat group instance...").addActionListener($ -> this.uiCreateGroupInstance());
                     jmenu_file.addSeparator();
                     jmenu_file.add("Quit").addActionListener($ -> this.uiModalExit());
                 }
@@ -773,6 +788,11 @@ public class ScarletUI implements IScarletUI
             btn_dataFolder.addActionListener($ -> MiscUtils.AWTDesktop.browseDirectory(Scarlet.dir));
             actions.add(btn_dataFolder);
 
+            JButton btn_createInstance = mkBtn.apply("Create Instance");
+            btn_createInstance.setToolTipText("Create a VRChat group instance and open it in the VRChat client");
+            btn_createInstance.addActionListener($ -> this.uiCreateGroupInstance());
+            actions.add(btn_createInstance);
+
             JButton btn_importUrl = mkBtn.apply("Import Groups (URL)");
             btn_importUrl.setToolTipText("Import watched groups from a URL");
             btn_importUrl.addActionListener($ -> this.importWG(false));
@@ -843,9 +863,9 @@ public class ScarletUI implements IScarletUI
                 emptyCard.setBackground(TAB_BG);
                 JLabel emptyState = new JLabel(
                     "<html><center>\u25CB<br><br>"
-                    + "No instance loaded<br>"
-                    + "<font color='#505064'>Player data will appear here once connected</font>"
-                    + "</center></html>",
+                        + "No instance loaded<br>"
+                        + "<font color='#505064'>Player data will appear here once connected</font>"
+                        + "</center></html>",
                     SwingConstants.CENTER);
                 emptyState.setForeground(EMPTY_FG);
                 emptyState.setFont(emptyState.getFont().deriveFont(13f));
@@ -1138,6 +1158,394 @@ public class ScarletUI implements IScarletUI
         this.scarlet.execModal.execute(() -> JOptionPane.showMessageDialog(component != null ? component : this.jframe, message, title, JOptionPane.INFORMATION_MESSAGE));
     }
 
+    private void uiCreateGroupInstance()
+    {
+        this.scarlet.execModal.execute(() ->
+        {
+            InstanceWizardSelection selection = Swing.getWait(this::showCreateGroupInstanceDialog);
+            if (selection == null)
+                return;
+
+            String groupId = this.scarlet.vrc.groupId;
+            if (MiscUtils.blank(groupId))
+            {
+                this.showInstanceWizardError("Scarlet does not have a configured VRChat group id yet.", "Create instance");
+                return;
+            }
+
+            GroupPermissions requiredPermission = this.requiredCreateInstancePermission(selection.accessType);
+            if (!this.scarlet.vrc.checkSelfUserHasVRChatPermission(requiredPermission))
+            {
+                this.showInstanceWizardError(this.scarlet.vrc.messageNeedPerms(requiredPermission), "Create instance");
+                return;
+            }
+            if (selection.ageGate && !this.scarlet.vrc.checkSelfUserHasVRChatPermission(GroupPermissions.group_instance_age_gated_create))
+            {
+                this.showInstanceWizardError(this.scarlet.vrc.messageNeedPerms(GroupPermissions.group_instance_age_gated_create), "Create age-gated instance");
+                return;
+            }
+
+            World world = this.scarlet.vrc.getWorld(selection.worldId);
+            if (world == null)
+            {
+                this.showInstanceWizardError("Scarlet could not find a VRChat world for:\n" + selection.worldId, "Create instance");
+                return;
+            }
+
+            Instance instance;
+            try
+            {
+                instance = this.scarlet.vrc.createInstanceEx(this.createGroupInstanceRequest(selection, groupId));
+            }
+            catch (ApiException apiex)
+            {
+                this.showInstanceWizardError("VRChat rejected the instance request:\n" + this.apiExceptionMessage(apiex), "Create instance");
+                return;
+            }
+            catch (Exception ex)
+            {
+                LOG.error("Exception creating VRChat group instance", ex);
+                this.showInstanceWizardError("Scarlet could not create the instance:\n" + ex.getMessage(), "Create instance");
+                return;
+            }
+
+            String location = this.locationOf(instance, selection.worldId);
+            if (!MiscUtils.blank(location))
+                this.scarlet.pendingModActions.addPending(GroupAuditType.INSTANCE_CREATE, MiscUtils.blank(instance.getId()) ? location : instance.getId(), this.scarlet.vrc.currentUserId);
+
+            String launchError = null;
+            if (selection.openInVrchat && !MiscUtils.blank(location))
+            {
+                try
+                {
+                    VrcLaunch.launch(this.scarlet.vrc.currentUserId, location, selection.launchMode);
+                }
+                catch (Exception ex)
+                {
+                    LOG.warn("Failed to launch VRChat instance {}", location, ex);
+                    launchError = ex.getMessage();
+                }
+            }
+
+            this.showCreatedInstanceDialog(world, instance, location, launchError);
+        });
+    }
+
+    private InstanceWizardSelection showCreateGroupInstanceDialog()
+    {
+        JTextField worldField = new JTextField(34);
+        worldField.setToolTipText("Paste a VRChat world URL or wrld_ id");
+        JTextField displayNameField = new JTextField(24);
+        displayNameField.setToolTipText("Optional instance name shown in VRChat");
+
+        JComboBox<ComboChoice<GroupAccessType>> accessType = new JComboBox<>();
+        accessType.addItem(new ComboChoice<>("Group Public - anyone can join", GroupAccessType.PUBLIC));
+        accessType.addItem(new ComboChoice<>("Group+ - friends of people there can join", GroupAccessType.PLUS));
+        accessType.addItem(new ComboChoice<>("Group Members - members only", GroupAccessType.MEMBERS));
+
+        JComboBox<ComboChoice<InstanceRegion>> region = new JComboBox<>();
+        region.addItem(new ComboChoice<>("US West", InstanceRegion.US));
+        region.addItem(new ComboChoice<>("US East", InstanceRegion.USE));
+        region.addItem(new ComboChoice<>("Europe", InstanceRegion.EU));
+        region.addItem(new ComboChoice<>("Japan", InstanceRegion.JP));
+
+        JComboBox<ComboChoice<PerformanceRatings>> avatarGate = new JComboBox<>();
+        avatarGate.addItem(new ComboChoice<>("None", null));
+        avatarGate.addItem(new ComboChoice<>("Poor or better", PerformanceRatings.POOR));
+        avatarGate.addItem(new ComboChoice<>("Medium or better", PerformanceRatings.MEDIUM));
+        avatarGate.addItem(new ComboChoice<>("Good or better", PerformanceRatings.GOOD));
+
+        JComboBox<ComboChoice<VrcLaunch.LaunchMode>> launchMode = new JComboBox<>();
+        launchMode.addItem(new ComboChoice<>("VR", VrcLaunch.LaunchMode.VR));
+        launchMode.addItem(new ComboChoice<>("Desktop", VrcLaunch.LaunchMode.DESKTOP));
+
+        JCheckBox queueEnabled = new JCheckBox("Enable queue when the instance is full", true);
+        JCheckBox ageGate = new JCheckBox("Require Age Verified 18+ users", false);
+        JCheckBox openInVrchat = new JCheckBox("Open in VRChat after creating", true);
+        openInVrchat.addItemListener($ -> launchMode.setEnabled(openInVrchat.isSelected()));
+        JCheckBox contentDrones = new JCheckBox("Drones", true);
+        JCheckBox contentEmoji = new JCheckBox("Emoji", true);
+        JCheckBox contentItems = new JCheckBox("Items", true);
+        JCheckBox contentPedestals = new JCheckBox("Pedestals", true);
+        JCheckBox contentPrints = new JCheckBox("Prints", true);
+        JCheckBox contentStickers = new JCheckBox("Stickers", true);
+
+        JPanel panel = new JPanel(new GridBagLayout());
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(4, 4, 4, 4);
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+        gbc.weightx = 1.0;
+
+        JTextArea intro = new JTextArea("Scarlet will create a group instance using the logged-in VRChat account, then optionally send the launch link to the VRChat client.");
+        intro.setEditable(false);
+        intro.setLineWrap(true);
+        intro.setWrapStyleWord(true);
+        intro.setOpaque(false);
+        intro.setFocusable(false);
+        this.addWizardRow(panel, gbc, 0, null, intro);
+        this.addWizardRow(panel, gbc, 1, "World URL or ID", worldField);
+        this.addWizardRow(panel, gbc, 2, "Who can join", accessType);
+        this.addWizardRow(panel, gbc, 3, "Region", region);
+        this.addWizardRow(panel, gbc, 4, "Avatar gate", avatarGate);
+        this.addWizardRow(panel, gbc, 5, "Instance name", displayNameField);
+
+        JPanel options = new JPanel(new GridBagLayout());
+        GridBagConstraints ogbc = new GridBagConstraints();
+        ogbc.insets = new Insets(2, 2, 2, 2);
+        ogbc.anchor = GridBagConstraints.WEST;
+        ogbc.gridx = 0;
+        ogbc.gridy = 0;
+        options.add(queueEnabled, ogbc);
+        ogbc.gridy++;
+        options.add(ageGate, ogbc);
+        ogbc.gridy++;
+        options.add(openInVrchat, ogbc);
+        ogbc.gridy++;
+        JPanel launchModePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
+        launchModePanel.add(new JLabel("Mode"));
+        launchModePanel.add(launchMode);
+        options.add(launchModePanel, ogbc);
+        this.addWizardRow(panel, gbc, 6, "Options", options);
+
+        JPanel content = new JPanel(new GridBagLayout());
+        GridBagConstraints cgbc = new GridBagConstraints();
+        cgbc.insets = new Insets(2, 2, 2, 2);
+        cgbc.anchor = GridBagConstraints.WEST;
+        JCheckBox[] contentBoxes = { contentDrones, contentEmoji, contentItems, contentPedestals, contentPrints, contentStickers };
+        for (int i = 0; i < contentBoxes.length; i++)
+        {
+            cgbc.gridx = i % 3;
+            cgbc.gridy = i / 3;
+            content.add(contentBoxes[i], cgbc);
+        }
+        this.addWizardRow(panel, gbc, 7, "Allow content", content);
+
+        String worldId;
+        while (true)
+        {
+            int result = JOptionPane.showConfirmDialog(this.jframe, panel, "Create VRChat group instance", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            if (result != JOptionPane.OK_OPTION)
+                return null;
+
+            worldId = VrcIds.resolveWorldId(worldField.getText());
+            if (!VrcIds.id_world.matcher(worldId == null ? "" : worldId).matches())
+            {
+                JOptionPane.showMessageDialog(this.jframe, "Paste a valid VRChat world URL or wrld_ id.", "Create instance", JOptionPane.WARNING_MESSAGE);
+                continue;
+            }
+
+            String displayName = displayNameField.getText() == null ? "" : displayNameField.getText().trim();
+            if (displayName.length() > 32 || displayName.indexOf('.') >= 0 || displayName.indexOf('/') >= 0 || displayName.indexOf('\\') >= 0)
+            {
+                JOptionPane.showMessageDialog(this.jframe, "Instance names can be blank, or up to 32 characters without '.', '/', or '\\'.", "Create instance", JOptionPane.WARNING_MESSAGE);
+                continue;
+            }
+
+            break;
+        }
+
+        InstanceWizardSelection selection = new InstanceWizardSelection();
+        selection.worldId = worldId;
+        selection.accessType = selectedValue(accessType);
+        selection.region = selectedValue(region);
+        selection.minimumAvatarPerformance = selectedValue(avatarGate);
+        selection.displayName = MiscUtils.blank(displayNameField.getText()) ? null : displayNameField.getText().trim();
+        selection.queueEnabled = queueEnabled.isSelected();
+        selection.ageGate = ageGate.isSelected();
+        selection.openInVrchat = openInVrchat.isSelected();
+        selection.launchMode = selectedValue(launchMode);
+        selection.contentSettings_drones = contentDrones.isSelected();
+        selection.contentSettings_emoji = contentEmoji.isSelected();
+        selection.contentSettings_props = contentItems.isSelected();
+        selection.contentSettings_pedestals = contentPedestals.isSelected();
+        selection.contentSettings_prints = contentPrints.isSelected();
+        selection.contentSettings_stickers = contentStickers.isSelected();
+        return selection;
+    }
+
+    private void addWizardRow(JPanel panel, GridBagConstraints gbc, int row, String label, Component component)
+    {
+        gbc.gridy = row;
+        if (label == null)
+        {
+            gbc.gridx = 0;
+            gbc.gridwidth = 2;
+            panel.add(component, gbc);
+            gbc.gridwidth = 1;
+            return;
+        }
+        gbc.gridx = 0;
+        gbc.weightx = 0.0;
+        panel.add(new JLabel(label), gbc);
+        gbc.gridx = 1;
+        gbc.weightx = 1.0;
+        panel.add(component, gbc);
+    }
+
+    private JsonObject createGroupInstanceRequest(InstanceWizardSelection selection, String groupId)
+    {
+        CreateInstanceRequest request = new CreateInstanceRequest();
+        request.setWorldId(selection.worldId);
+        request.setOwnerId(groupId);
+        request.setType(InstanceType.GROUP);
+        request.setRegion(selection.region);
+        request.setGroupAccessType(selection.accessType);
+        request.setQueueEnabled(Boolean.valueOf(selection.queueEnabled));
+        request.setHardClose(Boolean.FALSE);
+        request.setAgeGate(Boolean.valueOf(selection.ageGate));
+        request.setDisplayName(selection.displayName);
+
+        InstanceContentSettings contentSettings = new InstanceContentSettings();
+        contentSettings.setDrones(selection.contentSettings_drones);
+        contentSettings.setEmoji(selection.contentSettings_emoji);
+        contentSettings.setProps(selection.contentSettings_props);
+        contentSettings.setPedestals(selection.contentSettings_pedestals);
+        contentSettings.setPrints(selection.contentSettings_prints);
+        contentSettings.setStickers(selection.contentSettings_stickers);
+        request.setContentSettings(contentSettings);
+
+        JsonObject requestJson = JSON.getGson().toJsonTree(request, CreateInstanceRequest.class).getAsJsonObject();
+        if (selection.minimumAvatarPerformance != null)
+            requestJson.addProperty("minimumAvatarPerformance", selection.minimumAvatarPerformance.getValue());
+        return requestJson;
+    }
+
+    private GroupPermissions requiredCreateInstancePermission(GroupAccessType accessType)
+    {
+        if (accessType == GroupAccessType.PLUS)
+            return GroupPermissions.group_instance_plus_create;
+        if (accessType == GroupAccessType.MEMBERS)
+            return GroupPermissions.group_instance_open_create;
+        return GroupPermissions.group_instance_public_create;
+    }
+
+    private String locationOf(Instance instance, String fallbackWorldId)
+    {
+        if (instance == null)
+            return null;
+        if (!MiscUtils.blank(instance.getLocation()))
+            return instance.getLocation();
+        if (!MiscUtils.blank(instance.getWorldId()) && !MiscUtils.blank(instance.getInstanceId()))
+            return instance.getWorldId() + ":" + instance.getInstanceId();
+        if (!MiscUtils.blank(instance.getInstanceId()))
+            return fallbackWorldId + ":" + instance.getInstanceId();
+        return instance.getId();
+    }
+
+    private void showCreatedInstanceDialog(World world, Instance instance, String location, String launchError)
+    {
+        Swing.invokeWait(() ->
+        {
+            String webLink = MiscUtils.blank(location) ? null : VrcWeb.Home.instance(location);
+            JPanel panel = new JPanel(new BorderLayout(0, 8));
+            StringBuilder message = new StringBuilder();
+            message.append("Created ");
+            message.append(world == null || MiscUtils.blank(world.getName()) ? "the instance" : world.getName());
+            message.append('.');
+            if (launchError != null)
+                message.append("\n\nScarlet created it, but could not open VRChat:\n").append(launchError);
+            panel.add(new JLabel("<html>"+message.toString().replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")+"</html>"), BorderLayout.NORTH);
+            if (webLink != null)
+            {
+                JTextField link = new JTextField(webLink);
+                link.setEditable(false);
+                panel.add(link, BorderLayout.CENTER);
+            }
+
+            Object[] options = MiscUtils.blank(location)
+                ? new Object[] { "Close" }
+                : new Object[] { "Open in VRChat (VR)", "Open in VRChat (Desktop)", "Open Web Page", "Copy Link", "Close" };
+            int choice = JOptionPane.showOptionDialog(this.jframe, panel, "Instance created", JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
+            if (MiscUtils.blank(location))
+                return;
+            if (choice == 0 || choice == 1)
+            {
+                VrcLaunch.LaunchMode mode = choice == 1 ? VrcLaunch.LaunchMode.DESKTOP : VrcLaunch.LaunchMode.VR;
+                this.scarlet.execModal.execute(() ->
+                {
+                    try
+                    {
+                        VrcLaunch.launch(this.scarlet.vrc.currentUserId, location, mode);
+                    }
+                    catch (Exception ex)
+                    {
+                        LOG.warn("Failed to launch VRChat instance {}", location, ex);
+                        this.showInstanceWizardError("Scarlet could not open VRChat:\n" + ex.getMessage(), "Open in VRChat");
+                    }
+                });
+            }
+            else if (choice == 2)
+            {
+                MiscUtils.AWTDesktop.browse(URI.create(webLink));
+            }
+            else if (choice == 3)
+            {
+                Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(webLink), null);
+            }
+        });
+    }
+
+    private void showInstanceWizardError(Object message, String title)
+    {
+        Swing.invokeWait(() -> JOptionPane.showMessageDialog(this.jframe, message, title, JOptionPane.ERROR_MESSAGE));
+    }
+
+    private String apiExceptionMessage(ApiException apiex)
+    {
+        String message = apiex.getResponseBody();
+        try
+        {
+            message = JSON.<io.github.vrchatapi.model.Error>deserialize(message, io.github.vrchatapi.model.Error.class).getError().getMessage();
+        }
+        catch (Exception ex)
+        {
+        }
+        return MiscUtils.blank(message) ? apiex.getMessage() : message;
+    }
+
+    private static <T> T selectedValue(JComboBox<ComboChoice<T>> combo)
+    {
+        @SuppressWarnings("unchecked")
+        ComboChoice<T> choice = (ComboChoice<T>)combo.getSelectedItem();
+        return choice == null ? null : choice.value;
+    }
+
+    static final class ComboChoice<T>
+    {
+        ComboChoice(String label, T value)
+        {
+            this.label = label;
+            this.value = value;
+        }
+        final String label;
+        final T value;
+        @Override
+        public String toString()
+        {
+            return this.label;
+        }
+    }
+
+    static final class InstanceWizardSelection
+    {
+        String worldId;
+        GroupAccessType accessType;
+        InstanceRegion region;
+        PerformanceRatings minimumAvatarPerformance;
+        String displayName;
+        boolean queueEnabled;
+        boolean ageGate;
+        boolean openInVrchat;
+        VrcLaunch.LaunchMode launchMode;
+        boolean contentSettings_drones;
+        boolean contentSettings_emoji;
+        boolean contentSettings_props;
+        boolean contentSettings_pedestals;
+        boolean contentSettings_prints;
+        boolean contentSettings_stickers;
+    }
+
     @Override
     public void refreshVrchatApiStatus()
     {
@@ -1155,7 +1563,8 @@ public class ScarletUI implements IScarletUI
 
             String bundled = report.bundledVersion == null ? "unknown" : report.bundledVersion;
             String latest = report.latestVersion == null ? "unavailable" : report.latestVersion;
-            StringBuilder tooltip = new StringBuilder("<html>");
+            StringBuilder tooltip = new StringBuilder();
+            tooltip.append("<html>");
             tooltip.append(report.message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;"));
             tooltip.append("<br>Bundled: ").append(bundled);
             tooltip.append("<br>Latest upstream: ").append(latest);
@@ -2883,10 +3292,13 @@ public class ScarletUI implements IScarletUI
                 int b = Integer.parseInt(preset[3]);
                 ScarletUI.this.scarlet.saveAccentColor(r, g, b);
                 Swing.applyTheme(new Color(r, g, b));
-                for (java.awt.Window w : java.awt.Window.getWindows())
+                if (!Swing.CLASSIC_MODE)
                 {
-                    com.formdev.flatlaf.FlatLaf.updateUI();
-                    w.repaint();
+                    for (java.awt.Window w : java.awt.Window.getWindows())
+                    {
+                        com.formdev.flatlaf.FlatLaf.updateUI();
+                        w.repaint();
+                    }
                 }
                 // Rebuild the settings cards so accent-coloured elements refresh.
                 // Deferred via invokeLater so the combo's action event finishes
