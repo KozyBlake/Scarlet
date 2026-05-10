@@ -103,7 +103,7 @@ Stale bridge scripts in AppData were being preferred over a fresh classpath copy
 A long-standing bug that only reproduced on some users' machines:
 
 ```
-[ERROR] [Scarlet] Exception in spin
+[ERROR] [KozyBlake/Scarlet] Exception in spin
 java.io.IOException: The handle is invalid
     at java.base/java.io.FileInputStream.available0(Native Method)
     at java.base/java.io.FileInputStream.available(FileInputStream.java:415)
@@ -140,7 +140,7 @@ net.dv8tion.jda.api.exceptions.ErrorResponseException: -1: java.io.InterruptedIO
 Caused by: java.io.InterruptedIOException
     at okhttp3.internal.http2.Http2Stream.waitForIo$okhttp(Http2Stream.kt:716)
     ...
-[INFO] [Scarlet] Finished shutdown flow
+[INFO] [KozyBlake/Scarlet] Finished shutdown flow
 ```
 
 On startup, when Scarlet detects that the version has changed since the last run, it calls `updateCommandList()` to push every slash command to Discord (one REST call per upsert/delete/edit). If the user closes Scarlet **before that REST queue has drained**, JDA's shutdown interrupts the in-flight OkHttp HTTP/2 streams, `Http2Stream.waitForIo` throws `InterruptedIOException`, and JDA wraps it as `ErrorResponseException(-1, …)` — the `-1` response code means "IO-layer error, no HTTP response". JDA's shipped default failure handler logs everything at ERROR with a stack trace, which users understandably read as a bug.

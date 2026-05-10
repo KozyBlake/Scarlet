@@ -684,12 +684,9 @@ public class ScarletUI implements IScarletUI
                 JMenu jmenu_help = new JMenu("Help");
                 {
                     // ── This fork ──────────────────────────────────────────────
-                    jmenu_help.add("Scarlet (Fork): GitHub").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.FORK_GITHUB_URL)));
-                    jmenu_help.add("Scarlet (Fork): VRChat Group").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.FORK_VRCHAT_GROUP_URL)));
+                    jmenu_help.add("Scarlet: GitHub").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.GITHUB_URL)));
+                    jmenu_help.add("Scarlet: VRChat Group").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.SCARLET_VRCHAT_GROUP_URL)));
                     jmenu_help.addSeparator();
-                    // ── Original project (credit) ──────────────────────────────
-                    jmenu_help.add("Scarlet (Original): GitHub").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.ORIGINAL_GITHUB_URL)));
-                    jmenu_help.add("Scarlet (Original): VRChat Group").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.SCARLET_VRCHAT_GROUP_URL)));
                     jmenu_help.add("Scarlet: License").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.LICENSE_URL)));
                     jmenu_help.add("Scarlet: Credits").addActionListener($ -> this.infoCredits());
                     jmenu_help.add("VRChat API: Check Status").addActionListener($ -> this.checkVrchatApiStatusManual());
@@ -784,7 +781,7 @@ public class ScarletUI implements IScarletUI
             };
 
             JButton btn_dataFolder = mkBtn.apply("Data Folder");
-            btn_dataFolder.setToolTipText("Open Scarlet's data directory");
+            btn_dataFolder.setToolTipText("Open KozyBlake/Scarlet's data directory");
             btn_dataFolder.addActionListener($ -> MiscUtils.AWTDesktop.browseDirectory(Scarlet.dir));
             actions.add(btn_dataFolder);
 
@@ -933,7 +930,7 @@ public class ScarletUI implements IScarletUI
                 this.jtext_cli.setForeground(CLI_FG);
                 this.jtext_cli.setCaretColor(CLI_FG);
                 this.jtext_cli.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
-                this.jtext_cli.setText("Scarlet CLI  —  type a command below or run 'help' to list all commands.\n");
+                this.jtext_cli.setText("KozyBlake/Scarlet CLI  —  type a command below or run 'help' to list all commands.\n");
 
                 JScrollPane cliScroll = new JScrollPane(this.jtext_cli);
                 cliScroll.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, CLI_BORD));

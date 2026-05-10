@@ -154,7 +154,7 @@ public final class RvcModelManagerDialog
         final JButton btnRefresh= new JButton("Refresh");
         final JButton btnClose  = new JButton("Close");
 
-        btnAdd.setToolTipText("Copy a .pth model (and optionally a .index) into Scarlet's models folder");
+        btnAdd.setToolTipText("Copy a .pth model (and optionally a .index) into KozyBlake/Scarlet's models folder");
         btnAddIndex.setToolTipText("Attach or replace the paired .index file for the selected model");
         btnRemoveIndex.setToolTipText("Delete only the paired .index file for the selected model");
         btnRemove.setToolTipText("Delete the selected .pth and its sibling .index from disk");

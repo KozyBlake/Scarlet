@@ -82,6 +82,18 @@ Since there is no automatic synchronization of data between groups running Scarl
   Lists internal information for a specific Discord user.  
   Example: `/discord-user-info <@123456789123456789>`
 
+- **`discord-warn <discord-user:user> <reason:string?>`**  
+  Sends a warning DM to a Discord server member and records it in the configured action log channel.  
+  Example: `/discord-warn <@123456789123456789> "Stop spamming chat"`
+
+- **`discord-kick <discord-user:user> <reason:string?>`**  
+  Kicks a Discord server member after confirmation and records the result in the configured action log channel.  
+  Example: `/discord-kick <@123456789123456789> "Repeated spam"`
+
+- **`discord-ban <discord-user:user> <reason:string?>`**  
+  Bans a Discord server member after confirmation and records the result in the configured action log channel.  
+  Example: `/discord-ban <@123456789123456789> "Raid account"`
+
 - **`submit-evidence <evidence-submission:attachment> <evidence-submission-2:attachment?> ...`**  
   Submit attachments for evidence.  
   Example: `/submit-evidence <(attached file)>`
@@ -115,6 +127,10 @@ Since there is no automatic synchronization of data between groups running Scarl
 - **`set-audit-ex-secret-channel <audit-ex-event-type:string> <discord-channel:channel?>`**  
   Sets a given text channel as the secret channel certain extended event types use.  
   Example: `/set-audit-ex-secret-channel "groupex.instance.vtk" <#log-instance-kicks>`
+
+- **`set-discord-action-log-channel <discord-text-channel:channel?>`**  
+  Sets the channel for Discord warn/kick/ban result logs and Discord member join invite logs. Omit the channel to disable this log. Invite tracking requires the bot to have Manage Server permission and the Discord member intent enabled; Discord does not expose member IP addresses to bots.  
+  Example: `/set-discord-action-log-channel <#discord-mod-log>`
 
 - **`moderation-summary <hours-back:int?>`**  
   Generates a summary of moderation actions.  

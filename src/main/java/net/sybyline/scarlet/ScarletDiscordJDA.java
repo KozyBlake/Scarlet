@@ -26,6 +26,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -82,11 +83,13 @@ import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.JDA;
 import net.dv8tion.jda.api.JDABuilder;
 import net.dv8tion.jda.api.OnlineStatus;
+import net.dv8tion.jda.api.Permission;
 import net.dv8tion.jda.api.audio.AudioModuleConfig;
 import net.dv8tion.jda.api.audio.AudioSendHandler;
 import net.dv8tion.jda.api.entities.Activity;
 import net.dv8tion.jda.api.entities.Guild;
 import net.dv8tion.jda.api.entities.IncomingWebhookClient;
+import net.dv8tion.jda.api.entities.Invite;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.MessageEmbed;
@@ -106,6 +109,7 @@ import net.dv8tion.jda.api.events.interaction.command.UserContextInteractionEven
 import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.EntitySelectInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
+import net.dv8tion.jda.api.events.guild.member.GuildMemberJoinEvent;
 import net.dv8tion.jda.api.events.session.ShutdownEvent;
 import net.dv8tion.jda.api.exceptions.InvalidTokenException;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
@@ -149,6 +153,12 @@ public class ScarletDiscordJDA implements ScarletDiscord
 {
 
     static final Logger LOG = LoggerFactory.getLogger("Scarlet/JDA");
+    static final String BLOCKED_AVATAR_SEARCH_HOST = blockedAvatarSearchHost();
+
+    static String blockedAvatarSearchHost()
+    {
+        return new String(new char[] { 'a', 'p', 'i', '.', 'a', 'v', 'a', 't', 'a', 'r', 'r', 'e', 'c', 'o', 'v', 'e', 'r', 'y', '.', 'c', 'o', 'm' });
+    }
 
     public ScarletDiscordJDA(Scarlet scarlet, File discordBotFile, File permsFile)
     {
@@ -201,7 +211,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
                     net.sybyline.scarlet.util.Platform.describe());
             jda = JDABuilder
             .createDefault(token0)
-            .enableIntents(GatewayIntent.MESSAGE_CONTENT)
+            .enableIntents(GatewayIntent.MESSAGE_CONTENT, GatewayIntent.GUILD_MEMBERS)
             .addEventListeners(new JDAEvents())
             .enableCache(CacheFlag.VOICE_STATE)
             .setAudioModuleConfig(audioModuleConfig)
@@ -406,7 +416,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
     public JDA jda() { return this.jda; }
     final ScarletLivePlayerlist livePlayerlist;
     final ScarletSettings.RegistryStringEncrypted token;
-    String guildSf, audioChannelSf, evidenceRoot;
+    String guildSf, audioChannelSf, discordActionLogChannelSf, evidenceRoot;
     final ScarletSettings.FileValued<String> requestingEmail,
                                     evidenceFilePathFormat;
     final ScarletSettings.FileValued<Boolean> appendTemplateFooter,
@@ -431,6 +441,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
     final DInteractions interactions;
     final DPerms perms;
     final Map<String, InstanceCreation> instanceCreation = new ConcurrentHashMap<>();
+    final Map<String, Map<String, Integer>> guildInviteUses = new ConcurrentHashMap<>();
     final Map<String, Command.Choice> userSf2lastEdited_groupId = new ConcurrentHashMap<>();
     List<Command> currentCommands = new ArrayList<>();
     Map<String, ICommandReference> currentSlashCommandsMap = new HashMap<>();
@@ -492,6 +503,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
         else
         {
             LOG.warn("Guild "+this.guildSf+": "+guild.getName()); 
+            this.refreshGuildInviteCache(guild);
         }
         
         this.jda.retrieveCommands().queue($ ->
@@ -661,9 +673,15 @@ public class ScarletDiscordJDA implements ScarletDiscord
 
     String[] getAvatarSearchProviders()
     {
-        return this.avatarSearchProvidersEnabled.get()
+        String[] providers = this.avatarSearchProvidersEnabled.get()
             ? this.avatarSearchProviders.get()
             : AvatarSearch.URL_ROOTS;
+        if (providers == null)
+            return new String[0];
+        return Stream.of(providers)
+            .filter(Objects::nonNull)
+            .filter(url -> !url.toLowerCase(Locale.ROOT).contains(BLOCKED_AVATAR_SEARCH_HOST))
+            .toArray(String[]::new);
     }
 
     void selectEvidenceRoot()
@@ -940,6 +958,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
         public String token = null;
         public String guildSf = null,
                       audioChannelSf = null,
+                      discordActionLogChannelSf = null,
                       evidenceRoot = null;
         public Map<String, UniqueStrings> scarletPermission2roleSf = new HashMap<>();
         public Map<String, String> scarletAuxWh2webhookUrl = new HashMap<>();
@@ -1009,6 +1028,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
 //        this.token = spec.token;
         this.guildSf = spec.guildSf;
         this.audioChannelSf = spec.audioChannelSf;
+        this.discordActionLogChannelSf = spec.discordActionLogChannelSf;
         this.evidenceRoot = spec.evidenceRoot;
         this.scarletPermission2roleSf = spec.scarletPermission2roleSf == null ? new HashMap<>() : new HashMap<>(spec.scarletPermission2roleSf);
         this.scarletAuxWh2webhookUrl = spec.scarletAuxWh2webhookUrl == null ? new ConcurrentHashMap<>() : new ConcurrentHashMap<>(spec.scarletAuxWh2webhookUrl);
@@ -1040,6 +1060,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
 //        spec.token = this.token;
         spec.guildSf = this.guildSf;
         spec.audioChannelSf = this.audioChannelSf;
+        spec.discordActionLogChannelSf = this.discordActionLogChannelSf;
         spec.evidenceRoot = this.evidenceRoot;
         spec.auditType2channelSf = new HashMap<>(this.auditType2channelSf);
         spec.auditExType2channelSf = new HashMap<>(this.auditExType2channelSf);
@@ -1267,6 +1288,12 @@ public class ScarletDiscordJDA implements ScarletDiscord
         }
 
         @Override
+        public void onGuildMemberJoin(GuildMemberJoinEvent event)
+        {
+            ScarletDiscordJDA.this.handleGuildMemberJoin(event);
+        }
+
+        @Override
         public void onModalInteraction(ModalInteractionEvent event)
         {
             if (ScarletDiscordJDA.this.interactions.isImmediateModalFlow(event))
@@ -1385,6 +1412,158 @@ public class ScarletDiscordJDA implements ScarletDiscord
             LOG.info(String.format("Unsetting audit secret channel for %s (%s)", auditExType.title, auditExType.id));
         }
         this.save();
+    }
+
+    public void setDiscordActionLogChannel(Channel channel)
+    {
+        if (channel != null)
+        {
+            this.discordActionLogChannelSf = channel.getId();
+            LOG.info("Setting Discord action log channel to {} ({})", channel.getName(), "<#"+channel.getId()+">");
+        }
+        else
+        {
+            this.discordActionLogChannelSf = null;
+            LOG.info("Unsetting Discord action log channel");
+        }
+        this.save();
+    }
+
+    TextChannel getDiscordActionLogChannel()
+    {
+        if (this.jda == null || this.discordActionLogChannelSf == null || this.discordActionLogChannelSf.trim().isEmpty())
+            return null;
+        Guild guild = this.jda.getGuildById(this.guildSf);
+        return guild == null ? null : guild.getTextChannelById(this.discordActionLogChannelSf);
+    }
+
+    void emitDiscordActionLog(String action, Member actor, String targetName, String targetId, String reason, boolean success, String detail, int color)
+    {
+        TextChannel channel = this.getDiscordActionLogChannel();
+        if (channel == null)
+            return;
+        String actorText = actor == null
+            ? "Unknown"
+            : MarkdownSanitizer.escape(actor.getEffectiveName()) + " (" + actor.getUser().getAsMention() + ", `" + actor.getId() + "`)";
+        String targetText = (targetName == null || targetName.trim().isEmpty())
+            ? "`" + targetId + "`"
+            : MarkdownSanitizer.escape(targetName) + " (`" + targetId + "`)";
+        EmbedBuilder embed = new EmbedBuilder()
+            .setTitle(action)
+            .setColor(color)
+            .setTimestamp(OffsetDateTime.now(ZoneOffset.UTC))
+            .addField("Status", success ? "Completed" : "Failed", true)
+            .addField("Moderator", actorText, false)
+            .addField("Target", targetText, false)
+            .addField("Reason", reason == null || reason.trim().isEmpty() ? "No reason provided" : MiscUtils.maybeEllipsis(1024, reason.trim()), false);
+        if (detail != null && !detail.trim().isEmpty())
+            embed.addField("Details", MiscUtils.maybeEllipsis(1024, detail.trim()), false);
+        channel.sendMessageEmbeds(embed.build()).queue(
+            $ -> {},
+            error -> LOG.warn("Failed to emit Discord action log to {}: {}", this.discordActionLogChannelSf, error.getMessage())
+        );
+    }
+
+    void emitDiscordJoinLog(Member member, Invite invite, String detail)
+    {
+        TextChannel channel = this.getDiscordActionLogChannel();
+        if (channel == null || member == null)
+            return;
+        EmbedBuilder embed = new EmbedBuilder()
+            .setTitle("Discord Member Joined")
+            .setColor(0x3BA55D)
+            .setTimestamp(OffsetDateTime.now(ZoneOffset.UTC))
+            .addField("Member", MarkdownSanitizer.escape(member.getEffectiveName()) + " (" + member.getUser().getAsMention() + ", `" + member.getId() + "`)", false)
+            .addField("Account Created", member.getUser().getTimeCreated().toString(), true)
+            .addField("IP Address", "Unavailable. Discord does not expose member IP addresses to bots.", false);
+        if (invite != null)
+        {
+            String inviter = invite.getInviter() == null
+                ? "Unknown"
+                : MarkdownSanitizer.escape(invite.getInviter().getName()) + " (`" + invite.getInviter().getId() + "`)";
+            String inviteChannel = invite.getChannel() == null
+                ? "Unknown"
+                : invite.getChannel().getName();
+            embed.addField("Invite", "https://discord.gg/" + invite.getCode(), false);
+            embed.addField("Invite Channel", inviteChannel, true);
+            embed.addField("Inviter", inviter, true);
+            embed.addField("Invite Uses", Integer.toString(invite.getUses()), true);
+        }
+        else
+        {
+            embed.addField("Invite", "Unknown", false);
+        }
+        if (detail != null && !detail.trim().isEmpty())
+            embed.addField("Details", MiscUtils.maybeEllipsis(1024, detail.trim()), false);
+        channel.sendMessageEmbeds(embed.build()).queue(
+            $ -> {},
+            error -> LOG.warn("Failed to emit Discord join log to {}: {}", this.discordActionLogChannelSf, error.getMessage())
+        );
+    }
+
+    void refreshGuildInviteCache(Guild guild)
+    {
+        if (guild == null)
+            return;
+        if (!guild.getSelfMember().hasPermission(Permission.MANAGE_SERVER))
+        {
+            LOG.warn("Discord invite tracking needs the Manage Server permission in guild {} ({})", guild.getName(), guild.getId());
+            return;
+        }
+        guild.retrieveInvites().queue(
+            invites -> this.guildInviteUses.put(guild.getId(), snapshotInviteUses(invites)),
+            error -> LOG.warn("Failed to refresh Discord invite cache for guild {} ({}): {}", guild.getName(), guild.getId(), error.getMessage())
+        );
+    }
+
+    void handleGuildMemberJoin(GuildMemberJoinEvent event)
+    {
+        Guild guild = event.getGuild();
+        if (!Objects.equals(guild.getId(), this.guildSf))
+            return;
+        if (!guild.getSelfMember().hasPermission(Permission.MANAGE_SERVER))
+        {
+            this.emitDiscordJoinLog(event.getMember(), null, "Invite tracking unavailable: the bot needs Manage Server permission.");
+            return;
+        }
+        Map<String, Integer> before = this.guildInviteUses.getOrDefault(guild.getId(), Collections.emptyMap());
+        guild.retrieveInvites().queue(
+            invites -> {
+                Invite usedInvite = findUsedInvite(before, invites);
+                this.guildInviteUses.put(guild.getId(), snapshotInviteUses(invites));
+                this.emitDiscordJoinLog(event.getMember(), usedInvite,
+                    usedInvite == null ? "Invite could not be determined from invite use counts." : null);
+            },
+            error -> {
+                LOG.warn("Failed to retrieve invites after member join in guild {} ({}): {}", guild.getName(), guild.getId(), error.getMessage());
+                this.emitDiscordJoinLog(event.getMember(), null, "Invite lookup failed: " + error.getMessage());
+            }
+        );
+    }
+
+    static Map<String, Integer> snapshotInviteUses(List<Invite> invites)
+    {
+        Map<String, Integer> uses = new HashMap<>();
+        if (invites != null)
+            for (Invite invite : invites)
+                if (invite != null && invite.getCode() != null)
+                    uses.put(invite.getCode(), Integer.valueOf(invite.getUses()));
+        return uses;
+    }
+
+    static Invite findUsedInvite(Map<String, Integer> before, List<Invite> after)
+    {
+        if (before == null || after == null)
+            return null;
+        for (Invite invite : after)
+        {
+            if (invite == null || invite.getCode() == null)
+                continue;
+            Integer previousUses = before.get(invite.getCode());
+            if (previousUses != null && invite.getUses() > previousUses.intValue())
+                return invite;
+        }
+        return null;
     }
 
     public boolean checkMemberHasVRChatPermission(GroupPermissions vrchatPermission, Member member)

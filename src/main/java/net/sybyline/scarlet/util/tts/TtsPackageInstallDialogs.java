@@ -38,7 +38,7 @@ public class TtsPackageInstallDialogs
     public static final String LINUX_PACKAGE_DISPLAY_NAME = "eSpeak TTS";
     public static final String LINUX_PACKAGE_DESCRIPTION  =
         "eSpeak is a compact open source software speech synthesizer for English and other languages.\n\n" +
-        "This package is required for Scarlet's text-to-speech functionality on Linux.";
+        "This package is required for KozyBlake/Scarlet's text-to-speech functionality on Linux.";
 
     private final Platform  platform;
     private final Component parentComponent;
@@ -81,7 +81,7 @@ public class TtsPackageInstallDialogs
             showInfo("TTS Package Status",
                 "<h2 style='color:#4CAF50;'>&#10003; Package Already Installed</h2>" +
                 "<p style='margin-top:10px;'>" + getPackageDisplayName() + " is already installed.</p>" +
-                "<p style='margin-top:10px;color:#888;'>Scarlet's text-to-speech functionality is ready to use.</p>");
+                "<p style='margin-top:10px;color:#888;'>KozyBlake/Scarlet's text-to-speech functionality is ready to use.</p>");
             return InstallDialogResult.ALREADY_INSTALLED;
         }
 
@@ -105,7 +105,7 @@ public class TtsPackageInstallDialogs
         showInfo("TTS Package Status",
             "<h2 style='color:#4CAF50;'>&#10003; Package Already Installed</h2>" +
             "<p style='margin-top:10px;'>" + getPackageDisplayName() + " is already installed.</p>" +
-            "<p style='margin-top:10px;color:#888;'>Scarlet's text-to-speech functionality is ready to use.</p>");
+            "<p style='margin-top:10px;color:#888;'>KozyBlake/Scarlet's text-to-speech functionality is ready to use.</p>");
     }
 
     public boolean showDownloadConsentDialog()
@@ -142,7 +142,7 @@ public class TtsPackageInstallDialogs
         panel.add(header, BorderLayout.NORTH);
         panel.add(new JLabel(String.format(
             "<html><div style='width:450px;padding:5px;'>" +
-            "<p style='margin-bottom:10px;'>Scarlet requires <b>%s</b> for text-to-speech functionality.</p>" +
+            "<p style='margin-bottom:10px;'>KozyBlake/Scarlet requires <b>%s</b> for text-to-speech functionality.</p>" +
             "<p style='margin-bottom:10px;'>%s</p>" +
             "<p style='margin-bottom:10px;'><b>The following command will be executed:</b></p>" +
             "<pre style='background-color:#2d2d2d;padding:10px;border-radius:5px;font-family:monospace;'>%s</pre>" +
@@ -169,8 +169,8 @@ public class TtsPackageInstallDialogs
     {
         if (GraphicsEnvironment.isHeadless())
         {
-            System.out.println("[Scarlet TTS] TTS package installation declined. TTS features will be disabled.");
-            System.out.println("[Scarlet TTS] You can manually install " + getPackageDisplayName() + " later to enable TTS functionality.");
+            System.out.println("[KozyBlake/Scarlet/TTS] TTS package installation declined. TTS features will be disabled.");
+            System.out.println("[KozyBlake/Scarlet/TTS] You can manually install " + getPackageDisplayName() + " later to enable TTS functionality.");
             return;
         }
 
@@ -194,7 +194,7 @@ public class TtsPackageInstallDialogs
                 "<ul style='margin-top:5px;'>" +
                 "<li>Text-to-speech notifications will not be available</li>" +
                 "<li>Audio announcements in Discord will be disabled</li>" +
-                "<li>Other Scarlet features will continue to work normally</li>" +
+                "<li>Other KozyBlake/Scarlet features will continue to work normally</li>" +
                 "</ul>%s</div></html>",
                 getPackageDisplayName(), cmdsHtml
             ));
@@ -363,7 +363,7 @@ public class TtsPackageInstallDialogs
                 showInfo("Installation Complete",
                     "<h2 style='color:#4CAF50;'>&#10003; Installation Successful</h2>" +
                     "<p style='margin-top:10px;'>" + getPackageDisplayName() + " has been installed successfully!</p>" +
-                    "<p style='margin-top:10px;'>Scarlet's text-to-speech functionality is now ready to use.</p>");
+                    "<p style='margin-top:10px;'>KozyBlake/Scarlet's text-to-speech functionality is now ready to use.</p>");
                 return true;
             }
             showInstallationFailedDialog();
@@ -396,7 +396,7 @@ public class TtsPackageInstallDialogs
                 showInfo("Installation Complete",
                     "<h2 style='color:#4CAF50;'>&#10003; Installation Successful</h2>" +
                     "<p style='margin-top:10px;'>" + getPackageDisplayName() + " has been installed successfully!</p>" +
-                    "<p style='margin-top:10px;'>Scarlet's text-to-speech functionality is now ready to use.</p>");
+                    "<p style='margin-top:10px;'>KozyBlake/Scarlet's text-to-speech functionality is now ready to use.</p>");
                 return true;
             }
             showInstallationFailedDialog();
@@ -490,9 +490,9 @@ public class TtsPackageInstallDialogs
     {
         List<LinuxPackageManagerDetector.PackageManager> managers = LinuxPackageManagerDetector.detectAllPackageManagers();
         System.out.println("\n========================================");
-        System.out.println("[Scarlet TTS] TTS Package Required");
+        System.out.println("[KozyBlake/Scarlet/TTS] TTS Package Required");
         System.out.println("========================================");
-        System.out.println("Scarlet requires " + getPackageDisplayName() + " for text-to-speech functionality.");
+        System.out.println("KozyBlake/Scarlet requires " + getPackageDisplayName() + " for text-to-speech functionality.");
         System.out.println("\nDetected package managers:");
         for (LinuxPackageManagerDetector.PackageManager pm : managers)
             System.out.println("  \u2022 " + pm.displayName + ": " + pm.getFullInstallCommand().replace("{pkg}", pm.packageName));
@@ -504,11 +504,11 @@ public class TtsPackageInstallDialogs
     private boolean handleHeadlessConsent()
     {
         List<LinuxPackageManagerDetector.PackageManager> managers = LinuxPackageManagerDetector.detectAllPackageManagers();
-        System.out.println("\n[Scarlet TTS] " + getPackageDisplayName() + " is not installed.");
-        System.out.println("[Scarlet TTS] Detected package managers:");
+        System.out.println("\n[KozyBlake/Scarlet/TTS] " + getPackageDisplayName() + " is not installed.");
+        System.out.println("[KozyBlake/Scarlet/TTS] Detected package managers:");
         for (LinuxPackageManagerDetector.PackageManager pm : managers)
             System.out.println("  " + pm.displayName + ": " + pm.getFullInstallCommand().replace("{pkg}", pm.packageName));
-        System.out.println("[Scarlet TTS] TTS features will be disabled until the package is installed.\n");
+        System.out.println("[KozyBlake/Scarlet/TTS] TTS features will be disabled until the package is installed.\n");
         return false;
     }
 
@@ -521,7 +521,7 @@ public class TtsPackageInstallDialogs
     {
         if (GraphicsEnvironment.isHeadless())
         {
-            System.out.println("[Scarlet TTS] " + title);
+            System.out.println("[KozyBlake/Scarlet/TTS] " + title);
             return;
         }
         Swing.invokeWait(() -> JOptionPane.showMessageDialog(
@@ -537,7 +537,7 @@ public class TtsPackageInstallDialogs
     {
         if (GraphicsEnvironment.isHeadless())
         {
-            System.err.println("[Scarlet TTS] " + title);
+            System.err.println("[KozyBlake/Scarlet/TTS] " + title);
             return;
         }
         Swing.invokeWait(() -> JOptionPane.showMessageDialog(

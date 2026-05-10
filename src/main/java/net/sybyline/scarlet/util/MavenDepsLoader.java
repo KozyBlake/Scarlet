@@ -83,7 +83,7 @@ public class MavenDepsLoader
         }
         catch (Exception ex)
         {
-            System.err.println(String.format("net.sybyline.scarlet.util.MavenDepsLoader: Exception creating dependencies directory '%s'", depsDir));
+            System.err.println(String.format("KozyBlake/Scarlet/MavenDepsLoader: Exception creating dependencies directory '%s'", depsDir));
             ex.printStackTrace(System.err);
             return;
         }
@@ -95,13 +95,13 @@ public class MavenDepsLoader
         }
         catch (Exception ex)
         {
-            System.err.println(String.format("net.sybyline.scarlet.util.MavenDepsLoader: Exception reading manifest from '%s'", url));
+            System.err.println(String.format("KozyBlake/Scarlet/MavenDepsLoader: Exception reading manifest from '%s'", url));
             ex.printStackTrace(System.err);
             return;
         }
         
         String cpEntriesString = mf.getMainAttributes().getValue("Class-Path");
-//        System.out.println(String.format("net.sybyline.scarlet.util.MavenDepsLoader: Class-Path: %s", cpEntriesString));
+//        System.out.println(String.format("KozyBlake/Scarlet/MavenDepsLoader: Class-Path: %s", cpEntriesString));
         if (cpEntriesString == null || cpEntriesString.trim().isEmpty())
             return;
         
@@ -113,7 +113,7 @@ public class MavenDepsLoader
         {
             if (cpEntry.startsWith(libPrefix))
             {
-//                System.out.println(String.format("net.sybyline.scarlet.util.MavenDepsLoader: Checking dependency '%s'", cpEntry));
+//                System.out.println(String.format("KozyBlake/Scarlet/MavenDepsLoader: Checking dependency '%s'", cpEntry));
                 dlDep(depsDir, cpEntry.substring(libPrefix.length()));
             }
         }
@@ -136,7 +136,7 @@ public class MavenDepsLoader
             return;
         if (!ALLOW_RUNTIME_DOWNLOADS)
         {
-            System.err.println(String.format("net.sybyline.scarlet.util.MavenDepsLoader: Refusing to download missing dependency '%s' because runtime downloads are disabled. Start with -Dscarlet.allowRuntimeDependencyDownloads=true to allow this.", depName));
+            System.err.println(String.format("KozyBlake/Scarlet/MavenDepsLoader: Refusing to download missing dependency '%s' because runtime downloads are disabled. Start with -Dscarlet.allowRuntimeDependencyDownloads=true to allow this.", depName));
             return;
         }
         
@@ -144,7 +144,7 @@ public class MavenDepsLoader
         
         if (depUrl == null)
         {
-            System.err.println(String.format("net.sybyline.scarlet.util.MavenDepsLoader: Failed to locate dependency '%s' from '%s' to '%s'", depName, depUrl, depPath));
+            System.err.println(String.format("KozyBlake/Scarlet/MavenDepsLoader: Failed to locate dependency '%s' from '%s' to '%s'", depName, depUrl, depPath));
             return;
         }
         
@@ -156,7 +156,7 @@ public class MavenDepsLoader
         }
         catch (Exception ex)
         {
-            System.err.println(String.format("net.sybyline.scarlet.util.MavenDepsLoader: Exception creating directories '%s'", depPath.getParent()));
+            System.err.println(String.format("KozyBlake/Scarlet/MavenDepsLoader: Exception creating directories '%s'", depPath.getParent()));
             ex.printStackTrace(System.err);
             return;
         }
@@ -166,7 +166,7 @@ public class MavenDepsLoader
             String expectedSha256 = fetchRemoteChecksum(depUrl, ".sha256");
             if (expectedSha256 == null)
             {
-                System.err.println(String.format("net.sybyline.scarlet.util.MavenDepsLoader: Refusing to download dependency '%s' because no remote SHA-256 checksum was available at '%s.sha256'", depName, depUrl));
+                System.err.println(String.format("KozyBlake/Scarlet/MavenDepsLoader: Refusing to download dependency '%s' because no remote SHA-256 checksum was available at '%s.sha256'", depName, depUrl));
                 return;
             }
             try (HttpURLInputStream depIn = HttpURLInputStream.get(depUrl, HttpURLInputStream.PUBLIC_ONLY))
@@ -185,12 +185,12 @@ public class MavenDepsLoader
             {
                 Files.deleteIfExists(tmp);
             }
-            System.out.println(String.format("net.sybyline.scarlet.util.MavenDepsLoader: Located and copied dependency '%s' from '%s' to '%s'", depName, depUrl, depPath));
+            System.out.println(String.format("KozyBlake/Scarlet/MavenDepsLoader: Located and copied dependency '%s' from '%s' to '%s'", depName, depUrl, depPath));
             }
         }
         catch (Exception ex)
         {
-            System.err.println(String.format("net.sybyline.scarlet.util.MavenDepsLoader: Exception copying dependency '%s' from '%s' to '%s'", depName, depUrl, depPath));
+            System.err.println(String.format("KozyBlake/Scarlet/MavenDepsLoader: Exception copying dependency '%s' from '%s' to '%s'", depName, depUrl, depPath));
             ex.printStackTrace(System.err);
         }
     }

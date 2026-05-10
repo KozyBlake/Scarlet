@@ -51,7 +51,7 @@ public final class AndroidDaveJvmLibraryLoader {
         }
 
         LOG.info("No bundled Android libdave-jvm native found; falling back to System.loadLibrary(dave-jvm)");
-        System.err.println("[Scarlet/DAVE] No bundled Android libdave-jvm native found; falling back to System.loadLibrary(dave-jvm)"
+        System.err.println("[KozyBlake/Scarlet/DAVE] No bundled Android libdave-jvm native found; falling back to System.loadLibrary(dave-jvm)"
             + " (os.arch=" + System.getProperty("os.arch", "") + ")");
         System.loadLibrary("dave-jvm");
         loaded = true;
@@ -59,7 +59,7 @@ public final class AndroidDaveJvmLibraryLoader {
 
     private static void load(Path library) {
         Path normalized = library.toAbsolutePath().normalize();
-        System.err.println("[Scarlet/DAVE] Loading Android libdave-jvm native from " + normalized
+        System.err.println("[KozyBlake/Scarlet/DAVE] Loading Android libdave-jvm native from " + normalized
             + " (os.arch=" + System.getProperty("os.arch", "") + ")");
         LOG.info("Loading Android libdave-jvm native from {}", normalized);
         System.load(normalized.toString());

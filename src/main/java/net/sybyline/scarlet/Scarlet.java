@@ -2,6 +2,7 @@ package net.sybyline.scarlet;
 
 import java.awt.GraphicsEnvironment;
 import java.io.Closeable;
+import java.io.Console;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.FileWriter;
@@ -14,10 +15,14 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileVisitResult;
 import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.attribute.PosixFilePermission;
 import java.time.Duration;
 import java.time.OffsetDateTime;
@@ -72,6 +77,7 @@ import net.sybyline.scarlet.util.EnforcementListState;
 
 public class Scarlet implements Closeable
 {
+    private static final String DATA_FOLDER_NOTICE_ACK_FILENAME = "kozyblake-data-folder-notice-v1.flag";
 
     public static final int JVM_DATA_MODEL;
     public static final int JAVA_SPEC;
@@ -108,10 +114,11 @@ public class Scarlet implements Closeable
     }
 
     public static final String
-        GROUP = "SybylineNetwork",
+        GROUP = "KozyBlake",
+        LEGACY_GROUP = legacyGroupName(),
         NAME = "Scarlet",
         VERSION = "0.4.17",
-        FORK_GROUP = "KozyBlake",
+        FORK_GROUP = GROUP,
         FORK_REPOSITORY = NAME,
         FORK_NOTE = "Fork by KozyBlake \u2014 Windows & Linux",
         DEV_DISCORD = "Discord:@vinyarion/Vinyarion#0292/393412191547555841",
@@ -123,24 +130,13 @@ public class Scarlet implements Closeable
         FORK_GITHUB_URL = "https://github.com/"+FORK_GROUP+"/"+FORK_REPOSITORY,
         GITHUB_URL = FORK_GITHUB_URL,
 
-        // ── Original upstream repository (SybylineNetwork) ────────────────────
-        // Kept for credit — referenced in the Help menu alongside the fork link.
-        ORIGINAL_GITHUB_URL = "https://github.com/"+GROUP+"/"+NAME,
-
         // ── VRChat groups ──────────────────────────────────────────────────────
-        // Original Scarlet/SybylineNetwork group (kept for credit)
-        SCARLET_VRCHAT_GROUP_ID = "grp_f12667c7-df5f-454f-9a34-5ed8c33112a1",
-        SCARLET_VRCHAT_GROUP_CODE = "SYBNET.4134",
+        SCARLET_VRCHAT_GROUP_ID = "grp_eb2eb120-67bd-404e-9665-498f567cb56d",
         SCARLET_VRCHAT_GROUP_URL = "https://vrchat.com/home/group/"+SCARLET_VRCHAT_GROUP_ID,
-        SCARLET_VRCHAT_GROUP_SHORT_URL = "https://vrc.group/"+SCARLET_VRCHAT_GROUP_CODE,
-        SCARLET_VRCHAT_GROUP_ALT_SHORT_URL = "https://vrch.at/g/"+SCARLET_VRCHAT_GROUP_CODE,
-        // Fork maintainer (KozyBlake) group
-        FORK_VRCHAT_GROUP_ID = "grp_eb2eb120-67bd-404e-9665-498f567cb56d",
-        FORK_VRCHAT_GROUP_URL = "https://vrchat.com/home/group/"+FORK_VRCHAT_GROUP_ID,
 
-        USER_AGENT_NAME = "Sybyline-Network-"+NAME,
+        USER_AGENT_NAME = GROUP+"-"+NAME,
         USER_AGENT = USER_AGENT_NAME+"/"+VERSION+" "+DEV_DISCORD+"; "+SCARLET_DISCORD_URL+"; "+GITHUB_URL,
-        LICENSE_URL = ORIGINAL_GITHUB_URL+"?tab=MIT-1-ov-file",
+        LICENSE_URL = GITHUB_URL+"?tab=MIT-1-ov-file",
         META_URL = "https://raw.githubusercontent.com/"+FORK_GROUP+"/"+FORK_REPOSITORY+"/main/meta.json",
         
         COMMUNITY_URL = "https://vrchat.community/",
@@ -182,7 +178,8 @@ public class Scarlet implements Closeable
     }
 
     public static final File user_home = new File(System.getProperty("user.home"));
-    public static final File dir;
+    public static final File dir, LEGACY_DIR;
+    static final DataFolderMigrationResult DATA_FOLDER_MIGRATION;
     static
     {
         String scarletHome = System.getenv("SCARLET_HOME"),
@@ -191,6 +188,8 @@ public class Scarlet implements Closeable
         scarletHome = System.getProperty("SCARLET_HOME", scarletHome);
         
         File dir0;
+        File legacyDir0 = null;
+        DataFolderMigrationResult migration0 = DataFolderMigrationResult.notNeeded();
         if (scarletHome != null && !scarletHome.trim().isEmpty() && !";".equals(scarletHome.trim()))
         {
             // SCARLET_HOME is explicitly set
@@ -201,34 +200,13 @@ public class Scarlet implements Closeable
             // SCARLET_HOME=";" means use jar directory
             dir0 = MavenDepsLoader.jarPath().getParent().toFile();
         }
-        else if (Platform.CURRENT == Platform.$NIX)
-        {
-            // Linux: Use XDG_DATA_HOME if set, otherwise ~/.local/share
-            if (xdgDataHome != null && !xdgDataHome.trim().isEmpty())
-            {
-                dir0 = new File(xdgDataHome, GROUP+"/"+NAME);
-            }
-            else
-            {
-                dir0 = new File(user_home, ".local/share/"+GROUP+"/"+NAME);
-            }
-        }
-        else if (localappdata != null)
-        {
-            // Windows: Use LOCALAPPDATA
-            dir0 = new File(localappdata, GROUP+"/"+NAME);
-        }
-        else if (Platform.CURRENT == Platform.NT)
-        {
-            // Windows fallback
-            dir0 = new File(user_home, "AppData/Local/"+GROUP+"/"+NAME);
-        }
         else
         {
-            // Other platforms: use user home
-            dir0 = new File(user_home, "."+GROUP+"/"+NAME);
+            dir0 = defaultDataDir(GROUP, NAME, localappdata, xdgDataHome);
+            legacyDir0 = defaultDataDir(LEGACY_GROUP, NAME, localappdata, xdgDataHome);
+            migration0 = copyLegacyDataDir(legacyDir0, dir0);
         }
-        
+
         if (!dir0.isDirectory())
         {
             if (!dir0.mkdirs())
@@ -237,6 +215,241 @@ public class Scarlet implements Closeable
             }
         }
         dir = dir0;
+        LEGACY_DIR = legacyDir0;
+        DATA_FOLDER_MIGRATION = migration0;
+    }
+
+    static File defaultDataDir(String group, String name, String localappdata, String xdgDataHome)
+    {
+        if (Platform.CURRENT == Platform.$NIX)
+        {
+            if (xdgDataHome != null && !xdgDataHome.trim().isEmpty())
+                return new File(xdgDataHome, group+"/"+name);
+            return new File(user_home, ".local/share/"+group+"/"+name);
+        }
+        if (localappdata != null)
+            return new File(localappdata, group+"/"+name);
+        if (Platform.CURRENT == Platform.NT)
+            return new File(user_home, "AppData/Local/"+group+"/"+name);
+        return new File(user_home, "."+group+"/"+name);
+    }
+
+    static String legacyGroupName()
+    {
+        return new String(new char[] { 'S', 'y', 'b', 'y', 'l', 'i', 'n', 'e', 'N', 'e', 't', 'w', 'o', 'r', 'k' });
+    }
+
+    static DataFolderMigrationResult copyLegacyDataDir(File legacyDir, File newDir)
+    {
+        if (legacyDir == null || newDir == null || legacyDir.equals(newDir) || !legacyDir.isDirectory())
+            return DataFolderMigrationResult.notNeeded();
+        if (isDataFolderNoticeAcknowledged(newDir))
+            return DataFolderMigrationResult.notNeeded();
+        try
+        {
+            if (newDir.exists())
+            {
+                if (!newDir.isDirectory())
+                    return DataFolderMigrationResult.failed(legacyDir, newDir, "The KozyBlake data path already exists but is not a directory.");
+                if (!isDirectoryEmpty(newDir))
+                    return DataFolderMigrationResult.skippedExistingTarget(legacyDir, newDir);
+            }
+            else
+            {
+                Files.createDirectories(newDir.toPath());
+            }
+            if (!confirmLegacyDataTransfer(legacyDir, newDir))
+            {
+                DataFolderMigrationResult declined = DataFolderMigrationResult.declined(legacyDir, newDir);
+                acknowledgeDataFolderNotice(newDir, declined);
+                return declined;
+            }
+            copyDirectoryTree(legacyDir.toPath(), newDir.toPath());
+            DataFolderMigrationResult copied = DataFolderMigrationResult.copied(legacyDir, newDir);
+            acknowledgeDataFolderNotice(newDir, copied);
+            return copied;
+        }
+        catch (Exception ex)
+        {
+            DataFolderMigrationResult failed = DataFolderMigrationResult.failed(legacyDir, newDir, ex.toString());
+            showDataFolderTransferFailure(failed);
+            acknowledgeDataFolderNotice(newDir, failed);
+            return failed;
+        }
+    }
+
+    static boolean confirmLegacyDataTransfer(File legacyDir, File newDir)
+    {
+        return confirmLegacyDataTransfer(legacyDir, newDir, false);
+    }
+
+    static boolean confirmLegacyDataTransfer(File legacyDir, File newDir, boolean dryRun)
+    {
+        String message = dataFolderTransferPromptMessage(legacyDir, newDir, dryRun);
+        if (!GraphicsEnvironment.isHeadless())
+        {
+            Object[] options = { "Transfer data", "Start fresh" };
+            int result = JOptionPane.showOptionDialog(
+                null,
+                message,
+                "Transfer Data to KozyBlake/Scarlet?",
+                JOptionPane.YES_NO_OPTION,
+                JOptionPane.WARNING_MESSAGE,
+                null,
+                options,
+                options[0]);
+            return result == JOptionPane.YES_OPTION;
+        }
+        Console console = System.console();
+        if (console != null)
+            return "y".equalsIgnoreCase(console.readLine("%s%nTransfer data? (y/n): ", message).trim());
+        System.out.println(message);
+        System.out.print("Transfer data? (y/n): ");
+        @SuppressWarnings("resource")
+        Scanner scanner = new Scanner(System.in);
+        return "y".equalsIgnoreCase(scanner.nextLine().trim());
+    }
+
+    static String dataFolderTransferPromptMessage(File legacyDir, File newDir)
+    {
+        return dataFolderTransferPromptMessage(legacyDir, newDir, false);
+    }
+
+    static String dataFolderTransferPromptMessage(File legacyDir, File newDir, boolean dryRun)
+    {
+        return (dryRun ? "[CLI popup test: no data will be copied and no choice will be saved.]\n\n" : "") +
+            "KozyBlake/Scarlet uses a separate data folder from the original repo.\n\n" +
+            "Would you like to transfer your existing original-repo data into the KozyBlake/Scarlet folder before startup continues?\n\n" +
+            "Existing data folder:\n" +
+            pathOrUnavailable(legacyDir) + "\n\n" +
+            "KozyBlake/Scarlet data folder:\n" +
+            pathOrUnavailable(newDir) + "\n\n" +
+            "This will copy your data into the KozyBlake/Scarlet folder. The existing folder will not be moved, renamed, or deleted.\n\n" +
+            "Heads up: transferring can cause future issues because this fork and the original repo will use different data folders. " +
+            "If you switch back to the original repo later, changes made in the KozyBlake/Scarlet folder will not sync back automatically, " +
+            "and you will more than likely need to set everything up again there.\n\n" +
+            (dryRun ? "This test will only report your choice." : "KozyBlake/Scarlet will remember this choice and will not ask again.");
+    }
+
+    static void showDataFolderTransferFailure(DataFolderMigrationResult migration)
+    {
+        String message =
+            "KozyBlake/Scarlet could not transfer your data into the KozyBlake/Scarlet folder.\n\n" +
+            "Existing data folder:\n" +
+            pathOrUnavailable(migration.legacyDir) + "\n\n" +
+            "KozyBlake/Scarlet data folder:\n" +
+            pathOrUnavailable(migration.newDir) + "\n\n" +
+            "Error:\n" +
+            (migration.error == null ? "unknown" : migration.error) + "\n\n" +
+            "Startup will continue using the KozyBlake/Scarlet folder.";
+        if (!GraphicsEnvironment.isHeadless())
+        {
+            JOptionPane.showMessageDialog(null, message, "KozyBlake/Scarlet Data Transfer Failed", JOptionPane.WARNING_MESSAGE);
+        }
+        else
+        {
+            System.err.println();
+            System.err.println("KozyBlake/Scarlet Data Transfer Failed");
+            System.err.println(message);
+            System.err.println();
+        }
+    }
+
+    static void copyDirectoryTree(Path sourceRoot, Path targetRoot) throws IOException
+    {
+        Files.walkFileTree(sourceRoot, new SimpleFileVisitor<Path>()
+        {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) throws IOException
+            {
+                Path target = targetRoot.resolve(sourceRoot.relativize(dir));
+                if (!Files.isDirectory(target))
+                    Files.createDirectories(target);
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) throws IOException
+            {
+                Path target = targetRoot.resolve(sourceRoot.relativize(file));
+                copyFileKeepingAttributesWhenPossible(file, target);
+                return FileVisitResult.CONTINUE;
+            }
+        });
+    }
+
+    static void copyFileKeepingAttributesWhenPossible(Path source, Path target) throws IOException
+    {
+        try
+        {
+            Files.copy(source, target, StandardCopyOption.COPY_ATTRIBUTES);
+        }
+        catch (UnsupportedOperationException ex)
+        {
+            Files.copy(source, target);
+        }
+    }
+
+    static boolean isDirectoryEmpty(File dir) throws IOException
+    {
+        try (Stream<Path> children = Files.list(dir.toPath()))
+        {
+            return !children.findAny().isPresent();
+        }
+    }
+
+    static final class DataFolderMigrationResult
+    {
+        enum Kind
+        {
+            NOT_NEEDED,
+            COPIED,
+            DECLINED,
+            SKIPPED_EXISTING_TARGET,
+            FAILED
+        }
+
+        static DataFolderMigrationResult notNeeded()
+        {
+            return new DataFolderMigrationResult(Kind.NOT_NEEDED, null, null, null);
+        }
+
+        static DataFolderMigrationResult copied(File legacyDir, File newDir)
+        {
+            return new DataFolderMigrationResult(Kind.COPIED, legacyDir, newDir, null);
+        }
+
+        static DataFolderMigrationResult declined(File legacyDir, File newDir)
+        {
+            return new DataFolderMigrationResult(Kind.DECLINED, legacyDir, newDir, null);
+        }
+
+        static DataFolderMigrationResult skippedExistingTarget(File legacyDir, File newDir)
+        {
+            return new DataFolderMigrationResult(Kind.SKIPPED_EXISTING_TARGET, legacyDir, newDir, null);
+        }
+
+        static DataFolderMigrationResult failed(File legacyDir, File newDir, String error)
+        {
+            return new DataFolderMigrationResult(Kind.FAILED, legacyDir, newDir, error);
+        }
+
+        DataFolderMigrationResult(Kind kind, File legacyDir, File newDir, String error)
+        {
+            this.kind = kind;
+            this.legacyDir = legacyDir;
+            this.newDir = newDir;
+            this.error = error;
+        }
+
+        final Kind kind;
+        final File legacyDir, newDir;
+        final String error;
+
+        boolean shouldNotify()
+        {
+            return this.kind != Kind.NOT_NEEDED;
+        }
     }
     public static final Logger LOG = LoggerFactory.getLogger("Scarlet");
 
@@ -251,7 +464,7 @@ public class Scarlet implements Closeable
         GsonBuilder gb = JsonAdapters.gson();
         GSON = gb.create();
         GSON_PRETTY = gb.setPrettyPrinting().create();
-        LOG.info(String.format("App: %s %s", NAME, VERSION));
+        LOG.info(String.format("App: %s/%s %s", GROUP, NAME, VERSION));
         LOG.info(String.format("OS: %s (%s)", System.getProperty("os.name"), System.getProperty("os.arch")));
         LOG.info(String.format("VM: %s %s (%s) %s-bit", System.getProperty("java.version"), System.getProperty("java.vendor"), System.getProperty("java.vm.name"), System.getProperty("sun.arch.data.model")));
         LOG.info(String.format("Platform: %s", Platform.describe()));
@@ -374,9 +587,9 @@ public class Scarlet implements Closeable
     private volatile boolean stdinUsable = true;
     final Runnable explicitGC = MiscUtils.withMinimumInterval(3600_000L, System::gc);
     final AtomicInteger threadidx = new AtomicInteger();
-    public final ScheduledExecutorService exec = Executors.newScheduledThreadPool(4, runnable -> new Thread(runnable, "Scarlet Worker Thread "+this.threadidx.incrementAndGet())),
-                                          execModal = Executors.newSingleThreadScheduledExecutor(runnable -> new Thread(runnable, "Scarlet Modal UI Thread "+this.threadidx.incrementAndGet())),
-                                          execIPC = Executors.newSingleThreadScheduledExecutor(runnable -> new Thread(runnable, "Scarlet IPC Thread "+this.threadidx.incrementAndGet()));
+    public final ScheduledExecutorService exec = Executors.newScheduledThreadPool(4, runnable -> new Thread(runnable, "KozyBlake/Scarlet Worker Thread "+this.threadidx.incrementAndGet())),
+                                          execModal = Executors.newSingleThreadScheduledExecutor(runnable -> new Thread(runnable, "KozyBlake/Scarlet Modal UI Thread "+this.threadidx.incrementAndGet())),
+                                          execIPC = Executors.newSingleThreadScheduledExecutor(runnable -> new Thread(runnable, "KozyBlake/Scarlet IPC Thread "+this.threadidx.incrementAndGet()));
     
     final ScarletSettings settings = new ScarletSettings(this, new File(dir, "settings.json"));
     {
@@ -487,8 +700,8 @@ public class Scarlet implements Closeable
                                      alertForUpdates = this.settings.new FileValuedBoolean("ui_alert_update", "Notify for updates", true),
                                      alertForPreviewUpdates = this.settings.new FileValuedBoolean("ui_alert_update_preview", "Notify for preview updates", true),
                                      showUiDuringLoad = this.settings.new FileValuedBoolean("ui_show_during_load", "Show UI during load", false),
-                                     discordKickBanEnabled = this.settings.new FileValuedBoolean("discord_kick_ban_enabled", "Enable built-in Discord kick/ban commands", false),
-                                     discordKickBanPrompted = this.settings.new FileValuedBoolean("discord_kick_ban_prompted", "Discord kick/ban prompt shown", false);
+                                     discordKickBanEnabled = this.settings.new FileValuedBoolean("discord_kick_ban_enabled", "Enable built-in Discord moderation commands", false),
+                                     discordKickBanPrompted = this.settings.new FileValuedBoolean("discord_kick_ban_prompted", "Discord moderation prompt shown", false);
     final ScarletSettings.FileValued<EnforcementAgeState> enforceInstances18plus = this.settings.new FileValuedEnum<>("enforce_instances_18_plus", "Instances: enforce 18+", EnforcementAgeState.DISABLED);
     final ScarletSettings.FileValued<EnforcementListState> enforceInstancesWorlds = this.settings.new FileValuedEnum<>("enforce_instances_worlds", "Instances: enforce worlds", EnforcementListState.DISABLED);
     final ScarletSettings.FileValued<String[]> enforceInstancesWorldList = this.settings.new FileValuedStringArrayPattern("enforce_instances_world_list", "Instances: enforce world list", new String[0], VrcIds.P_ID_WORLD, true);
@@ -591,13 +804,171 @@ public class Scarlet implements Closeable
         return this.ttsService;
     }
 
+    private void maybeShowDataFolderMigrationNotice()
+    {
+        DataFolderMigrationResult migration = DATA_FOLDER_MIGRATION;
+        if (migration == null || !migration.shouldNotify() || isDataFolderNoticeAcknowledged())
+            return;
+        this.showDataFolderMigrationNotice(migration, false, null);
+    }
+
+    private void showDataFolderMigrationNotice(DataFolderMigrationResult migration, boolean dryRun, java.util.function.Consumer<String> out)
+    {
+        switch (migration.kind)
+        {
+            case COPIED:
+                LOG.info("KozyBlake/Scarlet data folder initialized from existing legacy original-repo data. Active data directory: {}", dir);
+                break;
+            case DECLINED:
+                LOG.info("KozyBlake/Scarlet data folder transfer was declined. Active data directory: {}", dir);
+                break;
+            case SKIPPED_EXISTING_TARGET:
+                LOG.info("KozyBlake/Scarlet data folder already had data; legacy original-repo data was left untouched. Active data directory: {}", dir);
+                break;
+            case FAILED:
+                LOG.warn("KozyBlake/Scarlet data folder copy did not complete. Active data directory: {}. Error: {}", dir, migration.error);
+                break;
+            default:
+                break;
+        }
+        String message = dataFolderMigrationMessage(migration);
+        if (dryRun)
+            message = "[CLI popup test: no acknowledgement will be saved.]\n\n" + message;
+        final String dialogMessage = message;
+        this.splash.splashSubtext("Confirming KozyBlake/Scarlet data folder");
+        try
+        {
+            if (!GraphicsEnvironment.isHeadless())
+            {
+                Swing.invokeWait(() -> JOptionPane.showMessageDialog(
+                    this.ui.getParentComponent(),
+                    dialogMessage,
+                    "KozyBlake/Scarlet Data Folder",
+                    JOptionPane.INFORMATION_MESSAGE));
+            }
+            else
+            {
+                System.out.println();
+                System.out.println("KozyBlake/Scarlet Data Folder");
+                System.out.println(dialogMessage);
+                System.out.println();
+            }
+        }
+        finally
+        {
+            if (dryRun)
+            {
+                String msg = "Popup test displayed: data-folder-notice " + migration.kind.name().toLowerCase();
+                LOG.info(msg);
+                if (out != null) out.accept(msg);
+            }
+            else
+            {
+                acknowledgeDataFolderNotice(migration);
+            }
+        }
+    }
+
+    private static String dataFolderMigrationMessage(DataFolderMigrationResult migration)
+    {
+        StringBuilder message = new StringBuilder();
+        message
+            .append("KozyBlake/Scarlet now uses a KozyBlake/Scarlet data folder.\n\n")
+            .append("Active data folder:\n")
+            .append(pathOrUnavailable(dir))
+            .append("\n\n")
+            .append("Going forward, this fork reads and writes data in that active folder instead of the legacy upstream folder.\n\n")
+            .append("Legacy data folder kept for rollback:\n")
+            .append(pathOrUnavailable(migration.legacyDir))
+            .append("\n\n");
+        switch (migration.kind)
+        {
+            case COPIED:
+                message.append("KozyBlake/Scarlet copied your existing data into the active KozyBlake/Scarlet folder because that folder was empty or missing.\n\n");
+                break;
+            case DECLINED:
+                message.append("You chose to start fresh in the active KozyBlake/Scarlet folder. No legacy data was copied.\n\n");
+                break;
+            case SKIPPED_EXISTING_TARGET:
+                message.append("KozyBlake/Scarlet found legacy data, but the active KozyBlake/Scarlet folder already contains data, so nothing was copied automatically.\n\n");
+                break;
+            case FAILED:
+                message
+                    .append("KozyBlake/Scarlet tried to copy your existing data into the active KozyBlake/Scarlet folder, but the copy did not complete.\n")
+                    .append("Error: ")
+                    .append(migration.error == null ? "unknown" : migration.error)
+                    .append("\n\n");
+                break;
+            default:
+                break;
+        }
+        message
+            .append("The legacy folder is not moved, renamed, or deleted. If you go back to the upstream build, it can keep using that folder.\n\n")
+            .append("This notice will only be shown once.");
+        return message.toString();
+    }
+
+    private static boolean isDataFolderNoticeAcknowledged()
+    {
+        return isDataFolderNoticeAcknowledged(dir);
+    }
+
+    private static boolean isDataFolderNoticeAcknowledged(File dataDir)
+    {
+        File ackFile = dataFolderNoticeAckFile(dataDir);
+        return ackFile != null && ackFile.isFile();
+    }
+
+    private static void acknowledgeDataFolderNotice(DataFolderMigrationResult migration)
+    {
+        acknowledgeDataFolderNotice(dir, migration);
+    }
+
+    private static void acknowledgeDataFolderNotice(File dataDir, DataFolderMigrationResult migration)
+    {
+        File ackFile = dataFolderNoticeAckFile(dataDir);
+        if (ackFile == null)
+            return;
+        try
+        {
+            File parent = ackFile.getParentFile();
+            if (parent != null && !parent.isDirectory())
+                parent.mkdirs();
+            Files.write(ackFile.toPath(), Arrays.asList(
+                "acknowledged=" + System.currentTimeMillis(),
+                "result=" + (migration == null ? "unknown" : migration.kind.name()),
+                "active=" + pathOrUnavailable(dir)
+            ), StandardCharsets.UTF_8);
+        }
+        catch (Exception ex)
+        {
+            System.err.println("Failed to persist KozyBlake/Scarlet data folder notice acknowledgement at " + ackFile + ": " + ex);
+        }
+    }
+
+    private static File dataFolderNoticeAckFile()
+    {
+        return dataFolderNoticeAckFile(dir);
+    }
+
+    private static File dataFolderNoticeAckFile(File dataDir)
+    {
+        return dataDir == null ? null : new File(dataDir, DATA_FOLDER_NOTICE_ACK_FILENAME);
+    }
+
+    private static String pathOrUnavailable(File file)
+    {
+        return file == null ? "(unavailable)" : file.getAbsolutePath();
+    }
+
     public void run()
     {
         System.out.println("===========================================");
-        System.out.println("  Scarlet " + VERSION);
+        System.out.println("  KozyBlake/Scarlet " + VERSION);
         System.out.println("  Type 'help' for available CLI commands.");
         System.out.println("===========================================");
         this.ui.loadSettings();
+        this.maybeShowDataFolderMigrationNotice();
         this.eventListener.settingsLoaded();
         this.checkVrchatApiPreflight();
         // Initialize TTS after UI is ready (for dialog parent component)
@@ -629,14 +1000,14 @@ public class Scarlet implements Closeable
         }
         this.splash.splashSubtext("Checking for updates");
         this.checkUpdate();
-        // One-time opt-in for built-in Discord kick/ban commands
+        // One-time opt-in for built-in Discord moderation commands
         if (Features.DISCORD_KICK_BAN_ENABLED && !this.discordKickBanPrompted.get())
         {
             this.settings.requireConfirmYesNoAsync(
-                "Scarlet includes built-in Discord slash commands for kicking and banning server members\n" +
-                "(/discord-kick and /discord-ban).\n\n" +
+                "KozyBlake/Scarlet includes built-in Discord slash commands for warning, kicking, and banning server members\n" +
+                "(/discord-warn, /discord-kick, and /discord-ban).\n\n" +
                 "Many users prefer to use a dedicated moderation bot for this instead.\n\n" +
-                "Would you like to enable Scarlet's built-in kick/ban commands?",
+                "Would you like to enable KozyBlake/Scarlet's built-in Discord moderation commands?",
                 "Discord Moderation Commands",
                 () -> {
                     this.discordKickBanEnabled.set(true, "user-prompt");
@@ -1055,11 +1426,11 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             } break;
             case "info":
             case "help": {
-                StringBuilder sb = new StringBuilder("Scarlet CLI commands:");
+                StringBuilder sb = new StringBuilder("KozyBlake/Scarlet CLI commands:");
                 sb.append("\n  help               — show this list (alternate: info)");
                 sb.append("\n  logout             — log out of VRChat");
-                sb.append("\n  exit               — stop Scarlet (alternate: halt, quit, stop)");
-                sb.append("\n  explore            — open the Scarlet data folder");
+                sb.append("\n  exit               — stop KozyBlake/Scarlet (alternate: halt, quit, stop)");
+                sb.append("\n  explore            — open the KozyBlake/Scarlet data folder");
                 sb.append("\n  tts <text>         — submit text to the TTS service");
                 sb.append("\n  link <usr_id> <sf> — link a VRChat user to a Discord snowflake");
                 sb.append("\n  importgroups <file|URL>     — import watched groups (legacy CSV)");
@@ -1078,7 +1449,7 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             case "quit":
             case "stop": {
                 this.running = false;
-                String msg = "Stopping Scarlet...";
+                String msg = "Stopping KozyBlake/Scarlet...";
                 LOG.info(msg);
                 if (out != null) out.accept(msg);
             } break;
@@ -1194,6 +1565,11 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
                 LOG.info(msg);
                 if (out != null) out.accept(msg);
             } break;
+            case "popup":
+            case "popups":
+            case "popup-test": {
+                this.rawPopupTestCommand(ls, out);
+            } break;
             }
         }
         catch (Exception ex)
@@ -1201,6 +1577,63 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             LOG.error("Exception handling CLI command: "+line, ex);
             if (out != null) out.accept("[error] Exception handling command: " + ex.getMessage());
         }
+    }
+
+    void rawPopupTestCommand(Scanner ls, java.util.function.Consumer<String> out)
+    {
+        String popup = ls.hasNext() ? ls.next().trim().toLowerCase() : "";
+        if (popup.isEmpty() || "help".equals(popup) || "list".equals(popup))
+        {
+            String msg = "Hidden popup test commands:"
+                + "\n  popup-test data-transfer"
+                + "\n  popup-test data-folder-notice <copied|declined|skipped|failed>"
+                + "\nThese commands only display/test popups; they do not copy data, write acknowledgement flags, or perform the confirmed action.";
+            LOG.info(msg);
+            if (out != null) out.accept(msg);
+            else System.out.println(msg);
+            return;
+        }
+        switch (popup)
+        {
+            case "data-transfer": {
+                File legacyDir = LEGACY_DIR != null ? LEGACY_DIR : defaultDataDir(LEGACY_GROUP, NAME, System.getenv("LOCALAPPDATA"), System.getenv("XDG_DATA_HOME"));
+                boolean transfer = confirmLegacyDataTransfer(legacyDir, dir, true);
+                String msg = "Popup test result: data-transfer selected `" + (transfer ? "Transfer data" : "Start fresh") + "`. No data was copied and no acknowledgement flag was written.";
+                LOG.info(msg);
+                if (out != null) out.accept(msg);
+            } break;
+            case "data-folder-notice": {
+                String kind = ls.hasNext() ? ls.next().trim().toLowerCase() : "copied";
+                DataFolderMigrationResult migration = popupTestMigrationResult(kind);
+                if (migration == null)
+                {
+                    String msg = "Unknown data-folder-notice state: " + kind + " (expected copied, declined, skipped, or failed)";
+                    LOG.warn(msg);
+                    if (out != null) out.accept("[warn] " + msg);
+                    return;
+                }
+                this.showDataFolderMigrationNotice(migration, true, out);
+            } break;
+            default: {
+                String msg = "Unknown popup test: " + popup;
+                LOG.warn(msg);
+                if (out != null) out.accept("[warn] " + msg);
+            } break;
+        }
+    }
+
+    DataFolderMigrationResult popupTestMigrationResult(String kind)
+    {
+        File legacyDir = LEGACY_DIR != null ? LEGACY_DIR : defaultDataDir(LEGACY_GROUP, NAME, System.getenv("LOCALAPPDATA"), System.getenv("XDG_DATA_HOME"));
+        if ("copied".equals(kind) || "transfer".equals(kind) || "transferred".equals(kind))
+            return DataFolderMigrationResult.copied(legacyDir, dir);
+        if ("declined".equals(kind) || "fresh".equals(kind) || "start-fresh".equals(kind))
+            return DataFolderMigrationResult.declined(legacyDir, dir);
+        if ("skipped".equals(kind) || "existing".equals(kind))
+            return DataFolderMigrationResult.skippedExistingTarget(legacyDir, dir);
+        if ("failed".equals(kind) || "error".equals(kind))
+            return DataFolderMigrationResult.failed(legacyDir, dir, "CLI popup test failure; no data was copied.");
+        return null;
     }
 
     void maybePollAction()
@@ -1263,9 +1696,9 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             StringBuilder text = new StringBuilder(report.message);
             if (report.updateAvailable)
             {
-                text.append("\n\nScarlet will continue starting, but if VRChat features behave oddly,");
-                text.append("\nyou may need a newer Scarlet build with an updated API adapter.");
-                text.append("\n\nIf this is causing problems, please open a ticket in the Scarlet Discord");
+                text.append("\n\nKozyBlake/Scarlet will continue starting, but if VRChat features behave oddly,");
+                text.append("\nyou may need a newer KozyBlake/Scarlet build with an updated API adapter.");
+                text.append("\n\nIf this is causing problems, please open a ticket in the KozyBlake/Scarlet Discord");
                 text.append("\nserver and ping BlakeBelladonna or Vinyarion.");
                 int choice = JOptionPane.showOptionDialog(
                     this.ui.getParentComponent(),

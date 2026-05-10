@@ -1,7 +1,8 @@
 
 # Settings
 
-All settings files for Scarlet can be found in the directory `%LOCALAPPDATA%\SybylineNetwork\Scarlet`.
+All settings files for KozyBlake/Scarlet can be found in the directory `%LOCALAPPDATA%\KozyBlake\Scarlet`.
+When upgrading from the upstream default folder, KozyBlake/Scarlet asks before copying existing data into the KozyBlake/Scarlet folder and leaves the legacy folder in place for rollback.
 Some internal volatile data can be found in the Windows registry.
 These registry entries exist because of the use of classes in the [`java.util.prefs`](https://docs.oracle.com/javase/8/docs/api/java/util/prefs/package-summary.html) package.
 
@@ -669,4 +670,3 @@ As the Windows implementation of the `java.util.prefs` package uses the Windows 
 Particular sensitive values are no longer stored in plain text, but instead are encrypted and stored in prefs.
 You may specify the password used to encrypt/decrypt by either setting the environment variable `SCARLET_GLOBAL_PW` or the Java system property `scarlet.global.pw`.
 It is highly recommended that you use a custom password instead of the default.
-

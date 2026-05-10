@@ -349,7 +349,7 @@ public class ScarletVRChat implements Closeable
             SSLContext sslContext = SSLContext.getInstance("TLS");
             sslContext.init(null, new TrustManager[] { composite }, null);
             builder.sslSocketFactory(sslContext.getSocketFactory(), composite);
-            LOG.warn("Using Scarlet's bundled VRChat TLS compatibility certificates");
+            LOG.warn("Using KozyBlake/Scarlet's bundled VRChat TLS compatibility certificates");
         }
         catch (GeneralSecurityException | IOException ex)
         {
@@ -430,8 +430,8 @@ public class ScarletVRChat implements Closeable
         boolean enable = this.scarlet.settings.requireConfirmYesNo(
             "Scarlet detected that this Java runtime cannot validate VRChat's HTTPS certificate chain.\n\n"
             + "This usually happens on older Windows and Java installs with outdated root certificates.\n\n"
-            + "Would you like Scarlet to enable Scarlet's built-in VRChat compatibility certificates on next launch?\n\n"
-            + "This only affects Scarlet's VRChat HTTPS client.\n"
+            + "Would you like KozyBlake/Scarlet to enable its built-in VRChat compatibility certificates on next launch?\n\n"
+            + "This only affects KozyBlake/Scarlet's VRChat HTTPS client.\n"
             + "It does NOT modify your Windows certificate store or Java installation.",
             "Enable VRChat TLS compatibility?");
         if (!enable)
@@ -440,13 +440,13 @@ public class ScarletVRChat implements Closeable
         if (!GraphicsEnvironment.isHeadless())
         {
             JOptionPane.showMessageDialog(null,
-                "Scarlet saved the VRChat TLS compatibility setting.\nPlease restart Scarlet and try logging in again.",
-                "Restart Scarlet",
+                "KozyBlake/Scarlet saved the VRChat TLS compatibility setting.\nPlease restart KozyBlake/Scarlet and try logging in again.",
+                "Restart KozyBlake/Scarlet",
                 JOptionPane.INFORMATION_MESSAGE);
         }
         else
         {
-            LOG.warn("Scarlet saved the VRChat TLS compatibility setting. Restart Scarlet and try logging in again.");
+            LOG.warn("KozyBlake/Scarlet saved the VRChat TLS compatibility setting. Restart KozyBlake/Scarlet and try logging in again.");
         }
         return true;
     }
@@ -1364,7 +1364,7 @@ CurrentUser getCurrentUser(AuthenticationApi auth) throws ApiException
         {
             try
             {
-                LOG.warn("VRChat rejected the generated audit-log request for group `{}`; retrying with Scarlet audit fallback mode `{}`", this.groupId, mode.name());
+                LOG.warn("VRChat rejected the generated audit-log request for group `{}`; retrying with KozyBlake/Scarlet audit fallback mode `{}`", this.groupId, mode.name());
                 List<GroupAuditLogEntry> audits = new ArrayList<>();
                 int offset = 0, batchSize = 100;
                 PaginatedGroupAuditLogEntryList page = this.getGroupAuditLogsRaw(batchSize, offset, from, to, actorIds, eventTypes, targetIds, mode);
@@ -1383,21 +1383,21 @@ CurrentUser getCurrentUser(AuthenticationApi auth) throws ApiException
                 if (page != null && page.getResults() != null)
                     audits.addAll(page.getResults());
                 audits.sort(OLDEST_TO_NEWEST);
-                LOG.warn("Scarlet audit fallback mode `{}` succeeded for group `{}` with {} entrie(s)", mode.name(), this.groupId, Integer.valueOf(audits.size()));
+                LOG.warn("KozyBlake/Scarlet audit fallback mode `{}` succeeded for group `{}` with {} entrie(s)", mode.name(), this.groupId, Integer.valueOf(audits.size()));
                 return audits;
             }
             catch (ApiException apiex)
             {
                 if (!this.isAuditEndpointNotImplemented(apiex))
                 {
-                    LOG.error("Scarlet audit fallback mode `{}` failed", mode.name(), apiex);
+                    LOG.error("KozyBlake/Scarlet audit fallback mode `{}` failed", mode.name(), apiex);
                     return null;
                 }
-                LOG.warn("Scarlet audit fallback mode `{}` still hit VRChat's `not implemented` response", mode.name());
+                LOG.warn("KozyBlake/Scarlet audit fallback mode `{}` still hit VRChat's `not implemented` response", mode.name());
             }
             catch (Exception ex)
             {
-                LOG.error("Scarlet audit fallback mode `{}` failed", mode.name(), ex);
+                LOG.error("KozyBlake/Scarlet audit fallback mode `{}` failed", mode.name(), ex);
                 return null;
             }
         }
@@ -1418,13 +1418,13 @@ CurrentUser getCurrentUser(AuthenticationApi auth) throws ApiException
             {
                 if (!this.isAuditEndpointNotImplemented(apiex))
                 {
-                    LOG.error("Scarlet audit-count fallback mode `{}` failed", mode.name(), apiex);
+                    LOG.error("KozyBlake/Scarlet audit-count fallback mode `{}` failed", mode.name(), apiex);
                     return null;
                 }
             }
             catch (Exception ex)
             {
-                LOG.error("Scarlet audit-count fallback mode `{}` failed", mode.name(), ex);
+                LOG.error("KozyBlake/Scarlet audit-count fallback mode `{}` failed", mode.name(), ex);
                 return null;
             }
         }
@@ -2704,8 +2704,8 @@ CurrentUser getCurrentUser(AuthenticationApi auth) throws ApiException
     public void modalNeedGroupId()
     {
         this.scarlet.settings.requireConfirmYesNoAsync(
-            "Scarlet could not determine a valid VRChat group ID for the logged-in account `"+this.currentUserId+"`.\n\n"
-          + "Please set the correct `vrchat_group_id` in Scarlet's settings, or make sure the account is representing the intended group before launching Scarlet.",
+            "KozyBlake/Scarlet could not determine a valid VRChat group ID for the logged-in account `"+this.currentUserId+"`.\n\n"
+          + "Please set the correct `vrchat_group_id` in KozyBlake/Scarlet's settings, or make sure the account is representing the intended group before launching KozyBlake/Scarlet.",
             "Missing group ID",
             () -> MiscUtils.AWTDesktop.browse(URI.create("https://vrchat.com/home/groups")),
             null);

@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory;
  * <p>Default values encode <em>"what should happen if no properties file
  * is present on the classpath"</em>:
  * <ul>
- *   <li>Features that have always shipped (kick/ban, watched-avatars,
+ *   <li>Features that have always shipped (Discord moderation, watched-avatars,
  *       calendar, aux-webhooks, animated-emoji, DAVE, evidence,
  *       avatar-search, pronouns, vrchat-reports, CLI commands) default
  *       to {@code true} so older builds and the lite edition preserve
@@ -82,8 +82,8 @@ public final class Features
     public static final boolean RVC_ENABLED = loadFlag("rvc.enabled", false);
 
     /**
-     * Whether the built-in Discord {@code /discord-kick} and
-     * {@code /discord-ban} slash commands are registered and their
+     * Whether the built-in Discord {@code /discord-warn},
+     * {@code /discord-kick}, and {@code /discord-ban} slash commands are registered and their
      * settings toggle ({@code discordKickBanEnabled}) is exposed in the
      * UI.  Orthogonal to the runtime toggle — when this compile-time
      * flag is false, the commands are never registered regardless of

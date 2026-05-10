@@ -8,6 +8,13 @@
   - Added new instance-creation functionality backed by the newer VRChat group instance APIs, including more complete support for recent VRChat API additions
   - Added avatar performance gating to group instance creation, using the live VRChat API `minimumAvatarPerformance` field with Poor, Medium, and Good-or-better presets
   - Added modern VRChat group API commands under `/vrchat-group` for audit-type discovery, member search, ban/invite/join-request lists, group posts, group announcements, and confirmed owner-level transfer actions
+  - Added `/discord-warn` plus `/set-discord-action-log-channel` so Discord warn/kick/ban actions can be logged to a server-selected channel
+  - Added Discord member join logging with invite-use detection when the bot has Manage Server permission; Discord IP addresses remain unavailable because Discord does not expose them to bots
+  - Moved default Scarlet data directories and user-agent branding from the legacy upstream owner name to `KozyBlake`, with a one-time opt-in prompt before copying data from the old default folder
+  - Added a startup data-folder warning that explains the KozyBlake/Scarlet folder is separate, the legacy folder is left in place, and switching back to the original repo may require setup again
+  - Added a hidden `popup-test` CLI dispatcher for dry-run popup testing without performing the confirmed action
+  - Rebranded Scarlet log categories and direct console log prefixes to `KozyBlake/Scarlet`
+  - Removed the avatarrecovery provider from default and configured avatar search provider use
   - Added `scarlet-android/` Maven module producing a standalone APK (`scarlet-android-<ver>.apk`) that captures VRChat log output from the official VRChat Android app via an embedded ADB client over Wireless Debugging and writes a VRChat-formatted `output_log_<ts>.txt` that Scarlet's existing tailer consumes
   - Added one-time Wireless-Debugging pairing flow in `MainActivity` / `AdbPairingService` using NSD discovery of `_adb-tls-pairing._tcp` + a 6-digit pairing code; no USB, no root, no terminal commands
   - Added `ScarletLogService` foreground service that owns the dadb session + logcat tail and auto-reconnects when Wireless Debugging drops
@@ -112,7 +119,7 @@
   - Fixed silenced watched groups overriding TTS messages for lower priority groups
 
 ## 0.4.12-rc6
-  - Added links to the Sybyline Network VRChat Group
+  - Added links to the Scarlet VRChat Group
   - Added Group Invites created to Moderation Summary
   - Added option to skip confirmation to send a group invite to players via Instance UI
   - Added deep equality check to avoid editing Discord commands with identical content

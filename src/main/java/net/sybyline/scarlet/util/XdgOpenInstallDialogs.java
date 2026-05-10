@@ -34,7 +34,7 @@ public class XdgOpenInstallDialogs
     public static final String PACKAGE_DESCRIPTION  =
         "xdg-utils provides the xdg-open command, which opens files and URLs\n" +
         "using the user's preferred desktop applications.\n\n" +
-        "It is required for Scarlet's 'Browse data folder' and help-menu links\n" +
+        "It is required for KozyBlake/Scarlet's 'Browse data folder' and help-menu links\n" +
         "to work correctly on Linux.";
 
     /** Result of the install dialog flow. */
@@ -249,9 +249,9 @@ public class XdgOpenInstallDialogs
     private static InstallDialogResult handleHeadlessMode()
     {
         System.out.println("\n========================================");
-        System.out.println("[Scarlet] xdg-utils Required");
+        System.out.println("[KozyBlake/Scarlet] xdg-utils Required");
         System.out.println("========================================");
-        System.out.println("Scarlet requires xdg-utils (xdg-open) to open folders and web links.");
+        System.out.println("KozyBlake/Scarlet requires xdg-utils (xdg-open) to open folders and web links.");
         System.out.println("Install it manually using your package manager, e.g.:");
         System.out.println("  " + getInstallCommand());
         System.out.println("Folder/link browsing will be disabled until xdg-utils is installed.");

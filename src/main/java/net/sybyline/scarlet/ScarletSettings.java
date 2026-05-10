@@ -205,8 +205,8 @@ public class ScarletSettings
         String dataDirText = dataDir != null ? dataDir.getAbsolutePath() : "(unavailable)",
                settingsDirText = settingsParent != null ? settingsParent.getAbsolutePath() : dataDirText;
         String message =
-            "Back up your Scarlet data before startup continues.\n\n" +
-            "Scarlet may reinitialize or lose access to previously stored secure settings and credentials during initialization.\n" +
+            "Back up your KozyBlake/Scarlet data before startup continues.\n\n" +
+            "KozyBlake/Scarlet may reinitialize or lose access to previously stored secure settings and credentials during initialization.\n" +
             "If something goes wrong, a backup is the safest way to recover.\n\n" +
             "Any previously stored secure credentials from older installs will not carry over automatically.\n" +
             "You will need to enter your secure values again after this update.\n" +
@@ -215,7 +215,7 @@ public class ScarletSettings
             " - Discord bot token\n" +
             " - VRChat usernames, passwords, TOTP secrets, and cookie/session data\n" +
             " - Other secure values stored in the Java Preferences credential store\n\n" +
-            "The early secure-store initialization path does not rewrite Scarlet's JSON data files.\n" +
+            "The early secure-store initialization path does not rewrite KozyBlake/Scarlet's JSON data files.\n" +
             "That means files like watched groups, pronoun lists, watched avatars, and most other JSON-backed data should remain in place during this step.\n" +
             "You should still back them up first as a fail-safe.\n\n" +
             "Recommended current files/folders to copy now:\n" +
@@ -232,19 +232,19 @@ public class ScarletSettings
             " - " + legacyPrefsStore + "\n" +
             " - Legacy plain-text settings keys may also exist in " + pathOrUnavailable(settingsFile) + " as vrc_username / vrc_password / vrc_secret\n\n" +
             "Startup will continue after this reminder is acknowledged.";
-        LOG.warn("Back up Scarlet data before initialization continues. Most non-JSON secure settings will need to be re-entered, and older secure wrappers are no longer auto-migrated. JSON-backed files are not expected to be rewritten during the early secure-store initialization path. Recommended backup path(s): {}, {}. Legacy credential storage: {}",
+        LOG.warn("Back up KozyBlake/Scarlet data before initialization continues. Most non-JSON secure settings will need to be re-entered, and older secure wrappers are no longer auto-migrated. JSON-backed files are not expected to be rewritten during the early secure-store initialization path. Recommended backup path(s): {}, {}. Legacy credential storage: {}",
             dataDirText,
             settingsDirText,
             legacyPrefsStore);
         System.err.println();
         System.err.println("===========================================");
-        System.err.println("  BACK UP YOUR SCARLET DATA BEFORE CONTINUING");
+        System.err.println("  BACK UP YOUR KOZYBLAKE/SCARLET DATA BEFORE CONTINUING");
         System.err.println("  Previously stored secure credentials will not carry over.");
         System.err.println("  You will need to enter secure values again.");
         System.err.println("  Older secure credential wrappers are not auto-migrated.");
         System.err.println("  This can affect Discord bot token and VRChat credentials/cookies.");
         System.err.println("  The early secure-store initialization path is not expected");
-        System.err.println("  to rewrite Scarlet's JSON data files, but back them up anyway.");
+        System.err.println("  to rewrite KozyBlake/Scarlet's JSON data files, but back them up anyway.");
         System.err.println("  Recommended current backup path(s):");
         System.err.println("   - " + dataDirText);
         System.err.println("   - " + settingsDirText);
@@ -262,14 +262,14 @@ public class ScarletSettings
         System.err.println();
         if (this.scarlet != null && this.scarlet.splash != null)
         {
-            this.scarlet.splash.splashSubtext("Back up Scarlet data before continuing");
+            this.scarlet.splash.splashSubtext("Back up KozyBlake/Scarlet data before continuing");
         }
         if (!GraphicsEnvironment.isHeadless())
         {
             JOptionPane.showMessageDialog(
                 null,
                 message,
-                "Back Up Scarlet Data",
+                "Back Up KozyBlake/Scarlet Data",
                 JOptionPane.WARNING_MESSAGE);
         }
         acknowledgeBackupWarning(dataDir);

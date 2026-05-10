@@ -1503,8 +1503,9 @@ public class ScarletDiscordUI
         }
 
         String name = target.getEffectiveName();
-        String actor = event.getMember() != null
-            ? event.getMember().getEffectiveName()
+        final Member actorMember = event.getMember();
+        String actor = actorMember != null
+            ? actorMember.getEffectiveName()
             : event.getUser().getName();
 
         // Build audit log reason
@@ -1535,12 +1536,16 @@ public class ScarletDiscordUI
                 success -> {
                     LOG.info("Discord kick: {} ({}) kicked from {} ({}) by {}. Reason: {}",
                         finalName, finalTargetId, finalGuildName, finalGuildId, actor, finalAuditReason);
+                    this.discord.emitDiscordActionLog("Discord Kick", actorMember, finalName, finalTargetId,
+                        reason, true, "Member was kicked from " + finalGuildName + ".", 0xFEE75C);
                     hook.sendMessageFormat("**%s** has been kicked from the server.",
                         MarkdownSanitizer.escape(finalName)).queue();
                 },
                 error -> {
                     LOG.error("Failed to kick member {} ({}) from {} ({}): {}",
                         finalName, finalTargetId, finalGuildName, finalGuildId, error.getMessage());
+                    this.discord.emitDiscordActionLog("Discord Kick", actorMember, finalName, finalTargetId,
+                        reason, false, "Kick failed: " + error.getMessage(), 0xED4245);
                     hook.sendMessageFormat("Failed to kick **%s**: %s",
                         MarkdownSanitizer.escape(finalName), error.getMessage()).queue();
                 });
@@ -1642,8 +1647,9 @@ public class ScarletDiscordUI
             name = targetId;
         }
 
-        String actor = event.getMember() != null
-            ? event.getMember().getEffectiveName()
+        final Member actorMember = event.getMember();
+        String actor = actorMember != null
+            ? actorMember.getEffectiveName()
             : event.getUser().getName();
 
         // Build audit log reason
@@ -1674,12 +1680,16 @@ public class ScarletDiscordUI
                 success -> {
                     LOG.info("Discord ban: {} ({}) banned from {} ({}) by {}. Reason: {}",
                         finalName, finalTargetId, finalGuildName, finalGuildId, actor, finalAuditReason);
+                    this.discord.emitDiscordActionLog("Discord Ban", actorMember, finalName, finalTargetId,
+                        reason, true, "Member was banned from " + finalGuildName + ".", 0xED4245);
                     hook.sendMessageFormat("**%s** has been banned from the server.",
                         MarkdownSanitizer.escape(finalName)).queue();
                 },
                 error -> {
                     LOG.error("Failed to ban member {} ({}) from {} ({}): {}",
                         finalName, finalTargetId, finalGuildName, finalGuildId, error.getMessage());
+                    this.discord.emitDiscordActionLog("Discord Ban", actorMember, finalName, finalTargetId,
+                        reason, false, "Ban failed: " + error.getMessage(), 0xED4245);
                     hook.sendMessageFormat("Failed to ban **%s**: %s",
                         MarkdownSanitizer.escape(finalName), error.getMessage()).queue();
                 });

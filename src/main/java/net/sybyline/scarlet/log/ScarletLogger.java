@@ -166,11 +166,11 @@ public class ScarletLogger extends LegacyAbstractLogger
         static
         {
             printer_thread.setDaemon(true);
-            printer_thread.setName("Scarlet Logging Thread");
+            printer_thread.setName("KozyBlake/Scarlet Logging Thread");
             printer_thread.start();
             
             shutdown_thread.setDaemon(true);
-            shutdown_thread.setName("Scarlet Logging Shutdown Hook");
+            shutdown_thread.setName("KozyBlake/Scarlet Logging Shutdown Hook");
             Runtime.getRuntime().addShutdownHook(shutdown_thread);
             
             File logDir = logFile.getParentFile();

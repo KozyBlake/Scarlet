@@ -529,7 +529,7 @@ public class DaveLibraryLoader
             int exit = proc.waitFor();
             if (exit == 0)
             {
-                showDialog("Installation Complete", "Installation successful!\n\nPlease restart Scarlet for the changes to take effect.", JOptionPane.INFORMATION_MESSAGE);
+                showDialog("Installation Complete", "Installation successful!\n\nPlease restart KozyBlake/Scarlet for the changes to take effect.", JOptionPane.INFORMATION_MESSAGE);
                 return true;
             }
             showDialog("Installation Error", "Installation failed with exit code " + exit + "\n\nOutput:\n" + output, JOptionPane.ERROR_MESSAGE);

@@ -189,7 +189,7 @@ public class RvcInstallDialogs
             if (GraphicsEnvironment.isHeadless())
             {
                 System.err.println("\n========================================");
-                System.err.println("[Scarlet RVC] Python version incompatible");
+                System.err.println("[KozyBlake/Scarlet/RVC] Python version incompatible");
                 System.err.println("========================================");
                 if (status.python.incompatibleReason != null)
                     System.err.println(status.python.incompatibleReason);
@@ -646,7 +646,7 @@ public class RvcInstallDialogs
     private InstallDialogResult handleHeadlessInstall(List<String> missing)
     {
         System.out.println("\n========================================");
-        System.out.println("[Scarlet RVC] RVC Dependencies Required");
+        System.out.println("[KozyBlake/Scarlet/RVC] RVC Dependencies Required");
         System.out.println("========================================");
         System.out.println("Missing packages: " + missing);
         System.out.println("Attempting automatic installation in headless mode...");
@@ -676,16 +676,16 @@ public class RvcInstallDialogs
                 RvcStatus s = queryStatus();
                 if (s != null && s.isRvcCompatible())
                 {
-                    System.out.println("[Scarlet RVC] Installation successful.");
+                    System.out.println("[KozyBlake/Scarlet/RVC] Installation successful.");
                     return InstallDialogResult.INSTALL_APPROVED_SUCCESS;
                 }
             }
-            System.err.println("[Scarlet RVC] Installation failed (exit " + exit + "). RVC will be unavailable.");
+            System.err.println("[KozyBlake/Scarlet/RVC] Installation failed (exit " + exit + "). RVC will be unavailable.");
             return InstallDialogResult.INSTALL_APPROVED_FAILED;
         }
         catch (Exception ex)
         {
-            System.err.println("[Scarlet RVC] Exception during headless install: " + ex.getMessage());
+            System.err.println("[KozyBlake/Scarlet/RVC] Exception during headless install: " + ex.getMessage());
             return InstallDialogResult.INSTALL_APPROVED_FAILED;
         }
     }
@@ -698,8 +698,8 @@ public class RvcInstallDialogs
     {
         if (GraphicsEnvironment.isHeadless())
         {
-            System.out.println("[Scarlet RVC] RVC installation declined. Voice conversion will be unavailable.");
-            System.out.println("[Scarlet RVC] You can install later: "
+            System.out.println("[KozyBlake/Scarlet/RVC] RVC installation declined. Voice conversion will be unavailable.");
+            System.out.println("[KozyBlake/Scarlet/RVC] You can install later: "
                 + pythonDisplay + " -m pip install torch torchaudio torchcodec rvc-python");
             return;
         }
@@ -794,21 +794,21 @@ public class RvcInstallDialogs
                 "<code>AttributeError: module 'pkgutil' has no attribute 'ImpImporter'</code>.</p>" +
                 "<p style='margin-top:8px;'><b>Fix:</b> install Python " + maxHtml + " " +
                 "from <code>" + url + "</code> (leave your current Python installed &mdash; " +
-                "they can coexist), then restart Scarlet.</p>";
+                "they can coexist), then restart KozyBlake/Scarlet.</p>";
         }
         else if (py.tooOld)
         {
             verdict   = "Too old";
             extraHtml =
                 "<p style='margin-top:8px;'><b>Fix:</b> install Python " + minHtml + " or newer " +
-                "(up to " + maxHtml + ") from <code>" + url + "</code>, then restart Scarlet.</p>";
+                "(up to " + maxHtml + ") from <code>" + url + "</code>, then restart KozyBlake/Scarlet.</p>";
         }
         else
         {
             verdict   = "Incompatible";
             extraHtml =
                 "<p style='margin-top:8px;'><b>Fix:</b> install Python in the range " +
-                minHtml + "\u2013" + maxHtml + " and restart Scarlet.</p>";
+                minHtml + "\u2013" + maxHtml + " and restart KozyBlake/Scarlet.</p>";
         }
 
         final String body =
@@ -819,13 +819,13 @@ public class RvcInstallDialogs
             "Supported: <b>Python " + minHtml + "\u2013" + maxHtml + "</b> (inclusive)</p>" +
             extraHtml +
             "<p style='margin-top:8px;color:#888;'>If you have multiple Python installations, " +
-            "Scarlet now prefers a supported version automatically &mdash; installing Python " +
+            "KozyBlake/Scarlet now prefers a supported version automatically &mdash; installing Python " +
             maxHtml + " alongside your current one is usually enough.</p>" +
             "</div></html>";
 
         if (GraphicsEnvironment.isHeadless())
         {
-            System.err.println("[Scarlet RVC] Python Version Incompatible: " + verdict);
+            System.err.println("[KozyBlake/Scarlet/RVC] Python Version Incompatible: " + verdict);
             return;
         }
         net.sybyline.scarlet.ui.Swing.invokeWait(() ->
@@ -861,7 +861,7 @@ public class RvcInstallDialogs
     {
         if (GraphicsEnvironment.isHeadless())
         {
-            System.out.println("[Scarlet RVC] " + title);
+            System.out.println("[KozyBlake/Scarlet/RVC] " + title);
             return;
         }
         net.sybyline.scarlet.ui.Swing.invokeWait(() ->
@@ -879,7 +879,7 @@ public class RvcInstallDialogs
     {
         if (GraphicsEnvironment.isHeadless())
         {
-            System.err.println("[Scarlet RVC] " + title);
+            System.err.println("[KozyBlake/Scarlet/RVC] " + title);
             return;
         }
         net.sybyline.scarlet.ui.Swing.invokeWait(() ->

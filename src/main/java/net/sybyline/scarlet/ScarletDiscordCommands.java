@@ -4603,6 +4603,116 @@ public class ScarletDiscordCommands
         }
     }
 
+    // set-discord-action-log-channel
+
+    @SlashCmd("set-discord-action-log-channel")
+    @Desc("Set the Discord channel used for Scarlet moderation action logs")
+    @DefaultPerms(Permission.MANAGE_SERVER)
+    @Ephemeral
+    public void setDiscordActionLogChannel(SlashCommandInteractionEvent event, InteractionHook hook,
+                                           @SlashOpt("discord-text-channel") Channel channel)
+    {
+        this.discord.setDiscordActionLogChannel(channel);
+        if (channel == null)
+        {
+            hook.sendMessage("Discord action logging channel removed.").queue();
+        }
+        else
+        {
+            hook.sendMessageFormat("Discord action logs will be sent to <#%s>.", channel.getId()).queue();
+        }
+    }
+
+    // discord-warn
+
+    @FeatureGate("discord.kick_ban.enabled")
+    @SlashCmd("discord-warn")
+    @Desc("Warn a Discord server member")
+    @DefaultPerms(Permission.MODERATE_MEMBERS)
+    @Ephemeral
+    public void discordWarn(SlashCommandInteractionEvent event, InteractionHook hook,
+                            @SlashOpt("discord-user") Member discordUser,
+                            @SlashOpt("reason") String reason)
+    {
+        if (!this.discord.scarlet.discordKickBanEnabled.get())
+        {
+            hook.sendMessage("The built-in Discord moderation commands are not enabled.\n" +
+                "Enable them under **Settings -> Discord** in Scarlet.").queue();
+            return;
+        }
+        if (discordUser == null)
+        {
+            hook.sendMessage("Please select a valid server member.").queue();
+            return;
+        }
+
+        net.dv8tion.jda.api.entities.Guild guild =
+            this.discord.jda.getGuildById(this.discord.guildSf);
+        if (guild == null)
+        {
+            hook.sendMessage("Could not find the configured Discord server.").queue();
+            return;
+        }
+
+        Member actorMember = event.getMember();
+        if (actorMember == null || !actorMember.hasPermission(Permission.MODERATE_MEMBERS))
+        {
+            hook.sendMessage("You do not have permission to warn members.").queue();
+            return;
+        }
+
+        if (discordUser.isOwner())
+        {
+            hook.sendMessageFormat("Cannot warn **%s** - they are the server owner.",
+                MarkdownSanitizer.escape(discordUser.getEffectiveName())).queue();
+            return;
+        }
+
+        if (!actorMember.canInteract(discordUser))
+        {
+            hook.sendMessageFormat("Cannot warn **%s** - their highest role is equal to or above yours.",
+                MarkdownSanitizer.escape(discordUser.getEffectiveName())).queue();
+            return;
+        }
+
+        String actor = actorMember.getEffectiveName();
+        String targetName = discordUser.getEffectiveName();
+        String targetId = discordUser.getId();
+        String reasonText = reason != null && !reason.trim().isEmpty() ? reason.trim() : "No reason provided";
+        String dmMessage = String.format(
+            "You have received a warning in **%s** from %s.\n**Reason:** %s",
+            guild.getName(), actor, reasonText);
+
+        discordUser.getUser().openPrivateChannel().queue(
+            channel -> channel.sendMessage(dmMessage).queue(
+                sent -> {
+                    LOG.info("Discord warning: {} ({}) warned in {} ({}) by {}. Reason: {}",
+                        targetName, targetId, guild.getName(), guild.getId(), actor, reasonText);
+                    this.discord.emitDiscordActionLog("Discord Warning", actorMember, targetName, targetId,
+                        reasonText, true, "Warning DM delivered.", 0xFEE75C);
+                    hook.sendMessageFormat("Warned **%s**.",
+                        MarkdownSanitizer.escape(targetName)).queue();
+                },
+                error -> {
+                    LOG.warn("Failed to send warning DM to {} ({}): {}",
+                        targetName, targetId, error.getMessage());
+                    this.discord.emitDiscordActionLog("Discord Warning", actorMember, targetName, targetId,
+                        reasonText, false, "Failed to deliver warning DM: " + error.getMessage(), 0xED4245);
+                    hook.sendMessageFormat("Could not DM **%s**; warning was not delivered: %s",
+                        MarkdownSanitizer.escape(targetName), error.getMessage()).queue();
+                }
+            ),
+            error -> {
+                LOG.warn("Could not open DM channel for warning target {} ({}): {}",
+                    targetName, targetId, error.getMessage());
+                this.discord.emitDiscordActionLog("Discord Warning", actorMember, targetName, targetId,
+                    reasonText, false, "Could not open DM channel: " + error.getMessage(), 0xED4245);
+                hook.sendMessageFormat("Could not DM **%s**; warning was not delivered: %s",
+                    MarkdownSanitizer.escape(targetName), error.getMessage()).queue();
+            }
+        );
+    }
+
     // discord-ban
 
     @FeatureGate("discord.kick_ban.enabled")
@@ -4616,8 +4726,8 @@ public class ScarletDiscordCommands
     {
         if (!this.discord.scarlet.discordKickBanEnabled.get())
         {
-            hook.sendMessage("The built-in Discord ban command is not enabled.\n" +
-                "Enable it under **Settings → Discord** in Scarlet.").queue();
+            hook.sendMessage("The built-in Discord moderation commands are not enabled.\n" +
+                "Enable them under **Settings -> Discord** in Scarlet.").queue();
             return;
         }
         if (discordUser == null)
@@ -4689,8 +4799,8 @@ public class ScarletDiscordCommands
     {
         if (!this.discord.scarlet.discordKickBanEnabled.get())
         {
-            hook.sendMessage("The built-in Discord kick command is not enabled.\n" +
-                "Enable it under **Settings → Discord** in Scarlet.").queue();
+            hook.sendMessage("The built-in Discord moderation commands are not enabled.\n" +
+                "Enable them under **Settings -> Discord** in Scarlet.").queue();
             return;
         }
         if (discordUser == null)

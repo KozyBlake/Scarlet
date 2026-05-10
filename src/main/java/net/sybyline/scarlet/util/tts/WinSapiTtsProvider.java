@@ -71,7 +71,7 @@ public class WinSapiTtsProvider implements TtsProvider
         }
         if (this.voices.isEmpty())
         {
-            LOG.warn("No Windows TTS voices were discovered through SAPI. Scarlet will keep TTS enabled, but announcements cannot speak until a compatible voice is installed.");
+            LOG.warn("No Windows TTS voices were discovered through SAPI. KozyBlake/Scarlet will keep TTS enabled, but announcements cannot speak until a compatible voice is installed.");
         }
         else
         {
@@ -123,7 +123,7 @@ public class WinSapiTtsProvider implements TtsProvider
             {
                 LOG.info("TTS: Voice '{}' appears to be an Online/Natural voice. "
                     + "It will work if NaturalVoiceSAPIAdapter is installed (see {}), "
-                    + "otherwise Scarlet will automatically fall back to a Desktop voice if it fails.",
+                    + "otherwise KozyBlake/Scarlet will automatically fall back to a Desktop voice if it fails.",
                     label, NaturalVoiceSAPIAdapter_URL);
             }
         }

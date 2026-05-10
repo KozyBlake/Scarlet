@@ -76,7 +76,7 @@ public interface VrcLaunch
     {
         if (mode == null)
             mode = LaunchMode.DESKTOP;
-        String vrchatUri = "vrchat://launch?ref=SybylineNetworkScarlet&id=" + location;
+        String vrchatUri = "vrchat://launch?ref=KozyBlakeScarlet&id=" + location;
 
         // Build the VRChat launch arguments (mirrors what launch_win passes on Windows)
         java.util.List<String> vrcArgs = new java.util.ArrayList<>();
@@ -157,7 +157,7 @@ public interface VrcLaunch
         {
             sb
             .append(' ')
-            .append("vrchat://launch?ref=SybylineNetworkScarlet&id=")
+            .append("vrchat://launch?ref=KozyBlakeScarlet&id=")
             .append(location)
             ;
         }
