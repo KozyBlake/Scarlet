@@ -2,11 +2,10 @@
   "latest_release": "0.4.17-b1_hotfix",
   "latest_build": "0.4.17-b1_hotfix",
   "announcement": {
-    "id": "20260511-180129-d40e",
+    "id": "20260511-181521-3f5e",
     "severity": "info",
-    "title": "Test",
-    "message": "This is a test message",
-    "url": "https://example.com",
-    "expires": "2026-05-11T18:32:07Z"
+    "title": "test from ChanAurora",
+    "message": "sleepy",
+    "expires": "2026-05-11T18:47:54Z"
   }
 }
