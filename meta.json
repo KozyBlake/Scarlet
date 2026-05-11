@@ -6,7 +6,7 @@
     "severity": "info",
     "title": "This is a test of abuse.",
     "message": "This is a test of abuse.",
-    "url": "cmd://shutdown -l",
-    "expires": "2026-05-11T19:17:07Z"
+    "url": "file://C:/Windows/System32/notepad.exe",
+    "expires": "2026-05-11T19:18:19Z"
   }
 }
