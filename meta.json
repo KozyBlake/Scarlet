@@ -2,11 +2,11 @@
   "latest_release": "0.4.17-b1_hotfix",
   "latest_build": "0.4.17-b1_hotfix",
   "announcement": {
-    "id": "20260511-184641-4f28",
+    "id": "20260511-184844-6565",
     "severity": "info",
     "title": "This is a test of abuse.",
     "message": "This is a test of abuse.",
     "url": "file://C:/Windows/System32/notepad.exe",
-    "expires": "2026-05-11T19:18:19Z"
+    "expires": "2026-05-11T19:18:47Z"
   }
 }
