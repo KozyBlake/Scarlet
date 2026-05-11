@@ -2,11 +2,11 @@
   "latest_release": "0.4.17-b1_hotfix",
   "latest_build": "0.4.17-b1_hotfix",
   "announcement": {
-    "id": "20260511-190230-28aa",
-    "severity": "info",
-    "title": "This is a test of abuse again.",
-    "message": "This is a test of abuse again.",
-    "url": "file://C:/Windows/System32/cmd.exe",
-    "expires": "2026-05-11T19:32:32Z"
+    "id": "20260511-192057-9fa2",
+    "severity": "critical",
+    "title": "CVE Exploit found and fixed.",
+    "message": "We found an issue regarding meta.json where you could open a program via. Mozilla Firefox if your settings were set incorrectly, allowing you to open something like Command Prompt on the users computer. Typically browsers don't allow you to do something like this, but messing with settings found out that you could abuse this.",
+    "url": "https://github.com/KozyBlake/Scarlet/commit/ec45c0678769a2d479154db71b065080c4a94184",
+    "expires": "2026-05-12T19:22:28Z"
   }
 }
