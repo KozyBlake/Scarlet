@@ -1,4 +1,12 @@
 {
   "latest_release": "0.4.17-b1_hotfix",
-  "latest_build": "0.4.17-b1_hotfix"
+  "latest_build": "0.4.17-b1_hotfix",
+  "announcement": {
+    "id": "20260511-180129-d40e",
+    "severity": "info",
+    "title": "Test",
+    "message": "This is a test message",
+    "url": "https://example.com",
+    "expires": "2026-05-11T18:32:07Z"
+  }
 }
