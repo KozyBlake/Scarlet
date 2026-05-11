@@ -172,6 +172,8 @@ public class ScarletSettings
         this.lastInstancesCheck = new RegistryOffsetDateTime("lastInstancesCheck");
         this.lastAuthRefresh = new RegistryOffsetDateTime("lastAuthRefresh");
         this.lastUpdateCheck = new RegistryOffsetDateTime("lastUpdateCheck");
+        this.lastAnnouncementCheck = new RegistryOffsetDateTime("lastAnnouncementCheck");
+        this.lastAnnouncementId = new RegistryString("lastAnnouncementId");
         this.nextPollAction = new RegistryOffsetDateTime("nextPollAction");
         this.nextModSummary = new RegistryOffsetDateTime("nextModSummary");
         this.nextOutstandingMod = new RegistryOffsetDateTime("nextOutstandingMod");
@@ -419,7 +421,8 @@ public class ScarletSettings
     EncryptedPrefs encrypted;
     private JsonObject json;
     public final RegistryString lastRunVersion;
-    public final RegistryOffsetDateTime lastRunTime, lastAuditQuery, lastInstancesCheck, lastAuthRefresh, lastUpdateCheck, nextPollAction, nextModSummary, nextOutstandingMod;
+    public final RegistryString lastAnnouncementId;
+    public final RegistryOffsetDateTime lastRunTime, lastAuditQuery, lastInstancesCheck, lastAuthRefresh, lastUpdateCheck, lastAnnouncementCheck, nextPollAction, nextModSummary, nextOutstandingMod;
     public final RegistryLocalDateTime lastInstanceJoined;
     public final RegistryRectangle uiBounds;
     public final FileValuedIntRange heuristicKickCount, heuristicPeriodDays, outstandingPeriodDays;

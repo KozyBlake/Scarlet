@@ -117,6 +117,33 @@ public class HttpURLInputStream extends FilterInputStream
     }
     public static HttpURLInputStream of(String url, String method, Func.V1<IOException, HttpURLConnection> init, Func.V1<IOException, OutputStream> send, Predicate<String> validator) throws IOException
     {
+        HttpURLConnection connection = openConnection(url, method, init, validator);
+        try
+        {
+            if (send != null)
+            {
+                connection.setDoOutput(true);
+                try (OutputStream out = connection.getOutputStream())
+                {
+                    send.invoke(out);
+                    out.flush();
+                }
+            }
+            return new HttpURLInputStream(connection);
+        }
+        catch (IOException ioex)
+        {
+            connection.disconnect();
+            throw ioex;
+        }
+    }
+
+    public static HttpURLConnection openConnection(String url, String method, Func.V1<IOException, HttpURLConnection> init) throws IOException
+    {
+        return openConnection(url, method, init, null);
+    }
+    public static HttpURLConnection openConnection(String url, String method, Func.V1<IOException, HttpURLConnection> init, Predicate<String> validator) throws IOException
+    {
         if (validator != null && !validator.test(url))
             throw new IOException("Blocked unsafe URL: " + url);
         URL url0 = new URL(url);
@@ -132,16 +159,7 @@ public class HttpURLInputStream extends FilterInputStream
         {
             if (init != null)
                 init.invoke(connection);
-            if (send != null)
-            {
-                connection.setDoOutput(true);
-                try (OutputStream out = connection.getOutputStream())
-                {
-                    send.invoke(out);
-                    out.flush();
-                }
-            }
-            return new HttpURLInputStream(connection);
+            return connection;
         }
         catch (IOException ioex)
         {

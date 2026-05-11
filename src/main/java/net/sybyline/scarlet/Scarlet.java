@@ -13,6 +13,7 @@ import java.io.Reader;
 import java.io.StringReader;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
@@ -78,6 +79,7 @@ import net.sybyline.scarlet.util.EnforcementListState;
 public class Scarlet implements Closeable
 {
     private static final String DATA_FOLDER_NOTICE_ACK_FILENAME = "kozyblake-data-folder-notice-v1.flag";
+    private static final long META_CACHE_BUSTER_INTERVAL_MILLIS = 5L * 60L * 1_000L;
 
     public static final int JVM_DATA_MODEL;
     public static final int JAVA_SPEC;
@@ -138,6 +140,8 @@ public class Scarlet implements Closeable
         USER_AGENT_NAME = GROUP+"-"+NAME,
         USER_AGENT = USER_AGENT_NAME+"/"+VERSION+" "+DEV_DISCORD+"; "+SCARLET_DISCORD_URL+"; "+GITHUB_URL,
         LICENSE_URL = GITHUB_URL+"?tab=MIT-1-ov-file",
+        // Single endpoint that carries both update-version metadata and the
+        // optional broadcast announcement. See {@link ScarletMeta}.
         META_URL = "https://raw.githubusercontent.com/"+FORK_GROUP+"/"+FORK_REPOSITORY+"/main/meta.json",
         
         COMMUNITY_URL = "https://vrchat.community/",
@@ -511,6 +515,8 @@ public class Scarlet implements Closeable
     {
         if (!MiscUtils.isValidVersion(targetVersion))
             return 1;
+        if (this.allVersions.length == 0)
+            this.refreshAllVersions();
         if (Arrays.stream(this.allVersions).noneMatch(targetVersion::equals))
             return 2;
         try (FileWriter fw = new FileWriter("scarlet.version.target"))
@@ -712,6 +718,7 @@ public class Scarlet implements Closeable
     final ScarletSettings.FileValued<Boolean> confirmGroupInvite = this.settings.new FileValuedBoolean("ui_confirm_group_invite", "Confirmation dialog for group invites", false),
                                      alertForUpdates = this.settings.new FileValuedBoolean("ui_alert_update", "Notify for updates", true),
                                      alertForPreviewUpdates = this.settings.new FileValuedBoolean("ui_alert_update_preview", "Notify for preview updates", true),
+                                     alertForAnnouncements = this.settings.new FileValuedBoolean("ui_alert_announcement", "Notify for KozyBlake announcements", true),
                                      showUiDuringLoad = this.settings.new FileValuedBoolean("ui_show_during_load", "Show UI during load", false),
                                      discordKickBanEnabled = this.settings.new FileValuedBoolean("discord_kick_ban_enabled", "Enable built-in Discord moderation commands", false),
                                      discordKickBanPrompted = this.settings.new FileValuedBoolean("discord_kick_ban_prompted", "Discord moderation prompt shown", false);
@@ -1013,6 +1020,7 @@ public class Scarlet implements Closeable
         }
         this.splash.splashSubtext("Checking for updates");
         this.checkUpdate();
+        this.checkAnnouncement();
         // One-time opt-in for built-in Discord moderation commands
         if (Features.DISCORD_KICK_BAN_ENABLED && !this.discordKickBanPrompted.get())
         {
@@ -1127,6 +1135,15 @@ public class Scarlet implements Closeable
                 catch (Exception ex)
                 {
                     LOG.error("Exception maybe checking for update", ex);
+                }
+                // maybe check announcement
+                try
+                {
+                    this.maybeCheckAnnouncement();
+                }
+                catch (Exception ex)
+                {
+                    LOG.error("Exception maybe checking for announcement", ex);
                 }
                 // maybe save data
                 try
@@ -1670,8 +1687,23 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
         }
     }
 
+    void maybeCheckAnnouncement()
+    {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        if (now.isAfter(this.settings.lastAnnouncementCheck.getOrSupply().plusMinutes(10L)))
+        {
+            this.settings.lastAnnouncementCheck.set(now);
+            this.checkAnnouncement();
+        }
+    }
+
     String newerVersion = null,
            allVersions[] = {};
+    private final Object metaCacheLock = new Object();
+    private ScarletMeta cachedMeta;
+    private OffsetDateTime cachedMetaFetchedAt;
+    private String cachedMetaEtag,
+                   cachedMetaLastModified;
     VrchatApiVersionChecker.Report vrchatApiPreflightReport = null;
 
     void checkVrchatApiPreflight()
@@ -1759,15 +1791,115 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
         }
     }
 
+    private static final class MetaCheckResult
+    {
+        final ScarletMeta meta;
+        final String error;
+        final boolean notModified;
+        MetaCheckResult(ScarletMeta meta, String error, boolean notModified)
+        {
+            this.meta = meta;
+            this.error = error;
+            this.notModified = notModified;
+        }
+    }
+
+    private MetaCheckResult fetchMeta(boolean force)
+    {
+        OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
+        synchronized (this.metaCacheLock)
+        {
+            if (!force && this.cachedMeta != null && this.cachedMetaFetchedAt != null && now.isBefore(this.cachedMetaFetchedAt.plusSeconds(30L)))
+                return new MetaCheckResult(this.cachedMeta, null, false);
+        }
+
+        HttpURLConnection connection = null;
+        try
+        {
+            String metaUrl = metaRequestUrl(force);
+            String etag;
+            String lastModified;
+            ScarletMeta fallbackMeta;
+            synchronized (this.metaCacheLock)
+            {
+                etag = this.cachedMetaEtag;
+                lastModified = this.cachedMetaLastModified;
+                fallbackMeta = this.cachedMeta;
+            }
+            connection = HttpURLInputStream.openConnection(metaUrl, "GET", conn ->
+            {
+                conn.setRequestProperty("Accept", "application/json");
+                if (fallbackMeta != null && etag != null && !etag.trim().isEmpty())
+                    conn.setRequestProperty("If-None-Match", etag);
+                if (fallbackMeta != null && lastModified != null && !lastModified.trim().isEmpty())
+                    conn.setRequestProperty("If-Modified-Since", lastModified);
+            });
+
+            int status = connection.getResponseCode();
+            if (status == HttpURLConnection.HTTP_NOT_MODIFIED && fallbackMeta != null)
+            {
+                synchronized (this.metaCacheLock)
+                {
+                    this.cachedMetaFetchedAt = now;
+                }
+                LOG.debug("meta.json unchanged (HTTP 304); reusing cached metadata");
+                return new MetaCheckResult(fallbackMeta, null, true);
+            }
+            if (status == HttpURLConnection.HTTP_NOT_FOUND)
+                throw new FileNotFoundException(metaUrl);
+            if (status < 200 || status >= 300)
+                throw new IOException("HTTP " + status + " from " + metaUrl);
+
+            ScarletMeta meta;
+            try (Reader reader = new InputStreamReader(connection.getInputStream(), StandardCharsets.UTF_8))
+            {
+                meta = GSON_PRETTY.fromJson(reader, ScarletMeta.class);
+            }
+            synchronized (this.metaCacheLock)
+            {
+                this.cachedMeta = meta;
+                this.cachedMetaFetchedAt = now;
+                this.cachedMetaEtag = connection.getHeaderField("ETag");
+                this.cachedMetaLastModified = connection.getHeaderField("Last-Modified");
+            }
+            return new MetaCheckResult(meta, null, false);
+        }
+        catch (FileNotFoundException ex)
+        {
+            LOG.warn("Update metadata not found at {}; skipping update notice", META_URL);
+            return new MetaCheckResult(null, "Update metadata not found at " + META_URL, false);
+        }
+        catch (Exception ex)
+        {
+            LOG.error("Failed to download meta", ex);
+            return new MetaCheckResult(null, "Failed to download meta: " + ex, false);
+        }
+        finally
+        {
+            if (connection != null)
+                connection.disconnect();
+        }
+    }
+
+    private static String metaRequestUrl(boolean force)
+    {
+        long now = System.currentTimeMillis();
+        long bucket = force ? now : now / META_CACHE_BUSTER_INTERVAL_MILLIS;
+        return META_URL + "?scarlet_meta=" + bucket;
+    }
+
     UpdateCheckResult pollMeta()
+    {
+        return this.pollMeta(false);
+    }
+    UpdateCheckResult pollMeta(boolean force)
     {
         try
         {
-            ScarletMeta meta;
-            try (HttpURLInputStream in = HttpURLInputStream.get(META_URL))
-            {
-                meta = GSON_PRETTY.fromJson(new InputStreamReader(in), ScarletMeta.class);
-            }
+            MetaCheckResult metaResult = this.fetchMeta(force);
+            if (metaResult.error != null)
+                return new UpdateCheckResult(null, metaResult.error, false);
+            ScarletMeta meta = metaResult.meta;
             if (meta == null)
                 return new UpdateCheckResult(null, "meta.json was empty or could not be parsed", false);
             String cmp_version = this.alertForPreviewUpdates.get() || MiscUtils.isPreviewVersion(VERSION) ? meta.latest_build : meta.latest_release;
@@ -1778,15 +1910,10 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             boolean newer = MiscUtils.compareScarletVersion(VERSION, cmp_version) < 0;
             return new UpdateCheckResult(cmp_version, null, newer);
         }
-        catch (FileNotFoundException ex)
-        {
-            LOG.warn("Update metadata not found at {}; skipping update notice", META_URL);
-            return new UpdateCheckResult(null, "Update metadata not found at " + META_URL, false);
-        }
         catch (Exception ex)
         {
-            LOG.error("Failed to download meta", ex);
-            return new UpdateCheckResult(null, "Failed to download meta: " + ex, false);
+            LOG.error("Failed to check update metadata", ex);
+            return new UpdateCheckResult(null, "Failed to check update metadata: " + ex, false);
         }
     }
 
@@ -1820,7 +1947,8 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             }
             this.newerVersion = latest;
         }
-        this.refreshAllVersions();
+        if (result.updateAvailable)
+            this.refreshAllVersions();
     }
 
     /**
@@ -1831,11 +1959,123 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
      */
     public UpdateCheckResult checkUpdateNow()
     {
-        UpdateCheckResult result = this.pollMeta();
+        UpdateCheckResult result = this.pollMeta(true);
         this.refreshAllVersions();
         if (result.updateAvailable)
             this.newerVersion = result.latestVersion;
         return result;
+    }
+
+    // ── Announcement broadcast system ──────────────────────────────────────
+    // Mirrors the update-check shape and reads the *same* meta.json file
+    // — the optional `announcement` sub-object inside it. Maintainers edit
+    // that sub-object on the fork repo's main branch to push notices
+    // ("VRChat API change tomorrow, expect breakage") to every running
+    // Scarlet instance; remove the sub-object (or set it to null) to
+    // clear it. The `id` field is the dedup key so the same notice
+    // doesn't re-prompt; bump the id to broadcast a new one. Older
+    // Scarlet builds without the announcement code silently ignore the
+    // sub-object (Gson is lenient about unknown fields).
+
+    /**
+     * Result of an announcement probe against the {@code announcement}
+     * sub-object inside {@link #META_URL}.
+     * Shared by the periodic background check and the manual UI control.
+     */
+    public static final class AnnouncementCheckResult
+    {
+        /** Parsed announcement — null when no announcement, the file is empty, or the probe failed. */
+        public final ScarletAnnouncement announcement;
+        /** Non-null when the probe failed (network, parse, etc.). */
+        public final String error;
+        /** True when {@link #announcement} is non-null AND its id differs from the last one the user saw AND it hasn't expired. */
+        public final boolean isNew;
+        AnnouncementCheckResult(ScarletAnnouncement announcement, String error, boolean isNew)
+        {
+            this.announcement = announcement;
+            this.error = error;
+            this.isNew = isNew;
+        }
+    }
+
+    AnnouncementCheckResult pollAnnouncement()
+    {
+        return this.pollAnnouncement(false);
+    }
+    AnnouncementCheckResult pollAnnouncement(boolean force)
+    {
+        try
+        {
+            MetaCheckResult metaResult = this.fetchMeta(force);
+            if (metaResult.error != null)
+                return new AnnouncementCheckResult(null, metaResult.error, false);
+            ScarletMeta meta = metaResult.meta;
+            ScarletAnnouncement ann = meta == null ? null : meta.announcement;
+            // Missing / empty announcement sub-object → no current notice. Stay silent.
+            if (ann == null || ann.message == null || ann.message.trim().isEmpty())
+                return new AnnouncementCheckResult(null, null, false);
+            // Expired announcement → ignore silently so a forgotten one self-cleans.
+            if (ann.expires != null && !ann.expires.trim().isEmpty())
+            {
+                try
+                {
+                    OffsetDateTime expiresAt = OffsetDateTime.parse(ann.expires.trim());
+                    if (OffsetDateTime.now(ZoneOffset.UTC).isAfter(expiresAt))
+                        return new AnnouncementCheckResult(null, null, false);
+                }
+                catch (Exception ex)
+                {
+                    LOG.warn("Announcement {} has an unparseable 'expires' field ({}); treating as never-expiring", ann.id, ann.expires);
+                }
+            }
+            String seenId = this.settings.lastAnnouncementId.getOrNull();
+            boolean isNew = ann.id == null || !Objects.equals(seenId, ann.id);
+            return new AnnouncementCheckResult(ann, null, isNew);
+        }
+        catch (Exception ex)
+        {
+            LOG.error("Failed to check announcement metadata", ex);
+            return new AnnouncementCheckResult(null, "Failed to check announcement metadata: " + ex, false);
+        }
+    }
+
+    void checkAnnouncement()
+    {
+        AnnouncementCheckResult result = this.pollAnnouncement();
+        if (result.isNew && result.announcement != null && this.alertForAnnouncements.get())
+        {
+            ScarletAnnouncement ann = result.announcement;
+            LOG.info("Announcement {} received: {}", ann.id, ann.title != null ? ann.title : ann.message);
+            this.ui.showAnnouncement(ann);
+            if (ann.id != null)
+                this.settings.lastAnnouncementId.set(ann.id);
+        }
+    }
+
+    /**
+     * Manual announcement check entry point invoked by the UI. Runs the
+     * probe on the calling thread and returns the result so the UI can
+     * report success/up-to-date/no-announcement explicitly. Callers should
+     * dispatch this onto {@link #exec} instead of running it on the EDT.
+     * <p>
+     * Unlike the periodic check, this does NOT update
+     * {@code lastAnnouncementId} — the caller decides whether the user
+     * actually acknowledged the announcement.
+     */
+    public AnnouncementCheckResult checkAnnouncementNow()
+    {
+        return this.pollAnnouncement(true);
+    }
+
+    /**
+     * Record that the user has acknowledged the announcement with the given
+     * id, so it won't re-prompt on the next poll. Called from the manual
+     * dialog after the user dismisses it.
+     */
+    public void acknowledgeAnnouncement(String id)
+    {
+        if (id != null)
+            this.settings.lastAnnouncementId.set(id);
     }
 
     void maybeCheckInstances()

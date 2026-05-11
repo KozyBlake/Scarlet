@@ -690,6 +690,7 @@ public class ScarletUI implements IScarletUI
                     jmenu_help.add("Scarlet: License").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.LICENSE_URL)));
                     jmenu_help.add("Scarlet: Credits").addActionListener($ -> this.infoCredits());
                     jmenu_help.add("Scarlet: Check for updates").addActionListener($ -> this.checkScarletUpdateManual());
+                    jmenu_help.add("Scarlet: Check for announcements").addActionListener($ -> this.checkScarletAnnouncementManual());
                     jmenu_help.add("VRChat API: Check Status").addActionListener($ -> this.checkVrchatApiStatusManual());
                     jmenu_help.addSeparator();
                     jmenu_help.add("Text-to-Speech: Natural Voices (Windows)").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(WinSapiTtsProvider.NaturalVoiceSAPIAdapter_URL)));
@@ -1636,6 +1637,133 @@ public class ScarletUI implements IScarletUI
             Scarlet.UpdateCheckResult result = this.scarlet.checkUpdateNow();
             Swing.invokeLater(() -> this.showScarletUpdateDialog(result));
         });
+    }
+
+    /**
+     * Help-menu action: probe the fork's meta.json right now (specifically
+     * its {@code announcement} sub-object) and report back to the user.
+     * Uses {@link Scarlet#checkAnnouncementNow()} so we share parsing
+     * logic with the periodic background check.
+     */
+    private void checkScarletAnnouncementManual()
+    {
+        this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_500L, "Checking for Scarlet announcements", "Fetching meta.json from " + Scarlet.FORK_GROUP + "/" + Scarlet.FORK_REPOSITORY, Color.WHITE);
+        this.scarlet.exec.execute(() ->
+        {
+            Scarlet.AnnouncementCheckResult result = this.scarlet.checkAnnouncementNow();
+            Swing.invokeLater(() -> this.showScarletAnnouncementManualDialog(result));
+        });
+    }
+
+    private void showScarletAnnouncementManualDialog(Scarlet.AnnouncementCheckResult result)
+    {
+        if (result.error != null)
+        {
+            JOptionPane.showMessageDialog(
+                this.jframe,
+                "Could not check for announcements:\n\n" + result.error,
+                "Scarlet Announcement Check",
+                JOptionPane.WARNING_MESSAGE
+            );
+            return;
+        }
+        if (result.announcement == null)
+        {
+            JOptionPane.showMessageDialog(
+                this.jframe,
+                "No announcements right now.",
+                "Scarlet Announcement Check",
+                JOptionPane.INFORMATION_MESSAGE
+            );
+            return;
+        }
+        // Reuse the same dialog as the auto-prompt and treat the manual
+        // viewing as acknowledgement so it doesn't pop again next hour.
+        this.showAnnouncement(result.announcement);
+    }
+
+    /**
+     * Renders an announcement to the user. Called both by the auto-prompt
+     * from the periodic check (via {@link Scarlet#checkAnnouncement()})
+     * and by the manual Help-menu action. Severity drives the icon;
+     * a non-null url adds an "Open link" button. After the dialog closes
+     * we record the announcement id as acknowledged so it won't re-prompt.
+     */
+    public void showAnnouncement(ScarletAnnouncement ann)
+    {
+        if (ann == null || ann.message == null)
+            return;
+        Swing.invokeLater(() ->
+        {
+            String title = ann.title != null && !ann.title.trim().isEmpty()
+                ? ann.title
+                : "Scarlet announcement";
+            int icon;
+            String severity = ann.severity == null ? "" : ann.severity.trim().toLowerCase();
+            switch (severity)
+            {
+            case "urgent":
+            case "error":
+            case "critical":
+                icon = JOptionPane.ERROR_MESSAGE;
+                break;
+            case "warning":
+            case "warn":
+                icon = JOptionPane.WARNING_MESSAGE;
+                break;
+            case "info":
+            case "":
+            default:
+                icon = JOptionPane.INFORMATION_MESSAGE;
+                break;
+            }
+            boolean hasLink = isAllowedAnnouncementUrl(ann.url);
+            if (ann.url != null && !ann.url.trim().isEmpty() && !hasLink)
+                LOG.warn("Ignoring unsafe announcement link {}", ann.url);
+            Object[] options = hasLink
+                ? new Object[] { "OK", "Open link" }
+                : new Object[] { "OK" };
+            int choice = JOptionPane.showOptionDialog(
+                this.jframe,
+                ann.message,
+                title,
+                JOptionPane.DEFAULT_OPTION,
+                icon,
+                null,
+                options,
+                "OK"
+            );
+            if (hasLink && choice == 1)
+            {
+                try
+                {
+                    MiscUtils.AWTDesktop.browse(URI.create(ann.url.trim()));
+                }
+                catch (Exception ex)
+                {
+                    LOG.warn("Failed to open announcement link {} ({})", ann.url, ex.toString());
+                }
+            }
+            // Mark as acknowledged regardless of which button was pressed
+            // — once the user has seen it, they've seen it.
+            this.scarlet.acknowledgeAnnouncement(ann.id);
+        });
+    }
+
+    private static boolean isAllowedAnnouncementUrl(String value)
+    {
+        if (value == null || value.trim().isEmpty())
+            return false;
+        try
+        {
+            URI uri = URI.create(value.trim());
+            String scheme = uri.getScheme();
+            return "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
+        }
+        catch (Exception ex)
+        {
+            return false;
+        }
     }
 
     private void showScarletUpdateDialog(Scarlet.UpdateCheckResult result)

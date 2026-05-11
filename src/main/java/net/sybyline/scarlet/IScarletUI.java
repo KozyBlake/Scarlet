@@ -34,6 +34,7 @@ public interface IScarletUI extends Closeable
     void setUIScale();
     void loadSettings();
     void refreshVrchatApiStatus();
+    void showAnnouncement(ScarletAnnouncement announcement);
 
     void fireSort();
     void clearInstance();
@@ -54,6 +55,7 @@ class ScarletUIHeadless implements IScarletUI
     public void setUIScale() {}
     public void loadSettings() {}
     public void refreshVrchatApiStatus() {}
+    public void showAnnouncement(ScarletAnnouncement announcement) {}
     public void fireSort() {}
     public void clearInstance() {}
     public void playerJoin(boolean initialPreamble, String id, String name, LocalDateTime joined, String advisory, Color text_color, int priority, boolean isRejoinFromPrev) {}

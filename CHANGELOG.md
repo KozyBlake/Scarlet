@@ -12,6 +12,8 @@ Hotfix highlights:
 - **Readable help-desk reports for stylized usernames.** Report URLs now use a normalized ASCII subject while preserving the exact VRChat display name in the report description so staff can identify the reported user.
 - **Correct report versioning.** Report footers, Discord embed footers, UI labels, startup output, and packaged JAR metadata now report `KozyBlake/Scarlet 0.4.17-b1_hotfix`.
 - **Fork update metadata.** `meta.json` now advertises `0.4.17-b1_hotfix` for both release and build update checks.
+- **Lower-bandwidth update checks.** Scarlet reuses the same `meta.json` fetch for update and announcement checks and asks GitHub for `304 Not Modified` when nothing changed.
+- **Security hardening for announcements.** Announcement link buttons are restricted to normal web links so `file://` paths and custom app protocols cannot be broadcast as clickable actions.
 - **Fork branding polish.** Remaining plain `Scarlet` version labels, startup text, and log prefixes now use `KozyBlake/Scarlet` where user-facing fork identity matters.
 
 Original 0.4.17-b1 highlights still included:
@@ -20,6 +22,10 @@ Original 0.4.17-b1 highlights still included:
 - **Group instance wizard.** A desktop UI for spinning up VRChat group instances with world / access / region / age-gate / avatar-performance prompts, and an option to launch straight into the new instance in VR or Desktop mode.
 - **Discord warn + action-log channel.** A new `/discord-warn` command and a configurable action-log channel so warn / kick / ban events get a paper trail.
 - **Faster, friendlier self-updates.** Hourly update polls, a manual *Help → Scarlet: Check for updates* entry, a fork-aware metadata URL, and a comparator that recognises `-b1` suffixes as iterations ahead of the bare release.
+
+### Security Advisory
+
+- **CVE pending / not assigned: announcement custom-protocol link handling.** During local abuse testing of the new GitHub-backed announcement popup, development builds accepted arbitrary URL schemes from `meta.json`. If a maintainer or compromised push-capable account published an announcement with a local file or custom protocol URL, and a user clicked the announcement's `Open link` button, Scarlet could hand that URI to the operating system through Java Desktop integration. Depending on the user's browser/OS/protocol-handler settings, this could invoke a local application or registered protocol handler. The fixed behavior allowlists only `http://` and `https://` announcement links; all other schemes are ignored defensively. The issue required control of the announcement metadata source plus user interaction, and no announcement link is opened automatically.
 
 ### Added
 
@@ -71,6 +77,9 @@ Original 0.4.17-b1 highlights still included:
 - Version reporting now reads the packaged implementation version at runtime instead of relying on a compile-time-inlined constant, preventing report footers from showing an older build after partial recompiles.
 - All primary packaged JAR variants now receive manifest implementation metadata so report/version text can resolve the correct build from the artifact itself.
 - Report footer branding now uses `KozyBlake/Scarlet` instead of plain `Scarlet`.
+- Background update / announcement polling now uses HTTP validators (`ETag` / `Last-Modified`), a short in-memory cache, and a shared 5-minute metadata cache key so unchanged `meta.json` checks do not repeatedly download the full file or get pinned to a stale GitHub CDN object for too long.
+- Announcement checks now run every 10 minutes instead of hourly, while normal update checks remain hourly.
+- Announcement link buttons now only open `http://` and `https://` URLs; local files and app/protocol links are ignored defensively.
 
 ### Removed
 
