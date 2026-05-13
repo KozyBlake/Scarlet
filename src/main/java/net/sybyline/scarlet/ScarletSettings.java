@@ -7,9 +7,15 @@ import java.io.File;
 import java.io.Reader;
 import java.io.Writer;
 import java.lang.reflect.Type;
+import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
+import java.nio.file.FileAlreadyExistsException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -79,20 +85,40 @@ public class ScarletSettings
             String encoded = Base64.getEncoder().encodeToString(secret);
             if (!Files.isDirectory(secretPath.getParent()))
                 Files.createDirectories(secretPath.getParent());
-            Files.write(secretPath, encoded.getBytes(StandardCharsets.UTF_8));
             try
             {
-                Files.setPosixFilePermissions(secretPath, EnumSet.of(PosixFilePermission.OWNER_READ, PosixFilePermission.OWNER_WRITE));
+                writeOwnerOnlyNewFile(secretPath, encoded.getBytes(StandardCharsets.UTF_8));
             }
-            catch (UnsupportedOperationException ignored)
+            catch (FileAlreadyExistsException ignored)
             {
-                // Best effort only; Windows and some filesystems do not support POSIX perms.
+                String existing = new String(Files.readAllBytes(secretPath), StandardCharsets.UTF_8).trim();
+                if (!existing.isEmpty())
+                    return existing;
+                throw ignored;
             }
             return encoded;
         }
         catch (Exception ex)
         {
             throw new IllegalStateException("Failed to initialize local fallback encryption password", ex);
+        }
+    }
+
+    private static void writeOwnerOnlyNewFile(Path path, byte[] bytes) throws java.io.IOException
+    {
+        try
+        {
+            FileAttribute<java.util.Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(EnumSet.of(
+                PosixFilePermission.OWNER_READ,
+                PosixFilePermission.OWNER_WRITE));
+            try (SeekableByteChannel channel = Files.newByteChannel(path, EnumSet.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE), attr))
+            {
+                channel.write(ByteBuffer.wrap(bytes));
+            }
+        }
+        catch (UnsupportedOperationException ex)
+        {
+            Files.write(path, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
         }
     }
 

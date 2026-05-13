@@ -773,7 +773,10 @@ public interface MiscUtils
             // Linux fallback: try xdg-open, then common browsers
             if (Platform.CURRENT.is$nix())
             {
-                for (String cmd : new String[]{"xdg-open", "sensible-browser", "x-www-browser", "firefox", "chromium-browser", "google-chrome"})
+                String[] commands = isBrowserHandledScheme(uri)
+                    ? new String[]{"xdg-open", "sensible-browser", "x-www-browser", "firefox", "chromium-browser", "google-chrome"}
+                    : new String[]{"xdg-open"};
+                for (String cmd : commands)
                 {
                     final String finalCmd = cmd;
                     try
@@ -796,6 +799,11 @@ public interface MiscUtils
             }
             Scarlet.LOG.warn("Desktop BROWSE action is not supported on this platform");
             return false;
+        }
+        static boolean isBrowserHandledScheme(URI uri)
+        {
+            String scheme = uri == null ? null : uri.getScheme();
+            return "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme) || "mailto".equalsIgnoreCase(scheme);
         }
 
         /**

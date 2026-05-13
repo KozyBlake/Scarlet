@@ -109,13 +109,27 @@ public final class EncryptedPrefs
         {
             String absolutePath = prefs.absolutePath(),
                    hash = masterPasswordKey(absolutePath, globalPassword);
+            String localPassword = readLocalPasswordAt(prefs, globalPassword, absolutePath, hash);
+            if (localPassword != null)
+                return localPassword;
+            return readLocalPasswordAt(prefs, globalPassword, absolutePath, legacyMasterPasswordKey(absolutePath, globalPassword));
+        }
+        catch (Exception ex)
+        {
+            return null;
+        }
+    }
+    private static String readLocalPasswordAt(Preferences prefs, String globalPassword, String absolutePath, String hash)
+    {
+        try
+        {
             if (SUPPORTED_KEY_SIZE < 128)
                 return prefs.get(FALLBACK_PREFIX + hash, null);
             byte[] localPasswordBytes = prefs.getByteArray(hash, null);
             if (localPasswordBytes == null)
                 return null;
             SecretKey initKey = derive(globalPassword.toCharArray(), absolutePath);
-            return decrypt(initKey, localPasswordBytes);
+            return decryptQuiet(initKey, localPasswordBytes);
         }
         catch (Exception ex)
         {
@@ -140,6 +154,10 @@ public final class EncryptedPrefs
     }
     public static String masterPasswordKey(String absolutePath, String globalPassword)
     {
+        return hash("local-password:" + absolutePath);
+    }
+    static String legacyMasterPasswordKey(String absolutePath, String globalPassword)
+    {
         return hash(absolutePath + ":" + globalPassword);
     }
     private static char[] init(Preferences prefs, String globalPassword)
@@ -151,6 +169,15 @@ public final class EncryptedPrefs
             String existing = prefs.get(FALLBACK_PREFIX + hash, null);
             if (existing != null)
                 return existing.toCharArray();
+            String legacyHash = legacyMasterPasswordKey(absolutePath, globalPassword);
+            existing = prefs.get(FALLBACK_PREFIX + legacyHash, null);
+            if (existing != null)
+            {
+                prefs.put(FALLBACK_PREFIX + hash, existing);
+                prefs.remove(FALLBACK_PREFIX + legacyHash);
+                flushPrefs(prefs, "migrating plain local password key");
+                return existing.toCharArray();
+            }
             byte[] bytes = new byte[32];
             rand.nextBytes(bytes);
             String localPassword = new String(Base64.getUrlEncoder().encode(bytes), StandardCharsets.UTF_8);
@@ -165,6 +192,19 @@ public final class EncryptedPrefs
             String decrypted = decrypt(initKey, localPasswordBytes);
             if (decrypted != null)
                 return decrypted.toCharArray();
+        }
+        String legacyHash = legacyMasterPasswordKey(absolutePath, globalPassword);
+        localPasswordBytes = prefs.getByteArray(legacyHash, null);
+        if (localPasswordBytes != null)
+        {
+            String decrypted = decrypt(initKey, localPasswordBytes);
+            if (decrypted != null)
+            {
+                prefs.putByteArray(hash, localPasswordBytes);
+                prefs.remove(legacyHash);
+                flushPrefs(prefs, "migrating encrypted local password key");
+                return decrypted.toCharArray();
+            }
         }
         byte[] bytes = new byte[32];
         rand.nextBytes(bytes);
@@ -303,7 +343,15 @@ public final class EncryptedPrefs
         }
     }
 
+    private static String decryptQuiet(SecretKey key, byte[] combined)
+    {
+        return decrypt(key, combined, false);
+    }
     private static String decrypt(SecretKey key, byte[] combined)
+    {
+        return decrypt(key, combined, true);
+    }
+    private static String decrypt(SecretKey key, byte[] combined, boolean logFailure)
     {
         try
         {
@@ -317,7 +365,8 @@ public final class EncryptedPrefs
         }
         catch (Exception e)
         {
-            LOG.warn("Exception decrypting", e);
+            if (logFailure)
+                LOG.warn("Exception decrypting", e);
             return null;
         }
     }

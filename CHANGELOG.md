@@ -14,6 +14,8 @@ Hotfix highlights:
 - **Fork update metadata.** `meta.json` now advertises `0.4.17-b1_hotfix` for both release and build update checks.
 - **Lower-bandwidth update checks.** Scarlet reuses the same `meta.json` fetch for update and announcement checks and asks GitHub for `304 Not Modified` when nothing changed.
 - **Security hardening for announcements.** Announcement link buttons are restricted to normal web links so `file://` paths and custom app protocols cannot be broadcast as clickable actions.
+- **Security hardening for VRChat launch links.** Windows client launch now uses argument-list process creation and URL-encodes the VRChat location, preventing crafted locations from injecting extra launch arguments.
+- **Announcement metadata guard.** GitHub now raises an immediate warning issue if `meta.json` announcement metadata is pushed by a GitHub actor outside the trusted announcer allowlist.
 - **Fork branding polish.** Remaining plain `Scarlet` version labels, startup text, and log prefixes now use `KozyBlake/Scarlet` where user-facing fork identity matters.
 
 Original 0.4.17-b1 highlights still included:
@@ -26,6 +28,7 @@ Original 0.4.17-b1 highlights still included:
 ### Security Advisory
 
 - **CVE pending / not assigned: announcement custom-protocol link handling.** During local abuse testing of the new GitHub-backed announcement popup, development builds accepted arbitrary URL schemes from `meta.json`. If a maintainer or compromised push-capable account published an announcement with a local file or custom protocol URL, and a user clicked the announcement's `Open link` button, Scarlet could hand that URI to the operating system through Java Desktop integration. Depending on the user's browser/OS/protocol-handler settings, this could invoke a local application or registered protocol handler. The fixed behavior allowlists only `http://` and `https://` announcement links; all other schemes are ignored defensively. The issue required control of the announcement metadata source plus user interaction, and no announcement link is opened automatically.
+- **Announcement metadata guard.** Pushes that change `meta.json` on `main` are checked by GitHub Actions against a trusted announcer allowlist. Untrusted actors create a warning issue and fail the guard job. This warning path is triggered by GitHub's push event, not by raw-file polling, so it is not affected by CDN cache delay.
 
 ### Added
 

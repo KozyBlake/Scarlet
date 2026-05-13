@@ -1,0 +1,65 @@
+name: Announcement Guard
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - meta.json
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  warn-untrusted-announcer:
+    name: Warn on untrusted announcement metadata push
+    runs-on: ubuntu-latest
+    env:
+      TRUSTED_ANNOUNCERS: KozyBlake
+      WARNING_MENTIONS: "@KozyBlake"
+    steps:
+      - name: Check actor trust
+        id: trust
+        shell: bash
+        run: |
+          actor="${GITHUB_ACTOR,,}"
+          trusted_list=" ${TRUSTED_ANNOUNCERS,,} "
+          if [[ "$trusted_list" == *" $actor "* ]]; then
+            echo "trusted=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "trusted=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Create warning issue
+        if: steps.trust.outputs.trusted != 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const actor = context.actor;
+            const sha = context.sha;
+            const runUrl = `${context.serverUrl}/${owner}/${repo}/actions/runs/${context.runId}`;
+            const commitUrl = `${context.serverUrl}/${owner}/${repo}/commit/${sha}`;
+            const mentions = process.env.WARNING_MENTIONS || "";
+            const body = [
+              mentions,
+              `Announcement metadata in \`meta.json\` was pushed by \`${actor}\`, who is not listed in \`TRUSTED_ANNOUNCERS\` for the announcement guard workflow.`,
+              `Commit: ${commitUrl}`,
+              `Guard run: ${runUrl}`,
+              "Review this immediately. If this was expected, add the GitHub username to `TRUSTED_ANNOUNCERS` in `.github/workflows/announcement-guard.yml`.",
+              "If this was not expected, revoke the actor's repository access or credentials and replace the announcement metadata."
+            ].filter(Boolean).join("\n\n");
+            await github.rest.issues.create({
+              owner,
+              repo,
+              title: `Security warning: untrusted announcement metadata push by ${actor}`,
+              body
+            });
+
+      - name: Fail untrusted announcement push
+        if: steps.trust.outputs.trusted != 'true'
+        run: |
+          echo "Untrusted actor changed meta.json. Warning issue created."
+          exit 1

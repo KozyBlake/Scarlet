@@ -35,9 +35,10 @@ public class MavenDepsLoader
 
     static final String[] repos =
     {
-        "https://search.maven.org/remotecontent?filepath=",
-        "https://jitpack.io/",
-        "https://oss.sonatype.org/content/repositories/snapshots/",
+        // Runtime downloads are disabled by default. If explicitly enabled,
+        // only recover artifacts from Maven Central; lower-trust build-on-demand
+        // repositories are intentionally excluded from this path.
+        "https://repo1.maven.org/maven2/",
     };
 
     static Path jarPath = null;

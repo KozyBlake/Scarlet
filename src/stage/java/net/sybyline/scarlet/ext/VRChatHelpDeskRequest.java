@@ -16,6 +16,7 @@ import net.sybyline.scarlet.jcef.JcefService;
 import net.sybyline.scarlet.jcef.JcefVRChatHelpDesk;
 import net.sybyline.scarlet.selenium.SeleniumVRChatHelpDesk;
 import net.sybyline.scarlet.util.HttpURLInputStream;
+import net.sybyline.scarlet.util.TemplateStrings;
 import net.sybyline.scarlet.util.VRChatHelpDeskURLs;
 
 public interface VRChatHelpDeskRequest extends AutoCloseable
@@ -159,10 +160,12 @@ public interface VRChatHelpDeskRequest extends AutoCloseable
                 tempDir = tempDir.getAbsoluteFile();
             if (!tempDir.isDirectory())
                 tempDir.mkdirs();
+            File root = tempDir.getCanonicalFile();
             URL url0 = new URL(resource);
-            String name = url0.getPath().substring(url0.getPath().lastIndexOf('/'));
-            File tgt = new File(tempDir, name);
-            try (HttpURLInputStream in = HttpURLInputStream.get(resource))
+            File tgt = new File(root, remoteAttachmentName(url0)).getCanonicalFile();
+            if (!tgt.toPath().startsWith(root.toPath()))
+                return null;
+            try (HttpURLInputStream in = HttpURLInputStream.get(resource, HttpURLInputStream.PUBLIC_ONLY))
             {
                 Files.copy(in, tgt.toPath());
             }
@@ -181,12 +184,14 @@ public interface VRChatHelpDeskRequest extends AutoCloseable
         {
             if (!tempDir.isAbsolute())
                 tempDir = tempDir.toAbsolutePath();
+            tempDir = tempDir.normalize();
             if (!Files.isDirectory(tempDir))
                 Files.createDirectories(tempDir);
             URL url0 = new URL(resource);
-            String name = url0.getPath().substring(url0.getPath().lastIndexOf('/'));
-            Path tgt = tempDir.resolve(name);
-            try (HttpURLInputStream in = HttpURLInputStream.get(resource))
+            Path tgt = tempDir.resolve(remoteAttachmentName(url0)).normalize();
+            if (!tgt.startsWith(tempDir))
+                return null;
+            try (HttpURLInputStream in = HttpURLInputStream.get(resource, HttpURLInputStream.PUBLIC_ONLY))
             {
                 Files.copy(in, tgt);
             }
@@ -196,6 +201,13 @@ public interface VRChatHelpDeskRequest extends AutoCloseable
         {
             return null;
         }
+    }
+    public static String remoteAttachmentName(URL url)
+    {
+        String path = url == null ? null : url.getPath();
+        String name = path == null ? "" : path.substring(path.lastIndexOf('/') + 1);
+        name = TemplateStrings.sanitizePathComponent(name);
+        return "_".equals(name) ? "attachment" : name;
     }
 
     public CompletableFuture<Void> submit();

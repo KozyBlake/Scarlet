@@ -1717,15 +1717,17 @@ public class ScarletUI implements IScarletUI
                 icon = JOptionPane.INFORMATION_MESSAGE;
                 break;
             }
-            boolean hasLink = isAllowedAnnouncementUrl(ann.url);
+            URI announcementUri = allowedHttpUri(ann.url);
+            boolean hasLink = announcementUri != null;
             if (ann.url != null && !ann.url.trim().isEmpty() && !hasLink)
                 LOG.warn("Ignoring unsafe announcement link {}", ann.url);
+            String message = hasLink ? ann.message + "\n\nLink: " + announcementUri : ann.message;
             Object[] options = hasLink
                 ? new Object[] { "OK", "Open link" }
                 : new Object[] { "OK" };
             int choice = JOptionPane.showOptionDialog(
                 this.jframe,
-                ann.message,
+                message,
                 title,
                 JOptionPane.DEFAULT_OPTION,
                 icon,
@@ -1737,7 +1739,7 @@ public class ScarletUI implements IScarletUI
             {
                 try
                 {
-                    MiscUtils.AWTDesktop.browse(URI.create(ann.url.trim()));
+                    MiscUtils.AWTDesktop.browse(announcementUri);
                 }
                 catch (Exception ex)
                 {
@@ -1752,17 +1754,24 @@ public class ScarletUI implements IScarletUI
 
     private static boolean isAllowedAnnouncementUrl(String value)
     {
+        return allowedHttpUri(value) != null;
+    }
+
+    private static URI allowedHttpUri(String value)
+    {
         if (value == null || value.trim().isEmpty())
-            return false;
+            return null;
         try
         {
-            URI uri = URI.create(value.trim());
+            URI uri = new URI(value.trim());
             String scheme = uri.getScheme();
-            return "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme);
+            if (!uri.isAbsolute() || uri.isOpaque() || uri.getAuthority() == null)
+                return null;
+            return "http".equalsIgnoreCase(scheme) || "https".equalsIgnoreCase(scheme) ? uri : null;
         }
         catch (Exception ex)
         {
-            return false;
+            return null;
         }
     }
 
@@ -1792,7 +1801,7 @@ public class ScarletUI implements IScarletUI
                 "Open download page"
             );
             if (choice == JOptionPane.YES_OPTION)
-                MiscUtils.AWTDesktop.browse(URI.create(Scarlet.GITHUB_URL + "/releases/tag/" + latest));
+                MiscUtils.AWTDesktop.browse(Scarlet.releaseUri(latest));
             return;
         }
         String latest = result.latestVersion == null ? "unknown" : result.latestVersion;

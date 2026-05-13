@@ -16,6 +16,7 @@ import net.sybyline.scarlet.util.Location;
 import net.sybyline.scarlet.util.MiscUtils;
 import net.sybyline.scarlet.util.Platform;
 import net.sybyline.scarlet.util.Sys;
+import net.sybyline.scarlet.util.URLs;
 
 public interface VrcLaunch
 {
@@ -76,7 +77,7 @@ public interface VrcLaunch
     {
         if (mode == null)
             mode = LaunchMode.DESKTOP;
-        String vrchatUri = "vrchat://launch?ref=KozyBlakeScarlet&id=" + location;
+        String vrchatUri = location == null ? null : "vrchat://launch?ref=KozyBlakeScarlet&id=" + URLs.encode(location);
 
         // Build the VRChat launch arguments (mirrors what launch_win passes on Windows)
         java.util.List<String> vrcArgs = new java.util.ArrayList<>();
@@ -126,8 +127,11 @@ public interface VrcLaunch
         }
 
         // Strategy 3: original xdg-open / URI handler fallback
-        LOG.info("Launching VRChat via URI handler: {}", vrchatUri);
-        MiscUtils.AWTDesktop.browse(URI.create(vrchatUri));
+        if (vrchatUri != null)
+        {
+            LOG.info("Launching VRChat via URI handler: {}", vrchatUri);
+            MiscUtils.AWTDesktop.browse(URI.create(vrchatUri));
+        }
     }
     static void launch_win(String userId, String location, LaunchMode mode) throws Exception
     {
@@ -148,58 +152,30 @@ public interface VrcLaunch
                  throw new Exception(String.format("Failed to locate VRChat via registry: 0x%08x", werr));
              path = new String(buffer, 0, pcbData.getValue() - 2, StandardCharsets.UTF_16LE);
         }
-        StringBuilder sb = new StringBuilder();
-        sb
-        .append(new File(path, "launch.exe").getAbsolutePath())
-        ;
-        
+        java.util.List<String> cmd = new java.util.ArrayList<>();
+        cmd.add(new File(path, "launch.exe").getAbsolutePath());
+
         if (location != null)
         {
-            sb
-            .append(' ')
-            .append("vrchat://launch?ref=KozyBlakeScarlet&id=")
-            .append(location)
-            ;
+            cmd.add("vrchat://launch?ref=KozyBlakeScarlet&id=" + URLs.encode(location));
         }
-        
+
         if (userId != null)
         {
-            sb
-            .append(' ')
-            .append("--profile=")
-            .append(userId)
-            ;
+            cmd.add("--profile=" + userId);
         }
-        
+
         if (mode.noVr)
         {
-            sb
-            .append(' ')
-            .append("--no-vr")
-            ;
+            cmd.add("--no-vr");
         }
-        
-        sb
-        .append(' ')
-        .append("--enable-sdk-log-levels")
-        ;
-        
-        sb
-        .append(' ')
-        .append("--enable-udon-debug-logging")
-        ;
-        
-        sb
-        .append(' ')
-        .append("--enable-verbose-logging")
-        ;
-        
-        sb
-        .append(' ')
-        .append("--log-debug-levels=\"API;All;Always;AssetBundleDownloadManager;ContentCreator;Errors;NetworkData;NetworkProcessing;NetworkTransport;Warnings\"")
-        ;
-        
-        Runtime.getRuntime().exec(sb.toString());
+
+        cmd.add("--enable-sdk-log-levels");
+        cmd.add("--enable-udon-debug-logging");
+        cmd.add("--enable-verbose-logging");
+        cmd.add("--log-debug-levels=API;All;Always;AssetBundleDownloadManager;ContentCreator;Errors;NetworkData;NetworkProcessing;NetworkTransport;Warnings");
+
+        new ProcessBuilder(cmd).start();
     }
 
 }

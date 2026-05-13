@@ -353,6 +353,9 @@
     <JDA.version>6.3.0</JDA.version>
     <concentus.version>master-3885c4e465-1</concentus.version>
     <jna.version>5.18.1</jna.version>
+    <okhttp.version>4.12.0</okhttp.version>
+    <okio.version>3.9.0</okio.version>
+    <kotlin.version>2.2.21</kotlin.version>
     <libdave.version>1.0.0</libdave.version>
     <libdave.native.version>0.1.2</libdave.native.version>
     <scarlet.androidDaveAbi>arm64-v8a</scarlet.androidDaveAbi>
@@ -518,6 +521,41 @@
       </build>
     </profile>
   </profiles>
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <!-- Override vrchatapi-java's older runtime HTTP stack. -->
+        <groupId>com.squareup.okhttp3</groupId>
+        <artifactId>okhttp</artifactId>
+        <version>${okhttp.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.squareup.okhttp3</groupId>
+        <artifactId>logging-interceptor</artifactId>
+        <version>${okhttp.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.squareup.okio</groupId>
+        <artifactId>okio</artifactId>
+        <version>${okio.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.jetbrains.kotlin</groupId>
+        <artifactId>kotlin-stdlib</artifactId>
+        <version>${kotlin.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.jetbrains.kotlin</groupId>
+        <artifactId>kotlin-stdlib-jdk7</artifactId>
+        <version>${kotlin.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.jetbrains.kotlin</groupId>
+        <artifactId>kotlin-stdlib-jdk8</artifactId>
+        <version>${kotlin.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
   <dependencies>
     <dependency>
       <groupId>net.dv8tion</groupId>
@@ -541,6 +579,12 @@
       <groupId>net.gcardone.junidecode</groupId>
       <artifactId>junidecode</artifactId>
       <version>0.5.2</version>
+    </dependency>
+    <dependency>
+      <!-- Override lava-common's older transitive commons-io dependency. -->
+      <groupId>commons-io</groupId>
+      <artifactId>commons-io</artifactId>
+      <version>2.22.0</version>
     </dependency>
     <dependency>
       <groupId>com.j256.two-factor-auth</groupId>

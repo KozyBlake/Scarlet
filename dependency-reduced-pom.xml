@@ -365,18 +365,55 @@
       <url>https://jitpack.io</url>
     </repository>
   </repositories>
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>com.squareup.okhttp3</groupId>
+        <artifactId>okhttp</artifactId>
+        <version>${okhttp.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.squareup.okhttp3</groupId>
+        <artifactId>logging-interceptor</artifactId>
+        <version>${okhttp.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>com.squareup.okio</groupId>
+        <artifactId>okio</artifactId>
+        <version>${okio.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.jetbrains.kotlin</groupId>
+        <artifactId>kotlin-stdlib</artifactId>
+        <version>${kotlin.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.jetbrains.kotlin</groupId>
+        <artifactId>kotlin-stdlib-jdk7</artifactId>
+        <version>${kotlin.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.jetbrains.kotlin</groupId>
+        <artifactId>kotlin-stdlib-jdk8</artifactId>
+        <version>${kotlin.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
   <properties>
     <scarlet.androidDaveNdk>${env.ANDROID_NDK_HOME}</scarlet.androidDaveNdk>
     <scarlet.androidDaveSourceDir>${project.basedir}/libdave-jvm-master</scarlet.androidDaveSourceDir>
     <scarlet.androidDaveBuildDir>${project.build.directory}/libdave-jvm-android-${scarlet.androidDaveArch}</scarlet.androidDaveBuildDir>
+    <kotlin.version>2.2.21</kotlin.version>
     <scarlet.androidDaveArch>aarch64</scarlet.androidDaveArch>
     <libdave.native.version>0.1.2</libdave.native.version>
     <concentus.version>master-3885c4e465-1</concentus.version>
     <vrchatapi.version>1.20.8-nightly.15</vrchatapi.version>
     <scarlet.androidDaveAbi>arm64-v8a</scarlet.androidDaveAbi>
     <scarlet.androidDaveToolchainFile>${scarlet.androidDaveNdk}/build/cmake/android.toolchain.cmake</scarlet.androidDaveToolchainFile>
+    <okhttp.version>4.12.0</okhttp.version>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <JDA.version>6.3.0</JDA.version>
+    <okio.version>3.9.0</okio.version>
     <libdave.version>1.0.0</libdave.version>
     <scarlet.androidDaveLibrary>${scarlet.androidDaveBuildDir}/libdave-jvm.so</scarlet.androidDaveLibrary>
     <scarlet.androidDavePlatform>android-24</scarlet.androidDavePlatform>

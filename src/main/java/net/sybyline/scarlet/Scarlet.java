@@ -15,6 +15,8 @@ import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.nio.ByteBuffer;
+import java.nio.channels.SeekableByteChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.FileAlreadyExistsException;
@@ -23,13 +25,17 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileAttribute;
 import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
@@ -80,6 +86,7 @@ public class Scarlet implements Closeable
 {
     private static final String DATA_FOLDER_NOTICE_ACK_FILENAME = "kozyblake-data-folder-notice-v1.flag";
     private static final long META_CACHE_BUSTER_INTERVAL_MILLIS = 5L * 60L * 1_000L;
+    private static final Pattern SAFE_RELEASE_TAG = Pattern.compile("^[A-Za-z0-9._+-]+$");
 
     public static final int JVM_DATA_MODEL;
     public static final int JAVA_SPEC;
@@ -1354,7 +1361,7 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             {
             }
         }
-        return securityLevelClass.getField("NO_SECURITY").get(null);
+        throw new NoSuchFieldException("No secure Win32SecurityLevel field is available");
     }
 
     private void hardenUnixIpcSocket(Path socketFilePath)
@@ -1388,26 +1395,35 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             String token = Base64.getUrlEncoder().withoutPadding().encodeToString(bytes);
             try
             {
-                Files.write(tokenPath, token.getBytes(StandardCharsets.UTF_8));
+                writeOwnerOnlyNewFile(tokenPath, token.getBytes(StandardCharsets.UTF_8));
             }
             catch (FileAlreadyExistsException ignored)
             {
                 return new String(Files.readAllBytes(tokenPath), StandardCharsets.UTF_8).trim();
-            }
-            try
-            {
-                Files.setPosixFilePermissions(tokenPath, java.util.EnumSet.of(
-                    PosixFilePermission.OWNER_READ,
-                    PosixFilePermission.OWNER_WRITE));
-            }
-            catch (UnsupportedOperationException ignored)
-            {
             }
             return token;
         }
         catch (IOException ioex)
         {
             throw new IllegalStateException("Failed to initialize IPC auth token", ioex);
+        }
+    }
+
+    private static void writeOwnerOnlyNewFile(Path path, byte[] bytes) throws IOException
+    {
+        try
+        {
+            FileAttribute<Set<PosixFilePermission>> attr = PosixFilePermissions.asFileAttribute(EnumSet.of(
+                PosixFilePermission.OWNER_READ,
+                PosixFilePermission.OWNER_WRITE));
+            try (SeekableByteChannel channel = Files.newByteChannel(path, EnumSet.of(StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE), attr))
+            {
+                channel.write(ByteBuffer.wrap(bytes));
+            }
+        }
+        catch (UnsupportedOperationException ex)
+        {
+            Files.write(path, bytes, StandardOpenOption.CREATE_NEW, StandardOpenOption.WRITE);
         }
     }
 
@@ -1888,6 +1904,18 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
         return META_URL + "?scarlet_meta=" + bucket;
     }
 
+    public static boolean isSafeReleaseTag(String value)
+    {
+        return value != null && SAFE_RELEASE_TAG.matcher(value).matches();
+    }
+
+    public static URI releaseUri(String releaseTag)
+    {
+        if (!isSafeReleaseTag(releaseTag))
+            throw new IllegalArgumentException("Unsafe Scarlet release tag: " + releaseTag);
+        return URI.create(GITHUB_URL + "/releases/tag/" + releaseTag);
+    }
+
     UpdateCheckResult pollMeta()
     {
         return this.pollMeta(false);
@@ -1905,6 +1933,8 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             String cmp_version = this.alertForPreviewUpdates.get() || MiscUtils.isPreviewVersion(VERSION) ? meta.latest_build : meta.latest_release;
             if (cmp_version == null)
                 return new UpdateCheckResult(null, "meta.json did not include a usable version field", false);
+            if (!isSafeReleaseTag(cmp_version))
+                return new UpdateCheckResult(null, "meta.json included an unsafe release tag", false);
             // Use Scarlet's flipped comparator: suffixed builds are treated as
             // iterations ahead of the bare release, not pre-releases.
             boolean newer = MiscUtils.compareScarletVersion(VERSION, cmp_version) < 0;
@@ -1943,7 +1973,7 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             if (this.alertForUpdates.get())
             {
                 this.settings.requireConfirmYesNoAsync("Hey, your release is "+VERSION+", there is a new release of "+latest+". Open the download page?", "Update available",
-                    () -> MiscUtils.AWTDesktop.browse(URI.create(GITHUB_URL+"/releases/tag/"+latest)), null);
+                    () -> MiscUtils.AWTDesktop.browse(releaseUri(latest)), null);
             }
             this.newerVersion = latest;
         }
