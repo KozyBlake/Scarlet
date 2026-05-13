@@ -129,6 +129,7 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         this.announceWatchedGroups = scarlet.settings.new FileValuedBoolean("tts_announce_watched_groups", "TTS: Announce watched groups", true);
         this.announceWatchedAvatars = scarlet.settings.new FileValuedBoolean("tts_announce_watched_avatars", "TTS: Announce watched avatars", true);
         this.announceNewPlayers = scarlet.settings.new FileValuedBoolean("tts_announce_new_players", "TTS: Announce new players", true);
+        this.announceMixedCharacterNames = scarlet.settings.new FileValuedBoolean("tts_announce_mixed_character_names", "TTS: Announce mixed-character names", true);
         this.announceVotesToKick = scarlet.settings.new FileValuedBoolean("tts_announce_votes_to_kick", "TTS: Announce Votes-to-Kick", true);
         this.announcePlayersNewerThan = scarlet.settings.new FileValuedIntRange("tts_announce_players_newer_than_days", "TTS: Announce players newer than (days)", 30, 1, 365);
 
@@ -167,6 +168,7 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
                                      announceWatchedGroups,
                                      announceWatchedAvatars,
                                      announceNewPlayers,
+                                     announceMixedCharacterNames,
                                      announceVotesToKick,
                                      attemptAvatarImageMatch;
     final ScarletSettings.FileValued<String> ttsRvcModelName,
@@ -735,6 +737,15 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
     {
         if (preamble) this.checkPlayerLimiter.await();
         Color overall_type = null;
+
+        if (!preamble
+         && this.announceMixedCharacterNames.get()
+         && !Objects.equals(this.clientUserId, userId)
+         && TtsService.shouldAlertMixedCharacterName(userDisplayName))
+        {
+            this.scarlet.getTtsService().submitMixedCharacterNameJoinAlert(
+                "mix-"+Long.toUnsignedString(System.nanoTime()));
+        }
         
         // check user
         ScarletWatchedEntities.WatchedEntity watchedUser = this.scarlet.watchedUsers.getWatchedEntity(userId);

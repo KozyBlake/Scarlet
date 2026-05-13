@@ -3,7 +3,10 @@ package net.sybyline.scarlet.util.tts;
 import java.awt.Component;
 import java.io.Closeable;
 import java.io.File;
+import java.io.InputStream;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.List;
@@ -24,12 +27,15 @@ import net.sybyline.scarlet.Features;
 import net.sybyline.scarlet.Scarlet;
 import net.sybyline.scarlet.ScarletDiscord;
 import net.sybyline.scarlet.ScarletEventListener;
+import net.sybyline.scarlet.util.Names;
 import net.sybyline.scarlet.util.rvc.RvcConfig;
 import net.sybyline.scarlet.util.rvc.RvcService;
 import net.sybyline.scarlet.util.rvc.RvcStatus;
 
 public class TtsService implements Closeable
 {
+    private static final String MIXED_CHARACTER_ALERT_RESOURCE = "/tts/mixed-character-alert.wav";
+    private static final String MIXED_CHARACTER_ALERT_FILE = "mixed-character-alert.wav";
 
     public TtsService(File dir, ScarletEventListener eventListener, ScarletDiscord discord)
     {
@@ -43,6 +49,9 @@ public class TtsService implements Closeable
         this.eventListener = eventListener;
         this.discord = discord;
         this.parentComponent = parentComponent;
+        this.mixedCharacterAlertWav = extractBundledAudio(dir,
+            MIXED_CHARACTER_ALERT_RESOURCE,
+            MIXED_CHARACTER_ALERT_FILE);
 
         // ── RVC dependency install flow ─────────────────────────────────────
         // Mirror the TtsPackageInstallDialogs pattern: check deps first, prompt
@@ -138,6 +147,7 @@ public class TtsService implements Closeable
     final ScarletDiscord discord;
     final Component parentComponent;
     final RvcService rvcService;
+    final File mixedCharacterAlertWav;
     private volatile RvcConfig rvcConfig = new RvcConfig();
     private final AtomicBoolean rvcRepairPrompted = new AtomicBoolean(false);
 
@@ -251,172 +261,89 @@ public class TtsService implements Closeable
      * Prepares a VRChat display name for safe TTS output.
      *
      * <p>VRChat allows display names containing characters that English TTS
-     * engines silently skip: invisible control/format codepoints, private-use
-     * characters, and — most commonly — letters from non-Latin scripts such as
-     * Cyrillic, Arabic, CJK, Hangul, Thai, Hebrew, Devanagari, etc. When any
-     * of these are skipped the engine produces silence with no error, leaving
-     * moderators confused about who was called out.
+     * engines silently skip or read out character-by-character ("b cyrillic
+     * l l cyrillic …"): invisible control/format codepoints, private-use
+     * characters, decorative symbols, and — most commonly — letters from
+     * non-Latin scripts such as Cyrillic, Greek, CJK, Hangul, Thai, Hebrew,
+     * Arabic, Devanagari, etc. Both failure modes leave a moderator with no
+     * way to map the audio back to the actual user.
      *
-     * <p>Processing pipeline:
+     * <p>Scarlet's primary TTS use case is a moderator wearing a VR headset
+     * who cannot glance at the Discord embed while an announcement plays,
+     * so the spoken form has to convey two things on its own:
      * <ol>
-     *   <li><b>NFKC normalisation</b> — resolves compatibility forms
-     *       (ﬁ→fi, fullwidth A→A, circled 1→1, etc.)</li>
-     *   <li><b>Strip invisible/control codepoints</b> — FORMAT, CONTROL,
-     *       PRIVATE_USE, lone SURROGATE, stacked NON_SPACING_MARK,
-     *       Specials block U+FFF0–FFFF</li>
-     *   <li><b>Replace non-Latin script runs</b> — consecutive codepoints
-     *       from the same non-Latin Unicode script are collapsed into a single
-     *       spoken token, e.g. {@code [Cyrillic]}, {@code [Arabic]},
-     *       {@code [CJK]}, {@code [Thai]}, etc. Latin letters, digits, spaces,
-     *       and common punctuation are preserved verbatim.</li>
-     *   <li><b>Decide the output</b>:
-     *     <ul>
-     *       <li>Fully empty after processing → "a user with an unpronounceable name"</li>
-     *       <li>Modified → append ", with non-Latin characters in their name"
-     *           so moderators know the spoken form differs from the display name</li>
-     *       <li>Unchanged → return as-is</li>
-     *     </ul>
-     *   </li>
+     *   <li><b>What alphabet to look for</b> — the moderator scans the
+     *       VRChat nameplates around them in the lobby. A name announced
+     *       as {@code "Cyrillic Prosto"} tells them the user's nameplate
+     *       will be Cyrillic letters.</li>
+     *   <li><b>A searchable identifier</b> — the moderator can later type
+     *       the transliterated form into a search box and find the user.
+     *       {@code "Prosto"} maps unambiguously to {@code "Просто"} in
+     *       VRChat's user finder.</li>
      * </ol>
+     *
+     * <p>Latin-looking confusable names are read as their visual English form
+     * first. If a name cannot be represented that way, the output falls back
+     * to <em>script-set + transliteration</em>:
+     * <ul>
+     *   <li>{@code "Yamada"}          → {@code "Yamada"} (no prefix needed)</li>
+     *   <li>{@code "Просто"}          → {@code "Cyrillic Prosto"}</li>
+     *   <li>{@code "中文"}             → {@code "CJK Zhong Wen"}</li>
+     *   <li>{@code "Αθήνα"}           → {@code "Greek Athena"}</li>
+     *   <li>{@code "Yamada 山田"}      → {@code "CJK Yamada Shan Tian"}</li>
+     *   <li>{@code "Просто 中文"}      → {@code "Cyrillic and CJK Prosto Zhong Wen"}</li>
+     *   <li>three+ non-Latin scripts  → {@code "mixed scripts ..."}</li>
+     * </ul>
+     *
+     * <p>Transliteration uses the shared {@link Names#toAscii(String)}
+     * pipeline (NFKD + stroke-Latin table + {@code junidecode}). For null,
+     * empty, or fully-stripped inputs (e.g. all-emoji handles), the method
+     * falls back to {@code "an unnamed user"} so the announcement still
+     * reads cleanly.
      *
      * @param displayName raw VRChat display name, may be null
      * @return a TTS-safe representation, never null or empty
      */
     public static String sanitizeName(String displayName)
     {
-        if (displayName == null || displayName.isEmpty())
+        String visualAscii = Names.toVisualAscii(displayName);
+        if (visualAscii != null)
+            return visualAscii;
+        String ascii = Names.toAscii(displayName);
+        if (ascii == null)
             return "an unnamed user";
-
-        // ── Step 1: NFKC ──────────────────────────────────────────────────────
-        String nfkc = Normalizer.normalize(displayName, Normalizer.Form.NFKC);
-
-        // ── Step 2: strip invisible / control codepoints ──────────────────────
-        StringBuilder stripped = new StringBuilder(nfkc.length());
-        for (int i = 0; i < nfkc.length(); )
-        {
-            int cp = nfkc.codePointAt(i);
-            i += Character.charCount(cp);
-            int type = Character.getType(cp);
-            if (type == Character.FORMAT
-             || type == Character.CONTROL
-             || type == Character.PRIVATE_USE
-             || type == Character.SURROGATE
-             || type == Character.NON_SPACING_MARK)
-                continue;
-            if (cp >= 0xFFF0 && cp <= 0xFFFF)
-                continue;
-            stripped.appendCodePoint(cp);
-        }
-
-        // ── Step 3: replace non-Latin script runs with spoken tokens ──────────
-        String input = stripped.toString();
-        StringBuilder out = new StringBuilder(input.length() + 32);
-        boolean modified = false;
-
-        // Track the script of the previous non-Latin run so we collapse
-        // consecutive codepoints from the same script into one token.
-        Character.UnicodeScript lastNonLatinScript = null;
-
-        for (int i = 0; i < input.length(); )
-        {
-            int cp = input.codePointAt(i);
-            i += Character.charCount(cp);
-
-            // Digits, spaces, and common ASCII punctuation always pass through
-            if (cp < 0x80 || Character.isDigit(cp))
-            {
-                lastNonLatinScript = null;
-                out.appendCodePoint(cp);
-                continue;
-            }
-
-            Character.UnicodeScript script;
-            try
-            {
-                script = Character.UnicodeScript.of(cp);
-            }
-            catch (IllegalArgumentException ex)
-            {
-                // Unknown script — skip silently
-                modified = true;
-                lastNonLatinScript = null;
-                continue;
-            }
-
-            // Scripts an English TTS voice can handle without issue
-            if (script == Character.UnicodeScript.LATIN
-             || script == Character.UnicodeScript.COMMON
-             || script == Character.UnicodeScript.INHERITED)
-            {
-                lastNonLatinScript = null;
-                out.appendCodePoint(cp);
-                continue;
-            }
-
-            // Non-Latin script — replace with a spoken token
-            modified = true;
-            if (script != lastNonLatinScript)
-            {
-                // Start of a new non-Latin run: emit the script name token
-                String scriptName = friendlyScriptName(script);
-                if (out.length() > 0 && out.charAt(out.length() - 1) != ' ')
-                    out.append(' ');
-                out.append('[').append(scriptName).append(']');
-                lastNonLatinScript = script;
-            }
-            // else: same script as previous codepoint — already emitted token, skip
-        }
-
-        String result = out.toString().trim();
-        // Collapse multiple spaces that may have formed between tokens
-        result = result.replaceAll(" {2,}", " ");
-
-        // ── Step 4: decide the final output ──────────────────────────────────
-        if (result.isEmpty())
-            return "a user with an unpronounceable name";
-
-        if (modified)
-            return result + ", with non-Latin characters in their name";
-
-        return result;
+        if (Names.hasMixedLetterScripts(displayName))
+            return ascii;
+        String scripts = Names.describeScripts(displayName);
+        return scripts.isEmpty() ? ascii : scripts + " " + ascii;
     }
 
-    /**
-     * Returns a short, human-friendly spoken label for a Unicode script,
-     * suitable for use in a TTS token like "[Cyrillic]".
-     */
-    private static String friendlyScriptName(Character.UnicodeScript script)
+    public static boolean shouldAlertMixedCharacterName(String displayName)
     {
-        switch (script)
+        return Names.hasMixedLetterScripts(displayName);
+    }
+
+    private static File extractBundledAudio(File dir, String resourcePath, String fileName)
+    {
+        try (InputStream in = TtsService.class.getResourceAsStream(resourcePath))
         {
-            case CYRILLIC:    return "Cyrillic";
-            case ARABIC:      return "Arabic";
-            case HAN:         return "CJK";
-            case HIRAGANA:    return "Japanese";
-            case KATAKANA:    return "Japanese";
-            case HANGUL:      return "Korean";
-            case THAI:        return "Thai";
-            case HEBREW:      return "Hebrew";
-            case DEVANAGARI:  return "Devanagari";
-            case GREEK:       return "Greek";
-            case GEORGIAN:    return "Georgian";
-            case ARMENIAN:    return "Armenian";
-            case MYANMAR:     return "Myanmar";
-            case KHMER:       return "Khmer";
-            case TIBETAN:     return "Tibetan";
-            case ETHIOPIC:    return "Ethiopic";
-            case SINHALA:     return "Sinhala";
-            case TAMIL:       return "Tamil";
-            case TELUGU:      return "Telugu";
-            case KANNADA:     return "Kannada";
-            case MALAYALAM:   return "Malayalam";
-            case BENGALI:     return "Bengali";
-            case GUJARATI:    return "Gujarati";
-            case GURMUKHI:    return "Gurmukhi";
-            case LAO:         return "Lao";
-            case MONGOLIAN:   return "Mongolian";
-            case CHEROKEE:    return "Cherokee";
-            default:          return "non-Latin";
+            if (in == null)
+            {
+                Scarlet.LOG.warn("Bundled TTS audio resource not found: {}", resourcePath);
+                return null;
+            }
+
+            File out = new File(dir, fileName);
+            Files.createDirectories(out.toPath().getParent());
+            Files.copy(in, out.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            Scarlet.LOG.info("Extracted bundled TTS audio resource: {} -> {}", resourcePath, out);
+            return out;
+        }
+        catch (Exception ex)
+        {
+            Scarlet.LOG.warn("Could not extract bundled TTS audio resource {}: {}",
+                resourcePath, ex.getMessage());
+            return null;
         }
     }
 
@@ -452,6 +379,45 @@ public class TtsService implements Closeable
         return next;
     }
 
+    public CompletableFuture<Void> submitMixedCharacterNameJoinAlert(String marker)
+    {
+        return this.submitAlertThenSpeak(marker,
+            "Mixed-letter name joined. Check nameplates.");
+    }
+
+    private CompletableFuture<Void> submitAlertThenSpeak(String marker, String text)
+    {
+        if (this.paused)
+        {
+            Scarlet.LOG.debug("TTS({}): Dropped mixed-character alert - TTS is paused", marker);
+            return CompletableFuture.completedFuture(null);
+        }
+        CompletableFuture<Path> speech = this.synthesize(marker, text);
+        return CompletableFuture.runAsync(() ->
+        {
+            this.playPreparedAudio(marker, this.mixedCharacterAlertWav);
+            try
+            {
+                Path path = speech.get();
+                if (path == null)
+                {
+                    Scarlet.LOG.warn("TTS({}): Provider returned null path, audio generation may have failed", marker);
+                    return;
+                }
+                this.playPreparedAudio(marker, path.toFile());
+            }
+            catch (InterruptedException ex)
+            {
+                Thread.currentThread().interrupt();
+                Scarlet.LOG.warn("TTS({}): Interrupted while waiting for mixed-character alert speech", marker);
+            }
+            catch (Exception ex)
+            {
+                Scarlet.LOG.error("TTS({}): Exception during mixed-character alert processing", marker, ex);
+            }
+        }, this.playbackExecutor);
+    }
+
     public CompletableFuture<Void> submit(String marker, String text)
     {
         if (this.paused)
@@ -459,6 +425,28 @@ public class TtsService implements Closeable
             Scarlet.LOG.debug("TTS({}): Dropped — TTS is paused", marker);
             return CompletableFuture.completedFuture(null);
         }
+        return this.synthesize(marker, text)
+            .thenAcceptAsync(path ->
+            {
+                if (path == null)
+                {
+                    Scarlet.LOG.warn("TTS({}): Provider returned null path, audio generation may have failed", marker);
+                    return;
+                }
+                this.playPreparedAudio(marker, path.toFile());
+                // NOTE: The .wav file is intentionally kept on disk so that Discord and other
+                // consumers have time to finish reading/streaming it. Previously, Files.deleteIfExists(path)
+                // was called here immediately after submitAudio(), causing a race condition where the file
+                // was gone before Discord could access it.
+            }, this.playbackExecutor)
+            .exceptionally(ex -> {
+                Scarlet.LOG.error("TTS({}): Exception during TTS processing", marker, ex);
+                return null;
+            });
+    }
+
+    private CompletableFuture<Path> synthesize(String marker, String text)
+    {
         text = Normalizer.normalize(text, Normalizer.Form.NFKC);
         final String selectedVoice = this.eventListener.getTtsVoiceName();
 
@@ -598,34 +586,6 @@ public class TtsService implements Closeable
                         maybePromptRvcRepair("RVC conversion failed while processing TTS.");
                         return path;
                     });
-            })
-            .thenAcceptAsync(path ->
-            {
-                if (path == null)
-                {
-                    Scarlet.LOG.warn("TTS({}): Provider returned null path, audio generation may have failed", marker);
-                    return;
-                }
-                if (this.eventListener.getTtsUseDefaultAudioDevice())
-                {
-                    // Route to system default audio output instead of Discord.
-                    // playOnSystemAudio blocks until the clip finishes, so the
-                    // single-threaded playbackExecutor guarantees clips play serially.
-                    playOnSystemAudio(marker, path.toFile(), this.activeClip);
-                }
-                else
-                {
-                    boolean submitted = this.discord.submitAudio(path.toFile());
-                    Scarlet.LOG.info("TTS({}): Audio submitted to Discord, success={}, file={}", marker, submitted, path);
-                    // NOTE: The .wav file is intentionally kept on disk so that Discord and other
-                    // consumers have time to finish reading/streaming it. Previously, Files.deleteIfExists(path)
-                    // was called here immediately after submitAudio(), causing a race condition where the file
-                    // was gone before Discord could access it.
-                }
-            }, this.playbackExecutor)
-            .exceptionally(ex -> {
-                Scarlet.LOG.error("TTS({}): Exception during TTS processing", marker, ex);
-                return null;
             });
     }
 
@@ -758,6 +718,28 @@ public class TtsService implements Closeable
      */
     private final java.util.concurrent.atomic.AtomicReference<Clip> activeClip =
         new java.util.concurrent.atomic.AtomicReference<>(null);
+
+    private void playPreparedAudio(String marker, File file)
+    {
+        if (file == null || !file.isFile())
+        {
+            Scarlet.LOG.warn("TTS({}): Audio file unavailable: {}", marker, file);
+            return;
+        }
+        if (this.eventListener != null && this.eventListener.getTtsUseDefaultAudioDevice())
+        {
+            playOnSystemAudio(marker, file, this.activeClip);
+        }
+        else if (this.discord != null)
+        {
+            boolean submitted = this.discord.submitAudio(file);
+            Scarlet.LOG.info("TTS({}): Audio submitted to Discord, success={}, file={}", marker, submitted, file);
+        }
+        else
+        {
+            Scarlet.LOG.warn("TTS({}): No audio output route available for {}", marker, file);
+        }
+    }
 
     /**
      * Skips the clip that is currently playing on the system audio device.

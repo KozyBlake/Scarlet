@@ -385,6 +385,9 @@ General settings for Scarlet:
     
     // Whether to announce new players with TTS
     "tts_announce_new_players": true,
+
+    // Whether to play a cue and announce when a joined user's display name mixes letter scripts
+    "tts_announce_mixed_character_names": true,
     
     // Threshold for what account age qualifies as a 'new' player for the above (in days, 1 to 365, default 30)
     "tts_announce_players_newer_than_days": 30,

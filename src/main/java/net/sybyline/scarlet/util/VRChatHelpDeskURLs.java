@@ -1,166 +1,32 @@
 package net.sybyline.scarlet.util;
 
-import java.text.Normalizer;
 import java.util.Base64;
 import java.util.regex.Pattern;
-
-import net.gcardone.junidecode.Junidecode;
 
 public interface VRChatHelpDeskURLs
 {
 
     // ── Subject normalisation ──────────────────────────────────────────────
     // VRChat's Zendesk-backed help-desk form embeds the subject in a URL
-    // query parameter. VRChat's `displayName` field permits broad Unicode,
-    // so reported users routinely show up with:
+    // query parameter. VRChat's `displayName` field permits broad Unicode
+    // (Cyrillic, CJK, Hebrew, mathematical alphanumerics, Latin-Extended
+    // stroke/bar "goth" handles like `༒808 ȼɍᵾsȺđɇɍ༒`, ligatures,
+    // zero-width joiners, RTL overrides, etc.), so once URL-encoded each
+    // non-ASCII codepoint expands to 2-4 %XX bytes and routinely blows past
+    // Zendesk's subject length limit or renders unreadably in the agent UI.
     //
-    //   • mathematical alphanumerics ("𝒽𝑒𝓁𝓁𝑜")
-    //   • fullwidth Latin ("ｈｅｌｌｏ")
-    //   • ligatures, precomposed diacritics, NFD combining sequences
-    //   • Latin-Extended "letter with stroke/bar" glyphs (`Ⱥ ȼ đ ɇ ɍ ᵾ`)
-    //     popular in stylised "goth" handles like `༒808 ȼɍᵾsȺđɇɍ༒`
-    //   • Cyrillic, Greek, CJK, Hebrew, Arabic, Devanagari, etc.
-    //   • Tibetan / Khmer / Arabic decorative punctuation used as flair
-    //   • zero-width joiners / spaces / RTL overrides used for spoofing
-    //
-    // Once URL-encoded each non-ASCII codepoint expands to 2-4 %XX bytes,
-    // which routinely blows past Zendesk's subject length limit or renders
-    // unreadably in the agent UI. The fix runs subjects through a layered
-    // pipeline before URL-encoding:
-    //
-    //   1. Strip Unicode control + format characters (zero-width joiners,
-    //      RTL overrides, BOMs, etc.) that VRChat itself blocks server-
-    //      side but which still occasionally slip through.
-    //   2. Strip decorative non-ASCII noise — Symbol-Other, Symbol-
-    //      Modifier, surrogate halves, private use, and *non-ASCII*
-    //      Punctuation-Other (so Tibetan/Khmer marks vanish but ASCII
-    //      `?!*` survive untouched).
-    //   3. Map Latin-Extended stroke/bar letters to their plain ASCII
-    //      base — NFKD doesn't decompose these (the stroke is intrinsic)
-    //      and junidecode 0.5.2 has gaps, so a tiny local table catches
-    //      the entire goth-username class cleanly.
-    //   4. NFKD compatibility-decomposition + combining-mark strip —
-    //      folds every styled Latin variant to plain ASCII letters and
-    //      removes diacritics ("café" → "cafe").
-    //   5. junidecode fallback for anything still non-ASCII — handles
-    //      Cyrillic ("Просто" → "Prosto"), Greek ("Αθήνα" → "Athena"),
-    //      CJK ("中文" → "Zhong Wen"), Hebrew, Arabic, Devanagari, etc.
-    //   6. Drop junidecode's "[?]" placeholder for any rare codepoints
-    //      its tables don't cover, then a final ASCII guard, then
-    //      collapse runs of whitespace and trim.
-    //   7. If everything was untransliterable and the result is empty,
-    //      fall back to "Report" so the help-desk form always has *some*
-    //      subject. The user is still identified by `targetUserId` in a
-    //      separate field, so the report still points at the right
-    //      account either way.
-    Pattern CONTROL_OR_FORMAT  = Pattern.compile("[\\p{Cc}\\p{Cf}]");
-    Pattern DECORATIVE_NOISE   = Pattern.compile("[\\p{So}\\p{Sk}\\p{Cs}\\p{Co}\\p{Cn}]|[\\p{Po}&&[^\\x00-\\x7F]]");
-    Pattern COMBINING_MARKS    = Pattern.compile("\\p{M}+");
-    Pattern NON_ASCII          = Pattern.compile("[^\\x00-\\x7F]");
-    Pattern JUNIDECODE_UNKNOWN = Pattern.compile("\\[\\?\\]");
-    Pattern WHITESPACE_RUN     = Pattern.compile("\\s+");
-    String  EMPTY_FALLBACK     = "Report";
+    // The fix is the shared ASCII transliteration pipeline in
+    // {@link Names#toAscii(String)} (NFKD + stroke-Latin table + junidecode
+    // fallback). If the input transliterates to empty, fall back to
+    // "Report" so the help-desk form always has *some* subject — the user
+    // is still identified by `targetUserId` in a separate field.
+    String EMPTY_FALLBACK = "Report";
 
     static String normalizeSubject(String subject)
     {
         if (subject == null)
             return null;
-        // 1. Strip Cc (control) + Cf (format: ZWJ, ZWSP, BOM, RTL overrides…)
-        String n = CONTROL_OR_FORMAT.matcher(subject).replaceAll("");
-        // 2. Strip decorative non-ASCII (Tibetan ༒, dingbats, runic flair…)
-        //    while preserving ASCII punctuation.
-        n = DECORATIVE_NOISE.matcher(n).replaceAll("");
-        // 3. Map Latin-Extended stroke/bar letters to their plain ASCII base.
-        n = mapStrokeLatin(n);
-        // 4. NFKD + drop combining marks → folds styled Latin to plain ASCII
-        n = Normalizer.normalize(n, Normalizer.Form.NFKD);
-        n = COMBINING_MARKS.matcher(n).replaceAll("");
-        // 5. junidecode fallback if anything non-ASCII remains
-        if (NON_ASCII.matcher(n).find())
-        {
-            n = Junidecode.unidecode(n);
-            // 6a. Drop "[?]" placeholders junidecode uses for codepoints it
-            //     can't transliterate.
-            n = JUNIDECODE_UNKNOWN.matcher(n).replaceAll("");
-            // 6b. Defensive re-strip in case any input codepoint slipped past
-            //     junidecode without an entry.
-            n = COMBINING_MARKS.matcher(n).replaceAll("");
-            n = NON_ASCII.matcher(n).replaceAll("");
-        }
-        // 7. Collapse whitespace runs introduced by transliteration ("中 文"
-        //    → "Zhong  Wen " → "Zhong Wen") and trim.
-        n = WHITESPACE_RUN.matcher(n).replaceAll(" ").trim();
-        // 8. Empty-result guard.
-        return n.isEmpty() ? EMPTY_FALLBACK : n;
-    }
-
-    // Latin-Extended "letter with stroke/bar" glyphs (mostly U+0180-024F,
-    // a few in IPA Extensions / Phonetic Extensions). NFKD does NOT
-    // decompose these — the stroke is part of the character's identity,
-    // not a combining mark — and junidecode 0.5.2 has gaps in this range
-    // (notably `ᵾ` U+1D7E renders as "[?]"). A small local table catches
-    // the whole class cleanly and is the difference between
-    // `cr[?]sAder` and `crUsAder` for handles like `༒808 ȼɍᵾsȺđɇɍ༒`.
-    static String mapStrokeLatin(String s)
-    {
-        StringBuilder out = null;
-        for (int i = 0, n = s.length(); i < n; i++)
-        {
-            char c = s.charAt(i);
-            String repl = strokeLatinFor(c);
-            if (repl == null)
-            {
-                if (out != null) out.append(c);
-            }
-            else
-            {
-                if (out == null)
-                {
-                    out = new StringBuilder(s.length() + 4);
-                    out.append(s, 0, i);
-                }
-                out.append(repl);
-            }
-        }
-        return out == null ? s : out.toString();
-    }
-
-    static String strokeLatinFor(char c)
-    {
-        switch (c)
-        {
-        // Latin-1 Supplement
-        case 'Ø': return "O"; // Ø
-        case 'ø': return "o"; // ø
-        // Latin Extended-A
-        case 'Đ': return "D"; // Đ
-        case 'đ': return "d"; // đ
-        case 'Ħ': return "H"; // Ħ
-        case 'ħ': return "h"; // ħ
-        case 'Ł': return "L"; // Ł
-        case 'ł': return "l"; // ł
-        case 'Ŧ': return "T"; // Ŧ
-        case 'ŧ': return "t"; // ŧ
-        // Latin Extended-B
-        case 'ƀ': return "b"; // ƀ
-        case 'Ƃ': return "B"; case 'ƃ': return "b"; // Ƃ ƃ
-        case 'Ⱥ': return "A"; // Ⱥ
-        case 'Ȼ': return "C"; case 'ȼ': return "c"; // Ȼ ȼ
-        case 'Ƚ': return "L"; // Ƚ
-        case 'Ⱦ': return "T"; // Ⱦ
-        case 'Ɇ': return "E"; case 'ɇ': return "e"; // Ɇ ɇ
-        case 'Ɉ': return "J"; case 'ɉ': return "j"; // Ɉ ɉ
-        case 'Ɋ': return "Q"; case 'ɋ': return "q"; // Ɋ ɋ
-        case 'Ɍ': return "R"; case 'ɍ': return "r"; // Ɍ ɍ
-        case 'Ɏ': return "Y"; case 'ɏ': return "y"; // Ɏ ɏ
-        // IPA Extensions
-        case 'ɨ': return "i"; // ɨ
-        case 'ʈ': return "t"; // ʈ
-        // Phonetic Extensions Supplement
-        case 'ᵻ': return "I"; // ᵻ
-        case 'ᵾ': return "U"; // ᵾ
-        }
-        return null;
+        return Names.toAscii(subject, EMPTY_FALLBACK);
     }
 
     static String newSupportRequest(String requesterEmail, SupportCategory supportCategory, String requesterUserId, SupportPlatform supportPlatform, String subject, String description)

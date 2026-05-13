@@ -2337,7 +2337,7 @@ public class ScarletUI implements IScarletUI
           "rvc_manage_models",
           "tts_rvc_enabled", "tts_rvc_model_name", "tts_rvc_index_name", "tts_rvc_pitch",
           "tts_announce_watched_users", "tts_announce_watched_groups", "tts_announce_watched_avatars",
-          "tts_announce_new_players", "tts_announce_players_newer_than_days",
+          "tts_announce_new_players", "tts_announce_mixed_character_names", "tts_announce_players_newer_than_days",
           "tts_announce_votes_to_kick" },
 
         { "Discord",
