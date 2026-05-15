@@ -2,11 +2,10 @@
   "latest_release": "0.4.17-b1_hotfix",
   "latest_build": "0.4.17-b1_hotfix",
   "announcement": {
-    "id": "20260511-192057-9fa2",
-    "severity": "critical",
-    "title": "CVE Exploit found and fixed.",
-    "message": "We found an issue regarding meta.json where you could open a program via. Mozilla Firefox if your settings were set incorrectly, allowing you to open something like Command Prompt on the users computer. Typically browsers don't allow you to do something like this, but messing with settings found out that you could abuse this.",
-    "url": "https://github.com/KozyBlake/Scarlet/commit/ec45c0678769a2d479154db71b065080c4a94184",
-    "expires": "2026-05-12T19:22:28Z"
+    "id": "20260515-222525-e0d6",
+    "severity": "info",
+    "title": "New release coming soon.",
+    "message": "There's going to be a new release coming into Scarlet soon which involves fixes of TTS. TTS in its current state (with your specific Scarlet logger version) will use TTS with different usernames as in \"Cryllic\" dd \"Greek\" nn \"Chinese\"... etc. This now attempts to make any username pure English rather than saying the character. If it's unable to, it will play a sound and tell you to look for a nameplate with a custom username.",
+    "expires": "2026-05-15T22:57:31Z"
   }
 }
