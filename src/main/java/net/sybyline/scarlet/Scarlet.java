@@ -76,6 +76,7 @@ import net.sybyline.scarlet.util.MavenDepsLoader;
 import net.sybyline.scarlet.util.MiscUtils;
 import net.sybyline.scarlet.util.Platform;
 import net.sybyline.scarlet.util.ProcLock;
+import net.sybyline.scarlet.util.SecurityRegressionChecks;
 import net.sybyline.scarlet.util.VrcIds;
 import net.sybyline.scarlet.util.VrchatApiVersionChecker;
 import net.sybyline.scarlet.util.tts.TtsService;
@@ -175,7 +176,7 @@ public class Scarlet implements Closeable
             if (implementationVersion != null && !implementationVersion.trim().isEmpty())
                 return implementationVersion.trim();
         }
-        return "0.4.17-b1_hotfix";
+        return "0.4.17-b2";
     }
 
     public static void main(String[] args) throws Exception
@@ -184,10 +185,14 @@ public class Scarlet implements Closeable
         int exitCode = 0;
         try
         {
-            try (Scarlet scarlet = new Scarlet())
+            try
             {
-                scarlet.run();
-                exitCode = scarlet.exitCode;
+                SecurityRegressionChecks.runAll();
+                try (Scarlet scarlet = new Scarlet())
+                {
+                    scarlet.run();
+                    exitCode = scarlet.exitCode;
+                }
             }
             catch (Throwable t)
             {
@@ -668,8 +673,8 @@ public class Scarlet implements Closeable
     public static ScarletPronounLists pronounLists;
     {
         // Initialise the static reference so PronounValidator can reach it without
-        // needing a Scarlet instance passed through the call chain. Skipped in
-        // minimal builds where the pronoun-validation subsystem is compiled out.
+        // needing a Scarlet instance passed through the call chain. Skipped when
+        // the pronoun-validation subsystem is disabled.
         if (Features.PRONOUNS_ENABLED)
         {
             Scarlet.pronounLists = new ScarletPronounLists(
@@ -1173,9 +1178,9 @@ public class Scarlet implements Closeable
     void spin()
     {
         MiscUtils.sleep(100L);
-        // Minimal builds compile out the interactive CLI entirely. The JIT
-        // folds this branch away when CLI_COMMANDS_ENABLED is a false
-        // compile-time constant, so the rest of this method becomes dead code.
+        // Custom builds can disable the interactive CLI entirely. The JIT folds
+        // this branch away when CLI_COMMANDS_ENABLED is false, so the rest of
+        // this method becomes dead code.
         if (!Features.CLI_COMMANDS_ENABLED)
             return;
         // Short-circuit once we've learned stdin has no valid handle (e.g.

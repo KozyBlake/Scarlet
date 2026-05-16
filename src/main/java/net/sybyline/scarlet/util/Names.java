@@ -223,6 +223,43 @@ public final class Names
         return out == null ? s : out.toString();
     }
 
+    // Latin-Extended "letter with stroke/bar" glyphs that NFKD does not
+    // decompose (the stroke is part of the character's identity, not a
+    // combining mark) and that junidecode 0.5.2 has gaps for.
+    static String strokeLatinFor(int cp)
+    {
+        switch (cp)
+        {
+        case 'Ø': return "O"; case 'ø': return "o";
+        case 'Đ': return "D"; case 'đ': return "d";
+        case 'Ħ': return "H"; case 'ħ': return "h";
+        case 'Ł': return "L"; case 'ł': return "l";
+        case 'Ŧ': return "T"; case 'ŧ': return "t";
+        case 'ƀ': return "b";
+        case 'Ƃ': return "B"; case 'ƃ': return "b";
+        case 'Ⱥ': return "A";
+        case 'Ȼ': return "C"; case 'ȼ': return "c";
+        case 'Ƚ': return "L";
+        case 'Ⱦ': return "T";
+        case 'Ɇ': return "E"; case 'ɇ': return "e";
+        case 'Ɉ': return "J"; case 'ɉ': return "j";
+        case 'Ɋ': return "Q"; case 'ɋ': return "q";
+        case 'Ɍ': return "R"; case 'ɍ': return "r";
+        case 'Ɏ': return "Y"; case 'ɏ': return "y";
+        case 'ɨ': return "i";
+        case 'ʈ': return "t";
+        case 'ᵻ': return "I"; case 'ᵾ': return "U";
+        }
+        return null;
+    }
+
+    // ── Visual-confusable mapping ──────────────────────────────────────────
+    // Replaces non-Latin codepoints that visually impersonate ASCII Latin
+    // letters (Cyrillic А, Greek Α, Cherokee Ꭺ, etc.) with their Latin
+    // lookalike. Used by toVisualAscii so a namespace-dodge handle like
+    // "Аpple" (Cyrillic А) reads aloud as "Apple" — exactly what the
+    // moderator sees on the nameplate — instead of being transliterated as
+    // a separate word.
     static String mapVisualLatinConfusables(String s)
     {
         StringBuilder out = null;
@@ -254,85 +291,46 @@ public final class Names
     {
         switch (cp)
         {
-            case 0x0410: return "A"; case 0x0430: return "a";
-            case 0x0412: return "B"; case 0x0432: return "b";
-            case 0x0415: return "E"; case 0x0435: return "e";
-            case 0x041A: return "K"; case 0x043A: return "k";
-            case 0x041C: return "M"; case 0x043C: return "m";
-            case 0x041D: return "H"; case 0x043D: return "h";
-            case 0x041E: return "O"; case 0x043E: return "o";
-            case 0x0420: return "P"; case 0x0440: return "p";
-            case 0x0421: return "C"; case 0x0441: return "c";
-            case 0x0422: return "T"; case 0x0442: return "t";
-            case 0x0423: return "Y"; case 0x0443: return "y";
-            case 0x0425: return "X"; case 0x0445: return "x";
-            case 0x0405: return "S"; case 0x0455: return "s";
-            case 0x0406: return "I"; case 0x0456: return "i";
-            case 0x0408: return "J"; case 0x0458: return "j";
-            case 0x04C0: return "I"; case 0x04CF: return "l";
-            case 0x0391: return "A"; case 0x03B1: return "a";
-            case 0x0392: return "B"; case 0x03B2: return "b";
-            case 0x0395: return "E"; case 0x03B5: return "e";
-            case 0x0396: return "Z"; case 0x03B6: return "z";
-            case 0x0397: return "H"; case 0x03B7: return "n";
-            case 0x0399: return "I"; case 0x03B9: return "i";
-            case 0x039A: return "K"; case 0x03BA: return "k";
-            case 0x039C: return "M"; case 0x03BC: return "u";
-            case 0x039D: return "N"; case 0x03BD: return "v";
-            case 0x039F: return "O"; case 0x03BF: return "o";
-            case 0x03A1: return "P"; case 0x03C1: return "p";
-            case 0x03A4: return "T"; case 0x03C4: return "t";
-            case 0x03A5: return "Y"; case 0x03C5: return "u";
-            case 0x03A7: return "X"; case 0x03C7: return "x";
-            case 0x03D2: return "Y"; case 0x03D5: return "f";
-            case 0x03D6: return "p"; case 0x03F2: return "c";
-            case 0x03F3: return "j"; case 0x03F9: return "C";
-            // Armenian/Georgian/Cherokee letters that are commonly used as
-            // Latin-looking substitutions in otherwise Latin display names.
-            case 0x0555: return "O"; case 0x0585: return "o";
-            case 0x10D0: return "a"; case 0x10FF: return "o";
-            case 0x13A0: return "D"; case 0x13A1: return "R";
-            case 0x13A2: return "T"; case 0x13A5: return "i";
-            case 0x13A9: return "Y"; case 0x13AA: return "A";
-            case 0x13AB: return "J"; case 0x13B0: return "G";
-            case 0x13B3: return "W"; case 0x13B7: return "M";
-            case 0x13BB: return "H"; case 0x13BE: return "O";
-            case 0x13C0: return "O"; case 0x13C2: return "P";
-            case 0x13C3: return "S"; case 0x13C7: return "V";
-            case 0x13D2: return "R";
-            case 0x13D4: return "W"; case 0x13D5: return "S";
-            case 0x13E2: return "L"; case 0x13E6: return "K";
-            case 0x13E7: return "d"; case 0x13E9: return "V";
-            case 0x13EC: return "b"; case 0x13F0: return "P";
-            case 0x13F3: return "G";
-        }
-        return null;
-    }
+        // Cyrillic uppercase that visually impersonate Latin caps
+        case 'А': return "A"; case 'В': return "B"; case 'Е': return "E";
+        case 'З': return "3"; case 'І': return "I"; case 'Ј': return "J";
+        case 'К': return "K"; case 'М': return "M";
+        case 'Н': return "H"; // looks like H, not N (famous gotcha)
+        case 'О': return "O";
+        case 'Р': return "P"; // looks like P, not R (famous gotcha)
+        case 'С': return "C"; case 'Т': return "T"; case 'У': return "Y";
+        case 'Х': return "X"; case 'Ѕ': return "S"; case 'Ү': return "Y";
+        case 'Ғ': return "F"; case 'Ԛ': return "Q"; case 'Ԝ': return "W";
 
-    static String strokeLatinFor(int cp)
-    {
-        switch (cp)
-        {
-            case 0x00D8: return "O"; case 0x00F8: return "o";
-            case 0x0110: return "D"; case 0x0111: return "d";
-            case 0x0126: return "H"; case 0x0127: return "h";
-            case 0x0141: return "L"; case 0x0142: return "l";
-            case 0x0166: return "T"; case 0x0167: return "t";
-            case 0x0180: return "b";
-            case 0x0182: return "B"; case 0x0183: return "b";
-            case 0x023A: return "A";
-            case 0x023B: return "C"; case 0x023C: return "c";
-            case 0x023D: return "L";
-            case 0x023E: return "T";
-            case 0x0246: return "E"; case 0x0247: return "e";
-            case 0x0248: return "J"; case 0x0249: return "j";
-            case 0x024A: return "Q"; case 0x024B: return "q";
-            case 0x024C: return "R"; case 0x024D: return "r";
-            case 0x024E: return "Y"; case 0x024F: return "y";
-            case 0x0268: return "i";
-            case 0x0288: return "t";
-            case 0x1D7B: return "I"; case 0x1D7E: return "U";
+        // Cyrillic lowercase
+        case 'а': return "a"; case 'е': return "e"; case 'о': return "o";
+        case 'р': return "p"; case 'с': return "c"; case 'у': return "y";
+        case 'х': return "x"; case 'і': return "i"; case 'ј': return "j";
+        case 'ѕ': return "s"; case 'ԛ': return "q"; case 'ԝ': return "w";
+        case 'ӏ': return "l";
+
+        // Greek uppercase
+        case 'Α': return "A"; case 'Β': return "B"; case 'Ε': return "E";
+        case 'Ζ': return "Z"; case 'Η': return "H"; case 'Ι': return "I";
+        case 'Κ': return "K"; case 'Μ': return "M"; case 'Ν': return "N";
+        case 'Ο': return "O"; case 'Ρ': return "P"; case 'Τ': return "T";
+        case 'Υ': return "Y"; case 'Χ': return "X";
+
+        // Greek lowercase that read clearly as Latin
+        case 'ο': return "o"; case 'ν': return "v"; case 'α': return "a";
+        case 'κ': return "k"; case 'ρ': return "p"; case 'ι': return "i";
+        case 'τ': return "t";
+
+        // Armenian
+        case 'Օ': return "O"; case 'օ': return "o"; case 'հ': return "h";
+
+        // Cherokee letters that look like Latin caps
+        case 'Ꭰ': return "D"; case 'Ꭱ': return "R"; case 'Ꭲ': return "T";
+        case 'Ꭺ': return "A"; case 'Ꭻ': return "J"; case 'Ꭼ': return "E";
+        case 'Ꮃ': return "W"; case 'Ꮄ': return "L"; case 'Ꮋ': return "H";
+        case 'Ꮍ': return "Y"; case 'Ꮤ': return "W";
         }
         return null;
     }
 }
+

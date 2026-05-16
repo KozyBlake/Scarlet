@@ -1,6 +1,39 @@
 
 # Changelog
 
+## 0.4.17-b2
+
+TTS and packaging cleanup release.
+
+Highlights:
+
+- **Clearer mixed-character TTS alerts.** Scarlet now plays a bundled alert sound before a short spoken warning when a joined user's display name uses mixed scripts or lookalike characters, then lets TTS pronounce the best readable form without spelling out language labels.
+- **Smaller desktop JAR.** RVC, the old lite/minimal package variants, and dormant staged browser automation code have been removed from the desktop build, while Android DAVE natives now stay in the Android artifact instead of the main desktop JAR.
+- **Bundled startup security checks.** Security regression checks now live in the main Scarlet source tree and run during normal Scarlet startup instead of living under the test tree.
+- **Fork update metadata.** `meta.json` now advertises `0.4.17-b2` for both release and build update checks.
+
+### Added
+
+- Bundled `tts/mixed-character-alert.wav` so mixed-character username alerts work from the packaged JAR without requiring a separate local audio file.
+- Moved security regression checks into the main Scarlet source tree so the packaged JAR carries the checks with the application.
+
+### Changed
+
+- Mixed-character username TTS now uses a short alert phrase and best-effort readable pronunciation instead of announcing script names such as Cyrillic or Greek for each character.
+- Mixed-character username normalization now favors Latin lookalike output when a display name is mostly readable as an English-style name, while still preserving full non-Latin names instead of forcing them through the lookalike path.
+- The main desktop shade excludes Android and Termux DAVE native payloads; the Android classifier build still includes them automatically during normal Maven packaging.
+- Bumped Scarlet release / version metadata to `0.4.17-b2` and pointed update / download release checks at the KozyBlake fork.
+
+### Fixed
+
+- Security regression checks are no longer stranded under `src/test`; they are bundled with Scarlet and executed as part of normal startup.
+
+### Removed
+
+- RVC voice-conversion code, bundled Python bridge assets, and RVC settings/UI wiring have been removed from Scarlet.
+- The lite and minimal shaded JAR variants have been removed now that RVC is no longer shipped.
+- Dormant staged browser/web automation sources, including the old NanoHTTPD/JCEF/Selenium experiment tree, have been removed.
+
 ## 0.4.17-b1_hotfix
 
 Hotfix update for the first KozyBlake fork release.

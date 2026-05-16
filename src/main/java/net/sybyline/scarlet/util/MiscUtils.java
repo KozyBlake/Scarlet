@@ -437,7 +437,7 @@ public interface MiscUtils
                               SEMVER_CMP_NEWEST_FIRST = SEMVER_CMP_OLDEST_FIRST.reversed();
     /**
      * Comparator pair using {@link #compareScarletVersion(String, String)} —
-     * a suffixed version (e.g. "0.4.17-b1") is treated as <em>newer</em> than
+     * a suffixed version (e.g. "0.4.17-b2") is treated as <em>newer</em> than
      * the bare release ("0.4.17"), the convention used by Scarlet for its own
      * fork builds.
      */
@@ -511,11 +511,11 @@ public interface MiscUtils
 
     /**
      * Scarlet-specific version comparison. Standard semver (see
-     * {@link #compareSemVer(String, String)}) treats "0.4.17-b1" as a
+     * {@link #compareSemVer(String, String)}) treats "0.4.17-b2" as a
      * pre-release of "0.4.17" and therefore older. For the KozyBlake fork's
      * own update notifications we instead want the suffix to mean "iteration
-     * ahead of the bare release" — so "0.4.17-b1" is <em>newer</em> than
-     * "0.4.17", and "0.4.17-b2" is newer than "0.4.17-b1".
+     * ahead of the bare release" - so "0.4.17-b2" is <em>newer</em> than
+     * "0.4.17", and "0.4.17-b3" is newer than "0.4.17-b2".
      *
      * <p>Returns a value &lt; 0 when {@code l} is older than {@code r}, &gt; 0
      * when newer, 0 when equal. Suitable for direct use as a {@link Comparator}

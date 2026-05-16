@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>net.sybyline</groupId>
   <artifactId>scarlet</artifactId>
-  <version>0.4.17-b1_hotfix</version><!--scarlet-version-->
+  <version>0.4.17-b2</version><!--scarlet-version-->
   <name>Scarlet</name>
   <build>
     <plugins>
@@ -39,11 +39,8 @@
         <version>3.2.4</version>
         <executions>
           <!-- ================================================================
-               Full edition — replaces the main artifact.
+               Main distribution jar. Replaces the Maven main artifact.
                Output: target/scarlet-${version}.jar
-               Contains everything, including the RVC Python bridge and the
-               scarlet-features.properties file that turns Features.RVC_ENABLED
-               on at runtime.
                ================================================================ -->
           <execution>
             <id>shade-full</id>
@@ -71,191 +68,20 @@
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.EC</exclude>
-                  </excludes>
-                </filter>
-                <filter>
-                  <artifact>moe.kyokobot.libdave:libdave-jvm-impl</artifact>
-                  <excludes>
-                    <exclude>moe/kyokobot/libdave/natives/DaveNativeBindings.class</exclude>
-                  </excludes>
-                </filter>
-              </filters>
-            </configuration>
-          </execution>
-          <!-- ================================================================
-               Lite edition — attached as a classifier, always built.
-               Output: target/scarlet-${version}-lite.jar
-               Filters strip the RVC bridge resource and the feature-flag
-               properties file so Features.RVC_ENABLED evaluates to false at
-               runtime (see net.sybyline.scarlet.Features).  The RVC Java
-               classes are still compiled in but never execute, and the UI
-               hides every tts_rvc_* / rvc_* setting.
-               Runs in the same `package` phase as the full shade above so a
-               plain `mvn package` produces both editions in one invocation.
-               ================================================================ -->
-          <execution>
-            <id>shade-lite</id>
-            <phase>package</phase>
-            <goals>
-              <goal>shade</goal>
-            </goals>
-            <configuration>
-              <shadedArtifactAttached>true</shadedArtifactAttached>
-              <shadedClassifierName>lite</shadedClassifierName>
-              <transformers>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
-                  <manifestEntries>
-                    <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
-                    <Implementation-Title>${project.artifactId}</Implementation-Title>
-                    <Implementation-Version>${project.version}</Implementation-Version>
-                    <Implementation-Vendor>${project.groupId}</Implementation-Vendor>
-                  </manifestEntries>
-                </transformer>
-              </transformers>
-              <filters>
-                <filter>
-                  <!-- The main/full jar is desktop-oriented. Keep Android DAVE
-                       natives exclusive to the dedicated -android artifact. -->
-                  <artifact>*:*</artifact>
-                  <excludes>
-                    <exclude>META-INF/*.SF</exclude>
-                    <exclude>META-INF/*.RSA</exclude>
-                    <exclude>META-INF/*.DSA</exclude>
-                    <exclude>META-INF/*.EC</exclude>
+                    <!-- Android/Termux DAVE natives are only for the
+                         -android artifact/profile builds. Keep the desktop
+                         jar from carrying mobile native payloads. -->
                     <exclude>native/android/**</exclude>
-                    <exclude>android-aarch64/libdave-jvm.so</exclude>
-                    <exclude>natives/android-aarch64/libdave-jvm.so</exclude>
-                    <exclude>termux-aarch64/libdave-jvm.so</exclude>
-                  </excludes>
-                </filter>
-                <filter>
-                  <artifact>moe.kyokobot.libdave:libdave-jvm-impl</artifact>
-                  <excludes>
-                    <exclude>moe/kyokobot/libdave/natives/DaveNativeBindings.class</exclude>
-                  </excludes>
-                </filter>
-                <filter>
-                  <!-- Match any artifact: we want to strip these paths
-                       wherever they appear.  Our project owns them both
-                       (see src/main/resources/scarlet-features.properties
-                       and src/main/resources/rvc/rvc_bridge.py), but
-                       using * future-proofs against a dependency ever
-                       shipping a clashing path. -->
-                  <artifact>*:*</artifact>
-                  <excludes>
-                    <!-- Flip Features.RVC_ENABLED off at runtime. -->
-                    <exclude>scarlet-features.properties</exclude>
-                    <!-- Drop the ~100 KB Python bridge and any companion
-                         resources under /rvc/ on the classpath. -->
-                    <exclude>rvc/**</exclude>
-                    <!-- Keep Android DAVE natives exclusive to -android.jar. -->
-                    <exclude>native/android/**</exclude>
-                    <exclude>android-aarch64/libdave-jvm.so</exclude>
-                    <exclude>natives/android-aarch64/libdave-jvm.so</exclude>
-                    <exclude>termux-aarch64/libdave-jvm.so</exclude>
-                  </excludes>
-                </filter>
-              </filters>
-            </configuration>
-          </execution>
-          <!-- ================================================================
-               Minimal edition — attached as a classifier, always built.
-               Output: target/scarlet-${version}-minimal.jar
-               Strips resources/classes for every subsystem the minimal
-               scarlet-features.properties turns off.  Leaves the full and
-               lite editions byte-for-byte unchanged.
-
-               What this execution removes (vs. full/lite):
-
-                 RVC
-                   - rvc/** (Python bridge + any companion resources).
-                   RVC Java classes (net/sybyline/scarlet/util/rvc/**) are
-                   KEPT because TtsService declares `final RvcService
-                   rvcService;` and `private volatile RvcConfig rvcConfig =
-                   new RvcConfig();` as field / field-initializer — removing
-                   them would NoClassDefFoundError on TtsService construction.
-                   When RVC is off the classes are simply dead code.
-
-                 DAVE
-                   - natives-*-*-libdave artifacts:
-                       linux-*/libdave.so, win32-*/libdave.dll,
-                       darwin-*/libdave.dylib
-                   - impl-jni native layout (same libs, different path):
-                       natives/**/*dave-jvm.*
-                   - DAVE adapter + wrapper Java classes:
-                       moe/kyokobot/libdave/**
-                       net/sybyline/scarlet/server/discord/dave/**
-                       net/sybyline/scarlet/server/discord/LDaveSessionFactory*
-                       net/sybyline/scarlet/server/discord/DAudioDaveSession*
-                   Safe because every use site sits inside
-                   `if (Features.DAVE_ENABLED)` in ScarletDiscordJDA
-                   (lines 170-171, 182-187); the two imports at the top of
-                   that file don't trigger class loading.
-
-                 ScarletCalendar / ScarletEvidence Java classes are KEPT —
-                 Scarlet.java and ScarletDiscordCommands.java reference them
-                 as field types / parameter types outside any gate.
-               ================================================================ -->
-          <execution>
-            <id>shade-minimal</id>
-            <phase>package</phase>
-            <goals>
-              <goal>shade</goal>
-            </goals>
-            <configuration>
-              <shadedArtifactAttached>true</shadedArtifactAttached>
-              <shadedClassifierName>minimal</shadedClassifierName>
-              <transformers>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                  <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
-                  <manifestEntries>
-                    <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
-                    <Implementation-Title>${project.artifactId}</Implementation-Title>
-                    <Implementation-Version>${project.version}</Implementation-Version>
-                    <Implementation-Vendor>${project.groupId}</Implementation-Vendor>
-                  </manifestEntries>
-                </transformer>
-                <transformer implementation="org.apache.maven.plugins.shade.resource.IncludeResourceTransformer">
-                  <resource>scarlet-features.properties</resource>
-                  <file>src/editions/minimal/scarlet-features.properties</file>
-                </transformer>
-              </transformers>
-              <filters>
-                <filter>
-                  <artifact>*:*</artifact>
-                  <excludes>
-                    <exclude>META-INF/*.SF</exclude>
-                    <exclude>META-INF/*.RSA</exclude>
-                    <exclude>META-INF/*.DSA</exclude>
-                    <exclude>META-INF/*.EC</exclude>
-                    <!-- Flip Features flags + strip the Python bridge. -->
-                    <exclude>scarlet-features.properties</exclude>
-                    <exclude>rvc/**</exclude>
-
-                    <!-- DAVE natives from the natives-*-* artifacts
-                         (top-level layout, no `natives/` prefix). -->
-                    <exclude>linux-*/libdave.so</exclude>
-                    <exclude>win32-*/libdave.dll</exclude>
-                    <exclude>darwin-*/libdave.dylib</exclude>
-
-                    <!-- DAVE natives from the impl-jni artifact
-                         (`natives/…/*dave-jvm.*` layout). ~18 MB raw. -->
-                    <exclude>natives/**/*dave-jvm.so</exclude>
-                    <exclude>natives/**/*dave-jvm.dll</exclude>
-                    <exclude>natives/**/*dave-jvm.dylib</exclude>
+                    <exclude>natives/android-*/libdave-jvm.so</exclude>
+                    <exclude>natives/linux-aarch64/libdave-jvm.so</exclude>
                     <exclude>android-*/libdave-jvm.so</exclude>
                     <exclude>termux-*/libdave-jvm.so</exclude>
-                    <exclude>linux-*/libdave-jvm.so</exclude>
-                    <exclude>native/android/**</exclude>
-
-                    <!-- DAVE adapter + wrapper classes.  Only reached via
-                         gated branches in ScarletDiscordJDA, so removing
-                         them is safe when dave.enabled=false. -->
-                    <exclude>moe/kyokobot/libdave/**</exclude>
-                    <exclude>net/sybyline/scarlet/server/discord/dave/**</exclude>
-                    <exclude>net/sybyline/scarlet/server/discord/LDaveSessionFactory*.class</exclude>
-                    <exclude>net/sybyline/scarlet/server/discord/DAudioDaveSession*.class</exclude>
+                  </excludes>
+                </filter>
+                <filter>
+                  <artifact>moe.kyokobot.libdave:libdave-jvm-impl</artifact>
+                  <excludes>
+                    <exclude>moe/kyokobot/libdave/natives/DaveNativeBindings.class</exclude>
                   </excludes>
                 </filter>
               </filters>
@@ -368,21 +194,6 @@
     <scarlet.androidDaveLibrary>${scarlet.androidDaveBuildDir}/libdave-jvm.so</scarlet.androidDaveLibrary>
   </properties>
   <profiles>
-    <profile>
-      <id>bundled-android-dave</id>
-      <activation>
-        <property>
-          <name>scarlet.bundleAndroidDave</name>
-        </property>
-      </activation>
-      <dependencies>
-        <dependency>
-          <groupId>moe.kyokobot.libdave</groupId>
-          <artifactId>libdave-jvm-natives-android</artifactId>
-          <version>${libdave.version}</version>
-        </dependency>
-      </dependencies>
-    </profile>
     <profile>
       <id>android-dave-native</id>
       <activation>
@@ -624,9 +435,9 @@
       <artifactId>libdave-jvm-impl</artifactId>
       <version>${libdave.version}</version>
     </dependency>
-    <!-- Android/Termux JNI natives for Discord voice E2EE. Kept in the
-         default build so plain `mvn package` preserves the Termux use-case
-         instead of silently dropping DAVE support on rebuild. -->
+    <!-- Android/Termux JNI natives for the -android classifier. The desktop
+         shade execution filters these paths out, so the main Scarlet jar stays
+         small while the Android jar remains self-contained by default. -->
     <dependency>
       <groupId>moe.kyokobot.libdave</groupId>
       <artifactId>libdave-jvm-natives-android</artifactId>
@@ -668,9 +479,6 @@
       <version>v3-rev20250220-2.0.0</version>
     </dependency>
 -->
-    <!-- selenium-java removed: not used in main sources, was already in ScarletBuild IGNORED_DEPS -->
-    <!-- jcefmaven removed: staged for future use, not referenced in src/main -->
-    <!-- nanohttpd removed: already in ScarletBuild IGNORED_DEPS, not used in main sources -->
     <dependency>
       <groupId>org.slf4j</groupId>
       <artifactId>slf4j-api</artifactId>

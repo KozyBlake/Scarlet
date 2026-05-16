@@ -4,7 +4,7 @@
   <groupId>net.sybyline</groupId>
   <artifactId>scarlet</artifactId>
   <name>Scarlet</name>
-  <version>0.4.17-b1_hotfix</version>
+  <version>0.4.17-b2</version>
   <build>
     <plugins>
       <plugin>
@@ -63,119 +63,17 @@
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.EC</exclude>
-                  </excludes>
-                </filter>
-                <filter>
-                  <artifact>moe.kyokobot.libdave:libdave-jvm-impl</artifact>
-                  <excludes>
-                    <exclude>moe/kyokobot/libdave/natives/DaveNativeBindings.class</exclude>
-                  </excludes>
-                </filter>
-              </filters>
-            </configuration>
-          </execution>
-          <execution>
-            <id>shade-lite</id>
-            <phase>package</phase>
-            <goals>
-              <goal>shade</goal>
-            </goals>
-            <configuration>
-              <shadedArtifactAttached>true</shadedArtifactAttached>
-              <shadedClassifierName>lite</shadedClassifierName>
-              <transformers>
-                <transformer>
-                  <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
-                  <manifestEntries>
-                    <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
-                    <Implementation-Title>${project.artifactId}</Implementation-Title>
-                    <Implementation-Version>${project.version}</Implementation-Version>
-                    <Implementation-Vendor>${project.groupId}</Implementation-Vendor>
-                  </manifestEntries>
-                </transformer>
-              </transformers>
-              <filters>
-                <filter>
-                  <artifact>*:*</artifact>
-                  <excludes>
-                    <exclude>META-INF/*.SF</exclude>
-                    <exclude>META-INF/*.RSA</exclude>
-                    <exclude>META-INF/*.DSA</exclude>
-                    <exclude>META-INF/*.EC</exclude>
                     <exclude>native/android/**</exclude>
-                    <exclude>android-aarch64/libdave-jvm.so</exclude>
-                    <exclude>natives/android-aarch64/libdave-jvm.so</exclude>
-                    <exclude>termux-aarch64/libdave-jvm.so</exclude>
-                  </excludes>
-                </filter>
-                <filter>
-                  <artifact>moe.kyokobot.libdave:libdave-jvm-impl</artifact>
-                  <excludes>
-                    <exclude>moe/kyokobot/libdave/natives/DaveNativeBindings.class</exclude>
-                  </excludes>
-                </filter>
-                <filter>
-                  <artifact>*:*</artifact>
-                  <excludes>
-                    <exclude>scarlet-features.properties</exclude>
-                    <exclude>rvc/**</exclude>
-                    <exclude>native/android/**</exclude>
-                    <exclude>android-aarch64/libdave-jvm.so</exclude>
-                    <exclude>natives/android-aarch64/libdave-jvm.so</exclude>
-                    <exclude>termux-aarch64/libdave-jvm.so</exclude>
-                  </excludes>
-                </filter>
-              </filters>
-            </configuration>
-          </execution>
-          <execution>
-            <id>shade-minimal</id>
-            <phase>package</phase>
-            <goals>
-              <goal>shade</goal>
-            </goals>
-            <configuration>
-              <shadedArtifactAttached>true</shadedArtifactAttached>
-              <shadedClassifierName>minimal</shadedClassifierName>
-              <transformers>
-                <transformer>
-                  <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
-                  <manifestEntries>
-                    <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
-                    <Implementation-Title>${project.artifactId}</Implementation-Title>
-                    <Implementation-Version>${project.version}</Implementation-Version>
-                    <Implementation-Vendor>${project.groupId}</Implementation-Vendor>
-                  </manifestEntries>
-                </transformer>
-                <transformer>
-                  <resource>scarlet-features.properties</resource>
-                  <file>src/editions/minimal/scarlet-features.properties</file>
-                </transformer>
-              </transformers>
-              <filters>
-                <filter>
-                  <artifact>*:*</artifact>
-                  <excludes>
-                    <exclude>META-INF/*.SF</exclude>
-                    <exclude>META-INF/*.RSA</exclude>
-                    <exclude>META-INF/*.DSA</exclude>
-                    <exclude>META-INF/*.EC</exclude>
-                    <exclude>scarlet-features.properties</exclude>
-                    <exclude>rvc/**</exclude>
-                    <exclude>linux-*/libdave.so</exclude>
-                    <exclude>win32-*/libdave.dll</exclude>
-                    <exclude>darwin-*/libdave.dylib</exclude>
-                    <exclude>natives/**/*dave-jvm.so</exclude>
-                    <exclude>natives/**/*dave-jvm.dll</exclude>
-                    <exclude>natives/**/*dave-jvm.dylib</exclude>
+                    <exclude>natives/android-*/libdave-jvm.so</exclude>
+                    <exclude>natives/linux-aarch64/libdave-jvm.so</exclude>
                     <exclude>android-*/libdave-jvm.so</exclude>
                     <exclude>termux-*/libdave-jvm.so</exclude>
-                    <exclude>linux-*/libdave-jvm.so</exclude>
-                    <exclude>native/android/**</exclude>
-                    <exclude>moe/kyokobot/libdave/**</exclude>
-                    <exclude>net/sybyline/scarlet/server/discord/dave/**</exclude>
-                    <exclude>net/sybyline/scarlet/server/discord/LDaveSessionFactory*.class</exclude>
-                    <exclude>net/sybyline/scarlet/server/discord/DAudioDaveSession*.class</exclude>
+                  </excludes>
+                </filter>
+                <filter>
+                  <artifact>moe.kyokobot.libdave:libdave-jvm-impl</artifact>
+                  <excludes>
+                    <exclude>moe/kyokobot/libdave/natives/DaveNativeBindings.class</exclude>
                   </excludes>
                 </filter>
               </filters>
@@ -236,16 +134,6 @@
     </plugins>
   </build>
   <profiles>
-    <profile>
-      <id>bundled-android-dave</id>
-      <dependencies>
-        <dependency>
-          <groupId>moe.kyokobot.libdave</groupId>
-          <artifactId>libdave-jvm-natives-android</artifactId>
-          <version>${libdave.version}</version>
-        </dependency>
-      </dependencies>
-    </profile>
     <profile>
       <id>android-dave-native</id>
       <build>

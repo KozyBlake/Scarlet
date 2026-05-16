@@ -563,7 +563,7 @@ public class Swing
      * {@code JOptionPane.showConfirmDialog} / {@code showMessageDialog} produce
      * non-resizable dialogs sized to the preferred height of the content.  On
      * Windows at 125%/150%/200% display scale, tall HTML-label panels (e.g. the
-     * RVC / eSpeak / xdg-open installer consent dialogs) end up taller than the
+     * eSpeak / xdg-open installer consent dialogs) end up taller than the
      * usable screen height.  The JOptionPane's auto-generated Yes/No button
      * row is rendered BELOW the content, so it ends up below the bottom edge of
      * the screen — invisible and un-clickable.  This helper wraps tall content

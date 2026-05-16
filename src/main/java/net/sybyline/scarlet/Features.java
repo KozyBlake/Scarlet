@@ -7,7 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Compile-once, ship-many feature flags.
+ * Build-time feature flags.
  *
  * <p>At startup we look for a classpath resource named
  * {@code /scarlet-features.properties}.  When present its boolean entries
@@ -15,71 +15,30 @@ import org.slf4j.LoggerFactory;
  * every flag falls back to its {@link #loadFlag compile-time default}.
  *
  * <p>Default values encode <em>"what should happen if no properties file
- * is present on the classpath"</em>:
- * <ul>
- *   <li>Features that have always shipped (Discord moderation, watched-avatars,
- *       calendar, aux-webhooks, animated-emoji, DAVE, evidence,
- *       avatar-search, pronouns, vrchat-reports, CLI commands) default
- *       to {@code true} so older builds and the lite edition preserve
- *       existing behaviour without needing to bundle a properties file.</li>
- *   <li>Opt-in features newer than their umbrella release (currently
- *       just {@link #RVC_ENABLED}) default to {@code false} so they're
- *       off unless a distribution explicitly opts in.</li>
- * </ul>
+ * is present on the classpath"</em>: every flag defaults to {@code true}
+ * so existing builds preserve current behavior without needing to set
+ * a property.
  *
- * <p>This lets us produce multiple distribution JARs from a single source
- * tree by picking which {@code scarlet-features.properties} gets shaded in:
- * <ul>
- *   <li><b>Full</b>: ships {@code scarlet-features.properties} with
- *       {@code rvc.enabled=true}; every other flag inherits its default
- *       ({@code true}), so all features are on.</li>
- *   <li><b>Lite</b>: strips {@code scarlet-features.properties}
- *       entirely, so every flag falls back to its compile-time default.
- *       RVC is off (opt-in default), everything else is on — existing
- *       lite behaviour is preserved byte-for-byte.</li>
- *   <li><b>Minimal</b>: ships a minimal-specific
- *       {@code scarlet-features.properties} that sets every cut flag
- *       ({@code discord.kick_ban}, {@code watched.avatars},
- *       {@code calendar}, {@code aux_webhooks}, {@code animated_emoji},
- *       {@code dave}, {@code evidence}, {@code avatar_search},
- *       {@code pronouns}, {@code vrchat_reports}, {@code cli_commands})
- *       to {@code false} alongside {@code rvc.enabled=false}, leaving
- *       TTS and the core VRChat-audit-log-to-Discord pipeline as the
- *       only active subsystems.</li>
- * </ul>
+ * <p>The standard Scarlet jar bundles an empty
+ * {@code scarlet-features.properties}, so every feature stays enabled.
+ * The gates remain here for custom builds that intentionally disable a
+ * subsystem.
  *
  * <p>Flags evaluated here are {@code public static final}, so the JIT
  * can treat them as constants and dead-code-eliminate disabled paths
- * across the whole call graph.  That means a stripped-down build pays
- * no runtime cost for the gating: the disabled branches fold away.
+ * across the whole call graph. That means a custom build with disabled
+ * flags pays no runtime cost for the gating: the disabled branches fold
+ * away.
  */
 public final class Features
 {
     private static final Logger LOG = LoggerFactory.getLogger("Scarlet/Features");
 
-    /** Relative to classpath root.  Matches what the Maven shade filters
-     *  target (see pom.xml {@code shade-lite} / {@code shade-minimal}
-     *  executions). */
+    /** Relative to the classpath root for optional build-time overrides. */
     private static final String RESOURCE_PATH = "/scarlet-features.properties";
 
     /** Loaded once at class init; empty if the resource was absent. */
     private static final Properties PROPS = loadProperties();
-
-    /**
-     * Whether the RVC (Retrieval-based Voice Conversion) subsystem is
-     * compiled-in AND bundled with its Python bridge.  When false:
-     * <ul>
-     *   <li>RVC-related settings are hidden from the UI.</li>
-     *   <li>{@link net.sybyline.scarlet.util.tts.TtsService} skips
-     *       RvcService creation (and the dependency-install flow).</li>
-     *   <li>The Python bridge resource {@code /rvc/rvc_bridge.py} is not
-     *       shipped, reducing JAR size and removing all RVC-adjacent
-     *       network/disk operations.</li>
-     * </ul>
-     * Default {@code false}: RVC is newer than the lite edition and is
-     * opt-in; a build without the properties file gets no RVC.
-     */
-    public static final boolean RVC_ENABLED = loadFlag("rvc.enabled", false);
 
     /**
      * Whether the built-in Discord {@code /discord-warn},
@@ -126,9 +85,7 @@ public final class Features
      * Whether DAVE (Discord Audio &amp; Video Encryption) is wired into
      * the JDA audio stack.  When false the JDA voice-init site skips
      * installing {@code LDaveSessionFactory}; Scarlet still participates
-     * in voice channels via non-E2EE transport.  Lets minimal builds
-     * skip shipping the ~1.5 MB per-platform native libraries bundled
-     * for Linux, Windows, and macOS. Default {@code true}.
+     * in voice channels via non-E2EE transport. Default {@code true}.
      */
     public static final boolean DAVE_ENABLED = loadFlag("dave.enabled", true);
 
@@ -197,7 +154,6 @@ public final class Features
     {
         switch (key)
         {
-        case "rvc.enabled":               return RVC_ENABLED;
         case "discord.kick_ban.enabled":  return DISCORD_KICK_BAN_ENABLED;
         case "watched.avatars.enabled":   return WATCHED_AVATARS_ENABLED;
         case "calendar.enabled":          return CALENDAR_ENABLED;

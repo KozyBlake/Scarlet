@@ -15,6 +15,12 @@ public final class SecurityRegressionChecks
 {
     public static void main(String[] args) throws Exception
     {
+        runAll();
+        System.out.println("Security regression checks passed");
+    }
+
+    public static void runAll() throws Exception
+    {
         testEncryptedPrefsRoundTrip();
         testEncryptedPrefsLegacyWrapperMigration();
         testPublicAddressClassification();
