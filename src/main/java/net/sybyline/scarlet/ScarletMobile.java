@@ -152,7 +152,7 @@ public class ScarletMobile implements Closeable
         this.load();
 
         this.enabled = scarlet.settings.new FileValuedBoolean("mobile_enabled", "Mobile companion", false);
-        this.minSeverity = scarlet.settings.new FileValuedEnum<>("mobile_min_severity", "Mobile minimum severity", Severity.WARNING);
+        this.minSeverity = scarlet.settings.new FileValuedEnum<>("mobile_min_severity", "Mobile minimum severity", Severity.WATCH);
         this.notifyWatchedUsers = scarlet.settings.new FileValuedBoolean("mobile_notify_watched_users", "Mobile: watched users", true);
         this.notifyWatchedGroups = scarlet.settings.new FileValuedBoolean("mobile_notify_watched_groups", "Mobile: watched groups", true);
         this.notifyWatchedAvatars = scarlet.settings.new FileValuedBoolean("mobile_notify_watched_avatars", "Mobile: watched avatars", true);
