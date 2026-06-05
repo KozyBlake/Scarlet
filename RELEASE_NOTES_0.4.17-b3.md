@@ -21,7 +21,7 @@ Scarlet runs a relay through a lightweight Node.js server. When something happen
 
 #### Notification types
 
-Each alert type has its own sound:
+Each alert type has its own sound from the previously known BanLogger:
 
 | Alert | Sound | Color in log |
 |-------|-------|--------------|
@@ -77,6 +77,7 @@ The app seamlessly switches between your home network (direct LAN, lowest latenc
 | File | Description |
 |------|-------------|
 | `scarlet-0.4.17-b3.jar` | Scarlet desktop application |
+| `scarlet-0.4.17-b3-android.jar` | Scarlet Android application|
 | `ScarletCompanion-debug.apk` | Android companion app |
 
 ## Installing the Android APK

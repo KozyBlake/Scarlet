@@ -1,0 +1,13 @@
+name = "scarlet-mobile-relay"
+main = "worker.js"
+compatibility_date = "2026-06-04"
+
+[[kv_namespaces]]
+binding = "SCARLET_MOBILE"
+id = "replace-with-kv-namespace-id"
+
+# Set these with `wrangler secret put ...`:
+# FCM_PROJECT_ID
+# FCM_CLIENT_EMAIL
+# FCM_PRIVATE_KEY
+# SCARLET_RELAY_TOKEN

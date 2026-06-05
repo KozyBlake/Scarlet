@@ -17,6 +17,7 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -24,6 +25,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
@@ -31,6 +33,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
@@ -39,6 +42,8 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -93,14 +98,19 @@ import net.dv8tion.jda.api.entities.Invite;
 import net.dv8tion.jda.api.entities.Member;
 import net.dv8tion.jda.api.entities.Message;
 import net.dv8tion.jda.api.entities.MessageEmbed;
+import net.dv8tion.jda.api.entities.PermissionOverride;
+import net.dv8tion.jda.api.entities.Role;
 import net.dv8tion.jda.api.entities.UserSnowflake;
 import net.dv8tion.jda.api.entities.WebhookClient;
 import net.dv8tion.jda.api.entities.channel.Channel;
+import net.dv8tion.jda.api.entities.channel.attribute.ICategorizableChannel;
+import net.dv8tion.jda.api.entities.channel.attribute.IPermissionContainer;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.entities.channel.concrete.ThreadChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
+import net.dv8tion.jda.api.events.channel.ChannelCreateEvent;
 import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.MessageContextInteractionEvent;
@@ -110,6 +120,7 @@ import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.EntitySelectInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
 import net.dv8tion.jda.api.events.guild.member.GuildMemberJoinEvent;
+import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.events.session.ShutdownEvent;
 import net.dv8tion.jda.api.exceptions.InvalidTokenException;
 import net.dv8tion.jda.api.hooks.ListenerAdapter;
@@ -154,6 +165,15 @@ public class ScarletDiscordJDA implements ScarletDiscord
 
     static final Logger LOG = LoggerFactory.getLogger("Scarlet/JDA");
     static final String BLOCKED_AVATAR_SEARCH_HOST = blockedAvatarSearchHost();
+    static final int DISCORD_ACCOUNT_AGE_ALERT_MAX_MINUTES = 365 * 24 * 60;
+    static final Duration TICKET_TOOL_AUTO_RESPONSE_MAX_CHANNEL_AGE = Duration.ofMinutes(30L);
+    static final String DEFAULT_TICKET_TOOL_CHANNEL_NAME_REGEX = "(?i).*ticket.*";
+    static final String DEFAULT_TICKET_TOOL_NOTIFY_ROLE_SF = "1479385524786696242";
+    static final String DEFAULT_TICKET_TOOL_AGE_VERIFICATION_MESSAGE =
+        "If your ticket is regarding age verification;\n\n" +
+        "You have 2 options.\n\n" +
+        "Take a photo of your ID with everything but your birthday covered, with a piece of paper next to it with todays date, the server name, your Discord username, and your VRChat username.\n\n" +
+        "If you're an NSFW content creator and have a verified Fansly account, you can write within your bio the server name. Once that is done, take a screenshot and also send the link of your profile here.";
 
     static String blockedAvatarSearchHost()
     {
@@ -416,7 +436,11 @@ public class ScarletDiscordJDA implements ScarletDiscord
     public JDA jda() { return this.jda; }
     final ScarletLivePlayerlist livePlayerlist;
     final ScarletSettings.RegistryStringEncrypted token;
-    String guildSf, audioChannelSf, discordActionLogChannelSf, evidenceRoot;
+    String guildSf, audioChannelSf, discordActionLogChannelSf, evidenceRoot,
+           ticketToolCategorySf, ticketToolChannelNameRegex, ticketToolNotifyRoleSf, ticketToolAgeVerificationMessage;
+    boolean ticketToolAutoResponseEnabled;
+    int discordAccountAgeAlertMinutes;
+    Pattern ticketToolChannelNamePattern;
     final ScarletSettings.FileValued<String> requestingEmail,
                                     evidenceFilePathFormat;
     final ScarletSettings.FileValued<Boolean> appendTemplateFooter,
@@ -442,6 +466,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
     final DPerms perms;
     final Map<String, InstanceCreation> instanceCreation = new ConcurrentHashMap<>();
     final Map<String, Map<String, Integer>> guildInviteUses = new ConcurrentHashMap<>();
+    final Set<String> ticketToolAutoRespondedChannels = ConcurrentHashMap.newKeySet();
     final Map<String, Command.Choice> userSf2lastEdited_groupId = new ConcurrentHashMap<>();
     List<Command> currentCommands = new ArrayList<>();
     Map<String, ICommandReference> currentSlashCommandsMap = new HashMap<>();
@@ -959,7 +984,13 @@ public class ScarletDiscordJDA implements ScarletDiscord
         public String guildSf = null,
                       audioChannelSf = null,
                       discordActionLogChannelSf = null,
-                      evidenceRoot = null;
+                      evidenceRoot = null,
+                      ticketToolCategorySf = null,
+                      ticketToolChannelNameRegex = DEFAULT_TICKET_TOOL_CHANNEL_NAME_REGEX,
+                      ticketToolNotifyRoleSf = DEFAULT_TICKET_TOOL_NOTIFY_ROLE_SF,
+                      ticketToolAgeVerificationMessage = DEFAULT_TICKET_TOOL_AGE_VERIFICATION_MESSAGE;
+        public boolean ticketToolAutoResponseEnabled = false;
+        public int discordAccountAgeAlertMinutes = 0;
         public Map<String, UniqueStrings> scarletPermission2roleSf = new HashMap<>();
         public Map<String, String> scarletAuxWh2webhookUrl = new HashMap<>();
         public Map<String, String> auditType2channelSf = new HashMap<>();
@@ -1030,6 +1061,19 @@ public class ScarletDiscordJDA implements ScarletDiscord
         this.audioChannelSf = spec.audioChannelSf;
         this.discordActionLogChannelSf = spec.discordActionLogChannelSf;
         this.evidenceRoot = spec.evidenceRoot;
+        this.ticketToolAutoResponseEnabled = spec.ticketToolAutoResponseEnabled;
+        this.ticketToolCategorySf = nonBlankOrNull(spec.ticketToolCategorySf);
+        this.ticketToolChannelNameRegex = nonBlankOrNull(spec.ticketToolChannelNameRegex);
+        if (this.ticketToolChannelNameRegex == null)
+            this.ticketToolChannelNameRegex = DEFAULT_TICKET_TOOL_CHANNEL_NAME_REGEX;
+        this.ticketToolAgeVerificationMessage = nonBlankOrNull(spec.ticketToolAgeVerificationMessage);
+        if (this.ticketToolAgeVerificationMessage == null)
+            this.ticketToolAgeVerificationMessage = DEFAULT_TICKET_TOOL_AGE_VERIFICATION_MESSAGE;
+        this.ticketToolNotifyRoleSf = nonBlankOrNull(spec.ticketToolNotifyRoleSf);
+        if (this.ticketToolNotifyRoleSf == null)
+            this.ticketToolNotifyRoleSf = DEFAULT_TICKET_TOOL_NOTIFY_ROLE_SF;
+        this.ticketToolChannelNamePattern = compileTicketToolChannelNamePattern(this.ticketToolChannelNameRegex);
+        this.discordAccountAgeAlertMinutes = clampDiscordAccountAgeAlertMinutes(spec.discordAccountAgeAlertMinutes);
         this.scarletPermission2roleSf = spec.scarletPermission2roleSf == null ? new HashMap<>() : new HashMap<>(spec.scarletPermission2roleSf);
         this.scarletAuxWh2webhookUrl = spec.scarletAuxWh2webhookUrl == null ? new ConcurrentHashMap<>() : new ConcurrentHashMap<>(spec.scarletAuxWh2webhookUrl);
         this.auditType2channelSf = spec.auditType2channelSf == null ? new HashMap<>() : new HashMap<>(spec.auditType2channelSf);
@@ -1062,6 +1106,12 @@ public class ScarletDiscordJDA implements ScarletDiscord
         spec.audioChannelSf = this.audioChannelSf;
         spec.discordActionLogChannelSf = this.discordActionLogChannelSf;
         spec.evidenceRoot = this.evidenceRoot;
+        spec.ticketToolAutoResponseEnabled = this.ticketToolAutoResponseEnabled;
+        spec.ticketToolCategorySf = this.ticketToolCategorySf;
+        spec.ticketToolChannelNameRegex = this.ticketToolChannelNameRegex;
+        spec.ticketToolNotifyRoleSf = this.ticketToolNotifyRoleSf;
+        spec.ticketToolAgeVerificationMessage = this.ticketToolAgeVerificationMessage;
+        spec.discordAccountAgeAlertMinutes = this.discordAccountAgeAlertMinutes;
         spec.auditType2channelSf = new HashMap<>(this.auditType2channelSf);
         spec.auditExType2channelSf = new HashMap<>(this.auditExType2channelSf);
         spec.auditType2scarletAuxWh = new HashMap<>(this.auditType2scarletAuxWh);
@@ -1086,6 +1136,65 @@ public class ScarletDiscordJDA implements ScarletDiscord
         {
             LOG.error("Exception saving discord bot settings", ex);
         }
+    }
+
+    static String nonBlankOrNull(String string)
+    {
+        if (string == null)
+            return null;
+        string = string.trim();
+        return string.isEmpty() ? null : string;
+    }
+
+    static int clampDiscordAccountAgeAlertMinutes(int minutes)
+    {
+        return Math.max(0, Math.min(minutes, DISCORD_ACCOUNT_AGE_ALERT_MAX_MINUTES));
+    }
+
+    static Pattern compileTicketToolChannelNamePattern(String regex)
+    {
+        String normalized = nonBlankOrNull(regex);
+        if (normalized == null)
+            return null;
+        try
+        {
+            return Pattern.compile(normalized);
+        }
+        catch (PatternSyntaxException ex)
+        {
+            LOG.warn("Invalid Ticket Tool channel-name regex `{}`; ticket auto-response channel-name matching disabled", regex, ex);
+            return null;
+        }
+    }
+
+    public int setDiscordAccountAgeAlertMinutes(int minutes)
+    {
+        this.discordAccountAgeAlertMinutes = clampDiscordAccountAgeAlertMinutes(minutes);
+        this.save();
+        return this.discordAccountAgeAlertMinutes;
+    }
+
+    public boolean setTicketToolAutoResponse(Boolean enabled, Channel category, Role notifyRole, String channelNameRegex)
+    {
+        String regex = this.ticketToolChannelNameRegex;
+        Pattern pattern = this.ticketToolChannelNamePattern;
+        if (channelNameRegex != null)
+        {
+            regex = nonBlankOrNull(channelNameRegex);
+            pattern = compileTicketToolChannelNamePattern(regex);
+            if (regex != null && pattern == null)
+                return false;
+        }
+        if (enabled != null)
+            this.ticketToolAutoResponseEnabled = enabled.booleanValue();
+        if (category != null)
+            this.ticketToolCategorySf = category.getId();
+        if (notifyRole != null)
+            this.ticketToolNotifyRoleSf = notifyRole.getId();
+        this.ticketToolChannelNameRegex = regex;
+        this.ticketToolChannelNamePattern = pattern;
+        this.save();
+        return true;
     }
 
     void clearDeadPagination()
@@ -1207,6 +1316,18 @@ public class ScarletDiscordJDA implements ScarletDiscord
                 ScarletDiscordJDA.this.scarlet.stop();
                 LOG.error("You must enable the `Message Content` intent in the `Privileged Gateway Intents` are of your application's `Bot` tab.");
             }
+        }
+
+        @Override
+        public void onChannelCreate(ChannelCreateEvent event)
+        {
+            ScarletDiscordJDA.this.handleChannelCreate(event);
+        }
+
+        @Override
+        public void onMessageReceived(MessageReceivedEvent event)
+        {
+            ScarletDiscordJDA.this.handleMessageReceived(event);
         }
 
         @Override
@@ -1469,13 +1590,26 @@ public class ScarletDiscordJDA implements ScarletDiscord
         TextChannel channel = this.getDiscordActionLogChannel();
         if (channel == null || member == null)
             return;
+        OffsetDateTime accountCreated = member.getUser().getTimeCreated();
+        Duration accountAge = Duration.between(accountCreated, OffsetDateTime.now(ZoneOffset.UTC));
+        long accountAgeMinutes = Math.max(0L, accountAge.toMinutes());
+        boolean accountAgeAlert = this.discordAccountAgeAlertMinutes > 0
+            && accountAgeMinutes < this.discordAccountAgeAlertMinutes;
+        String createdEpoch = Long.toUnsignedString(accountCreated.toEpochSecond());
         EmbedBuilder embed = new EmbedBuilder()
             .setTitle("Discord Member Joined")
-            .setColor(0x3BA55D)
+            .setColor(accountAgeAlert ? 0xED4245 : 0x3BA55D)
             .setTimestamp(OffsetDateTime.now(ZoneOffset.UTC))
             .addField("Member", MarkdownSanitizer.escape(member.getEffectiveName()) + " (" + member.getUser().getAsMention() + ", `" + member.getId() + "`)", false)
-            .addField("Account Created", member.getUser().getTimeCreated().toString(), true)
+            .addField("Account Created", "<t:" + createdEpoch + ":f> (<t:" + createdEpoch + ":R>)", true)
+            .addField("Account Age", formatDurationHuman(accountAge), true)
             .addField("IP Address", "Unavailable. Discord does not expose member IP addresses to bots.", false);
+        if (accountAgeAlert)
+        {
+            embed.addField("Account Age Alert",
+                "Account is under the configured threshold of " + formatDurationHuman(Duration.ofMinutes(this.discordAccountAgeAlertMinutes)) + ".",
+                false);
+        }
         if (invite != null)
         {
             String inviter = invite.getInviter() == null
@@ -1499,6 +1633,30 @@ public class ScarletDiscordJDA implements ScarletDiscord
             $ -> {},
             error -> LOG.warn("Failed to emit Discord join log to {}: {}", this.discordActionLogChannelSf, error.getMessage())
         );
+    }
+
+    static String formatDurationHuman(Duration duration)
+    {
+        long minutes = Math.max(0L, duration.toMinutes());
+        if (minutes < 60L)
+            return minutes + " minute" + (minutes == 1L ? "" : "s");
+        long hours = minutes / 60L;
+        long remainingMinutes = minutes % 60L;
+        if (hours < 48L)
+            return remainingMinutes == 0L
+                ? hours + " hour" + (hours == 1L ? "" : "s")
+                : hours + " hour" + (hours == 1L ? "" : "s") + ", " + remainingMinutes + " minute" + (remainingMinutes == 1L ? "" : "s");
+        long days = hours / 24L;
+        long remainingHours = hours % 24L;
+        if (days < 365L)
+            return remainingHours == 0L
+                ? days + " day" + (days == 1L ? "" : "s")
+                : days + " day" + (days == 1L ? "" : "s") + ", " + remainingHours + " hour" + (remainingHours == 1L ? "" : "s");
+        long years = days / 365L;
+        long remainingDays = days % 365L;
+        return remainingDays == 0L
+            ? years + " year" + (years == 1L ? "" : "s")
+            : years + " year" + (years == 1L ? "" : "s") + ", " + remainingDays + " day" + (remainingDays == 1L ? "" : "s");
     }
 
     void refreshGuildInviteCache(Guild guild)
@@ -1539,6 +1697,159 @@ public class ScarletDiscordJDA implements ScarletDiscord
                 this.emitDiscordJoinLog(event.getMember(), null, "Invite lookup failed: " + error.getMessage());
             }
         );
+    }
+
+    void handleChannelCreate(ChannelCreateEvent event)
+    {
+        if (!event.isFromGuild())
+            return;
+        if (!Objects.equals(event.getGuild().getId(), this.guildSf))
+            return;
+        GuildMessageChannel messageChannel;
+        try
+        {
+            messageChannel = event.getChannel().asGuildMessageChannel();
+        }
+        catch (RuntimeException ex)
+        {
+            return;
+        }
+        if (!this.isTicketToolAutoResponseCandidate(messageChannel))
+            return;
+        this.scarlet.exec.schedule(
+            () -> this.tryTicketToolAutoResponse(messageChannel, null, "channel create"),
+            2_000L,
+            TimeUnit.MILLISECONDS);
+    }
+
+    void handleMessageReceived(MessageReceivedEvent event)
+    {
+        if (!event.isFromGuild())
+            return;
+        if (this.jda != null && Objects.equals(event.getAuthor().getId(), this.jda.getSelfUser().getId()))
+            return;
+        if (!Objects.equals(event.getGuild().getId(), this.guildSf))
+            return;
+        GuildMessageChannel channel = event.getGuildChannel();
+        if (Duration.between(channel.getTimeCreated(), OffsetDateTime.now(ZoneOffset.UTC)).compareTo(TICKET_TOOL_AUTO_RESPONSE_MAX_CHANNEL_AGE) > 0)
+            return;
+        if (!this.isTicketToolAutoResponseCandidate(channel))
+            return;
+        Member opener = this.inferTicketToolMemberFromMessage(event.getMessage());
+        if (opener == null)
+            opener = event.getMember();
+        this.tryTicketToolAutoResponse(channel, opener, "message received");
+    }
+
+    boolean isTicketToolAutoResponseCandidate(GuildMessageChannel channel)
+    {
+        if (!this.ticketToolAutoResponseEnabled || channel == null)
+            return false;
+        if (!Objects.equals(channel.getGuild().getId(), this.guildSf))
+            return false;
+        boolean categoryMatch = this.ticketToolCategorySf != null
+            && channel instanceof ICategorizableChannel
+            && Objects.equals(((ICategorizableChannel)channel).getParentCategoryId(), this.ticketToolCategorySf);
+        boolean nameMatch = this.ticketToolChannelNamePattern != null
+            && this.ticketToolChannelNamePattern.matcher(channel.getName()).matches();
+        return categoryMatch || nameMatch;
+    }
+
+    void tryTicketToolAutoResponse(GuildMessageChannel channel, Member opener, String source)
+    {
+        if (!this.isTicketToolAutoResponseCandidate(channel))
+            return;
+        if (this.ticketToolAutoRespondedChannels.contains(channel.getId()))
+            return;
+        if (opener != null && opener.getUser().isBot())
+            opener = null;
+        if (opener == null)
+            opener = this.inferTicketToolMemberFromOverrides(channel);
+        if (opener != null)
+        {
+            this.sendTicketToolAutoResponse(channel, opener, source);
+            return;
+        }
+        channel.getHistoryFromBeginning(10).queue(
+            history -> {
+                Member historyOpener = this.inferTicketToolMemberFromMessages(history.getRetrievedHistory());
+                if (historyOpener != null)
+                    this.sendTicketToolAutoResponse(channel, historyOpener, source + " history");
+                else
+                    LOG.debug("Ticket Tool auto-response skipped in {} ({}): opener could not be inferred", channel.getName(), channel.getId());
+            },
+            error -> LOG.debug("Ticket Tool auto-response could not inspect history for {} ({}): {}", channel.getName(), channel.getId(), error.getMessage())
+        );
+    }
+
+    void sendTicketToolAutoResponse(GuildMessageChannel channel, Member opener, String source)
+    {
+        if (channel == null || opener == null || opener.getUser().isBot())
+            return;
+        if (!this.ticketToolAutoRespondedChannels.add(channel.getId()))
+            return;
+        String notifyRoleMention = this.ticketToolNotifyRoleSf == null || this.ticketToolNotifyRoleSf.trim().isEmpty()
+            ? ""
+            : " <@&" + this.ticketToolNotifyRoleSf.trim() + ">";
+        String message = opener.getUser().getAsMention() + notifyRoleMention + "\n\n" + this.ticketToolAgeVerificationMessage;
+        channel.sendMessage(message).queue(
+            sent -> LOG.info("Ticket Tool auto-response sent in {} ({}) for opener {} ({}) via {}",
+                channel.getName(), channel.getId(), opener.getEffectiveName(), opener.getId(), source),
+            error -> {
+                this.ticketToolAutoRespondedChannels.remove(channel.getId());
+                LOG.warn("Ticket Tool auto-response failed in {} ({}): {}", channel.getName(), channel.getId(), error.getMessage());
+            }
+        );
+    }
+
+    Member inferTicketToolMemberFromOverrides(GuildMessageChannel channel)
+    {
+        if (!(channel instanceof IPermissionContainer))
+            return null;
+        List<Member> candidates = new ArrayList<>();
+        for (PermissionOverride override : ((IPermissionContainer)channel).getMemberPermissionOverrides())
+        {
+            if (override == null || !override.isMemberOverride())
+                continue;
+            Member member = override.getMember();
+            if (member == null || member.getUser().isBot())
+                continue;
+            if (!override.getAllowed().contains(Permission.VIEW_CHANNEL))
+                continue;
+            candidates.add(member);
+        }
+        if (candidates.size() == 1)
+            return candidates.get(0);
+        if (!candidates.isEmpty())
+            return candidates.get(0);
+        return null;
+    }
+
+    Member inferTicketToolMemberFromMessages(List<Message> messages)
+    {
+        if (messages == null || messages.isEmpty())
+            return null;
+        Set<String> seen = new HashSet<>();
+        for (Message message : messages)
+        {
+            Member member = this.inferTicketToolMemberFromMessage(message);
+            if (member != null && seen.add(member.getId()))
+                return member;
+        }
+        return null;
+    }
+
+    Member inferTicketToolMemberFromMessage(Message message)
+    {
+        if (message == null)
+            return null;
+        for (Member member : message.getMentions().getMembers())
+        {
+            if (member != null && !member.getUser().isBot())
+                return member;
+        }
+        Member author = message.getMember();
+        return author != null && !author.getUser().isBot() ? author : null;
     }
 
     static Map<String, Integer> snapshotInviteUses(List<Invite> invites)
@@ -1847,6 +2158,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
         case "group.instance.warn":
             this.tryEmitExtendedWatchedModeration(scarlet, target);
         }
+        this.scarlet.mobile.notifyModeration(entryMeta, actor, target);
     }
     ThreadChannel emitUserModeration_thread(Scarlet scarlet, ScarletData.AuditEntryMetadata entryMeta, String actorId, Message message)
     {

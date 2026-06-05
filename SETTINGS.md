@@ -37,6 +37,27 @@ Settings for the Discord bot account
     
     // The Discord server snowflake id
     "guildSf": "123456789123456789",
+
+    // Optional. The Discord channel snowflake id used for Scarlet's Discord-native moderation and join logs
+    "discordActionLogChannelSf": "123456789123456789",
+
+    // Discord account age alert threshold, in minutes. 0 disables alerts. Maximum is 525600 (365 days).
+    "discordAccountAgeAlertMinutes": 1440,
+
+    // Whether the bot posts the age-verification prompt in new Ticket Tool ticket channels
+    "ticketToolAutoResponseEnabled": true,
+
+    // Optional. Discord category snowflake id for Ticket Tool channels
+    "ticketToolCategorySf": "123456789123456789",
+
+    // Optional. Java regex matched against ticket channel names
+    "ticketToolChannelNameRegex": "(?i).*ticket.*",
+
+    // Optional. Discord role snowflake id to ping alongside the ticket opener
+    "ticketToolNotifyRoleSf": "1479385524786696242",
+
+    // Message the bot sends after pinging the inferred ticket opener
+    "ticketToolAgeVerificationMessage": "If your ticket is regarding age verification;\n\nYou have 2 options.\n\nTake a photo of your ID with everything but your birthday covered, with a piece of paper next to it with todays date, the server name, your Discord username, and your VRChat username.\n\nIf you're an NSFW content creator and have a verified Fansly account, you can write within your bio the server name. Once that is done, take a screenshot and also send the link of your profile here.",
     
     // Optional. The voice channel snowflake id
     "audioChannelSf": "123456789123456789",

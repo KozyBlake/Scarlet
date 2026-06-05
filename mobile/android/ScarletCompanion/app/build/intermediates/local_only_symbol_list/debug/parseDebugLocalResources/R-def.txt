@@ -1,0 +1,9 @@
+R_DEF: Internal format may change without notice
+local
+drawable ic_scarlet
+string app_name
+string firebase_api_key
+string firebase_app_id
+string firebase_project_id
+string firebase_sender_id
+style AppTheme

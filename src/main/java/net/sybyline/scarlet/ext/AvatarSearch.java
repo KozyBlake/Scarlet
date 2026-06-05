@@ -1,13 +1,18 @@
 package net.sybyline.scarlet.ext;
 
 import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.time.OffsetDateTime;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.google.gson.TypeAdapter;
 import com.google.gson.annotations.SerializedName;
@@ -24,6 +29,13 @@ public interface AvatarSearch
 {
 
     int SEARCH_N = 5000;
+    int HYDRATION_SEARCH_N = 50;
+    Logger LOG = LoggerFactory.getLogger("Scarlet/AvatarSearch");
+    long RATE_LIMIT_BACKOFF_MILLIS = TimeUnit.MINUTES.toMillis(5L),
+         TIMEOUT_BACKOFF_MILLIS = TimeUnit.SECONDS.toMillis(45L),
+         ERROR_LOG_THROTTLE_MILLIS = TimeUnit.MINUTES.toMillis(1L);
+    Map<String, Long> providerBlockedUntil = new ConcurrentHashMap<>(),
+                      providerLastLog = new ConcurrentHashMap<>();
     String
         URL_ROOT_AVTRDB = AvatarSearch_AvtrDB.API_ROOT+"/avatar/search/vrcx",
         URL_ROOT_NEKOSUNEVR = AvatarSearch_VRCDS.API_ROOT+"/vrcx_search",
@@ -36,6 +48,52 @@ public interface AvatarSearch
             URL_ROOT_VRCDB,
             URL_ROOT_WORLDBALANCER,
         };
+
+    static String cacheKey(int n, String search)
+    {
+        return n == SEARCH_N ? search : Integer.toUnsignedString(n)+"\u0000"+search;
+    }
+
+    static boolean providerAvailable(String urlRoot)
+    {
+        Long until = providerBlockedUntil.get(urlRoot);
+        if (until == null)
+            return true;
+        long now = System.currentTimeMillis();
+        if (until.longValue() > now)
+            return false;
+        providerBlockedUntil.remove(urlRoot, until);
+        return true;
+    }
+
+    static void logProviderFailure(String urlRoot, String message, Throwable throwable)
+    {
+        long now = System.currentTimeMillis();
+        Long last = providerLastLog.put(urlRoot, Long.valueOf(now));
+        if (last == null || now - last.longValue() >= ERROR_LOG_THROTTLE_MILLIS)
+            LOG.warn("Avatar search provider unavailable: {} ({})", urlRoot, message);
+        else
+            LOG.debug("Avatar search provider unavailable: {} ({})", urlRoot, message, throwable);
+    }
+
+    static void blockProvider(String urlRoot, long millis, String message, Throwable throwable)
+    {
+        providerBlockedUntil.put(urlRoot, Long.valueOf(System.currentTimeMillis() + millis));
+        logProviderFailure(urlRoot, message+"; backing off for "+TimeUnit.MILLISECONDS.toSeconds(millis)+"s", throwable);
+    }
+
+    static void handleSearchFailure(String urlRoot, String search, Exception ex)
+    {
+        String message = ex.getMessage();
+        if (message == null)
+            message = ex.getClass().getSimpleName();
+        if (message.contains("429"))
+            blockProvider(urlRoot, RATE_LIMIT_BACKOFF_MILLIS, "rate limited while searching `"+search+"`", ex);
+        else if (ex instanceof SocketTimeoutException || message.toLowerCase().contains("timed out"))
+            blockProvider(urlRoot, TIMEOUT_BACKOFF_MILLIS, "timed out while searching `"+search+"`", ex);
+        else
+            logProviderFailure(urlRoot, "search failed for `"+search+"`: "+message, ex);
+    }
 
     class VrcxAvatar
     {
@@ -428,13 +486,15 @@ public interface AvatarSearch
     {
         if (!urlRoot.startsWith("http://") && !urlRoot.startsWith("https://"))
             return VrcxAvatar.NONE;
+        if (!providerAvailable(urlRoot))
+            return null;
         try (HttpURLInputStream in = HttpURLInputStream.get(urlRoot + "?n=" + Integer.toUnsignedString(n) + "&search=" + URLs.encode(search), ExtendedUserAgent.init_conn))
         {
             return in.readAsJson(null, null, VrcxAvatar[].class);
         }
         catch (Exception ex)
         {
-            ex.printStackTrace();
+            handleSearchFailure(urlRoot, search, ex);
             return null;
         }
     }
@@ -444,6 +504,8 @@ public interface AvatarSearch
     }
     static VrcxAvatar[] vrcxPutInCache(String urlRoot, String search, VrcxAvatar[] results)
     {
+        if (results == null)
+            return null;
         VrcxAvatar.searchCacheByUrlRoot.computeIfAbsent(urlRoot, urlRoot0 -> LRUMap.ofSynchronized()).put(search, results);
         return results;
     }
@@ -459,11 +521,12 @@ public interface AvatarSearch
         }
         
         synchronized (urlCache) {
-            VrcxAvatar[] cached = urlCache.get(search);
+            String key = cacheKey(n, search);
+            VrcxAvatar[] cached = urlCache.get(key);
             if (cached == null) {
                 cached = AvatarSearch.vrcxSearch(urlRoot, n, search);
                 if (cached != null) {
-                    urlCache.put(search, cached);
+                    urlCache.put(key, cached);
                 }
             }
             return cached;
@@ -476,8 +539,8 @@ public interface AvatarSearch
     static VrcxAvatar[] vrcxSearch(String urlRoot, int n, String search)
     {
         VrcxAvatar[] results = vrcxSearch0(urlRoot, n, search);
-        if (n == SEARCH_N)
-            vrcxPutInCache(urlRoot, search, results);
+        if (n == SEARCH_N && results != null)
+            vrcxPutInCache(urlRoot, cacheKey(n, search), results);
         return results;
     }
     static Stream<VrcxAvatar> vrcxSearchAllCached(String search)
@@ -486,9 +549,13 @@ public interface AvatarSearch
     }
     static Stream<VrcxAvatar> vrcxSearchAllCached(String[] urlRoots, String search)
     {
+        return vrcxSearchAllCached(urlRoots, SEARCH_N, search);
+    }
+    static Stream<VrcxAvatar> vrcxSearchAllCached(String[] urlRoots, int n, String search)
+    {
         return Arrays.stream(urlRoots)
             .filter(Objects::nonNull)
-            .map($ -> vrcxSearchCached($, SEARCH_N, search))
+            .map($ -> vrcxSearchCached($, n, search))
             .filter(Objects::nonNull)
             .flatMap(Arrays::stream)
             .filter(Objects::nonNull)
@@ -519,13 +586,15 @@ public interface AvatarSearch
         {
             if (!urlRoot.startsWith("http://") && !urlRoot.startsWith("https://"))
                 return VrcxAvatar.NONE;
+            if (!providerAvailable(urlRoot))
+                return null;
             try (HttpURLInputStream in = HttpURLInputStream.get(urlRoot + "?n=" + Integer.toUnsignedString(n) + "&fileId=" + imageFileId, ExtendedUserAgent.init_conn))
             {
                 return in.readAsJson(null, null, VrcxAvatar[].class);
             }
             catch (Exception ex)
             {
-                ex.printStackTrace();
+                handleSearchFailure(urlRoot, imageFileId, ex);
                 return null;
             }
         }
@@ -535,6 +604,8 @@ public interface AvatarSearch
         }
         static VrcxAvatar[] vrcxPutInCacheByImage(String urlRoot, String imageFileId, VrcxAvatar[] results)
         {
+            if (results == null)
+                return null;
             VrcxAvatar.searchCacheByUrlRootByImage.computeIfAbsent(urlRoot, urlRoot0 -> LRUMap.ofSynchronized()).put(imageFileId, results);
             return results;
         }
@@ -550,11 +621,12 @@ public interface AvatarSearch
             }
             
             synchronized (urlCache) {
-                VrcxAvatar[] cached = urlCache.get(imageFileId);
+                String key = cacheKey(n, imageFileId);
+                VrcxAvatar[] cached = urlCache.get(key);
                 if (cached == null) {
                     cached = AvatarSearch.ByImage.vrcxSearchByImage(urlRoot, n, imageFileId);
                     if (cached != null) {
-                        urlCache.put(imageFileId, cached);
+                        urlCache.put(key, cached);
                     }
                 }
                 return cached;
@@ -567,8 +639,8 @@ public interface AvatarSearch
         static VrcxAvatar[] vrcxSearchByImage(String urlRoot, int n, String imageFileId)
         {
             VrcxAvatar[] results = vrcxSearch0ByImage(urlRoot, n, imageFileId);
-            if (n == SEARCH_N)
-                vrcxPutInCacheByImage(urlRoot, imageFileId, results);
+            if (n == SEARCH_N && results != null)
+                vrcxPutInCacheByImage(urlRoot, cacheKey(n, imageFileId), results);
             return results;
         }
         static Stream<VrcxAvatar> vrcxSearchAllCachedByImage(String imageFileId)

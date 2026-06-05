@@ -1,0 +1,461 @@
+-- Merging decision tree log ---
+manifest
+ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:2:1-40:12
+INJECTED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:2:1-40:12
+INJECTED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:2:1-40:12
+INJECTED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:2:1-40:12
+MERGED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:17:1-66:12
+MERGED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:17:1-56:12
+MERGED from [com.google.firebase:firebase-datatransport:18.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eab62378a7054964320c869a0cc78a90\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:15:1-31:12
+MERGED from [com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:15:1-37:12
+MERGED from [com.google.firebase:firebase-encoders-json:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\fe3383f4b6096c1b1d3fcd31708f0f70\transformed\firebase-encoders-json-18.0.0\AndroidManifest.xml:15:1-23:12
+MERGED from [com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:15:1-41:12
+MERGED from [com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:2:1-24:12
+MERGED from [com.google.firebase:firebase-common-ktx:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\c346f013103237bc840060e14164e714\transformed\firebase-common-ktx-21.0.0\AndroidManifest.xml:2:1-18:12
+MERGED from [com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:15:1-41:12
+MERGED from [com.google.firebase:firebase-components:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\59d7263b0d668915083873341c223ef0\transformed\firebase-components-18.0.0\AndroidManifest.xml:15:1-20:12
+MERGED from [com.google.firebase:firebase-iid-interop:17.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\8e0fc6d31f3982c95ad7c8abf75f7760\transformed\firebase-iid-interop-17.1.0\AndroidManifest.xml:2:1-10:12
+MERGED from [com.google.firebase:firebase-installations-interop:17.1.1] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\6a0c9ebd6c130dc19da5947355c544d5\transformed\firebase-installations-interop-17.1.1\AndroidManifest.xml:15:1-19:12
+MERGED from [com.google.firebase:firebase-measurement-connector:19.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\85b7e6c215104929e0695490d2f4e6a8\transformed\firebase-measurement-connector-19.0.0\AndroidManifest.xml:17:1-25:12
+MERGED from [com.google.android.datatransport:transport-api:3.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\d37a2af46113b484a1680adada24f089\transformed\transport-api-3.1.0\AndroidManifest.xml:15:1-20:12
+MERGED from [com.google.android.gms:play-services-base:18.0.1] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\88f7dd6aaba8df0a8df0ae721cafb833\transformed\play-services-base-18.0.1\AndroidManifest.xml:16:1-24:12
+MERGED from [com.google.android.gms:play-services-cloud-messaging:17.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4fd2c4fedf46bb72f3efeb1278a4ebcd\transformed\play-services-cloud-messaging-17.2.0\AndroidManifest.xml:2:1-13:12
+MERGED from [com.google.android.gms:play-services-stats:17.0.2] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7339da2263450fb96cdc018b38ed671b\transformed\play-services-stats-17.0.2\AndroidManifest.xml:2:1-9:12
+MERGED from [com.google.android.gms:play-services-tasks:18.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\096e7dd55a515643970af992cca678a2\transformed\play-services-tasks-18.1.0\AndroidManifest.xml:2:1-6:12
+MERGED from [com.google.android.gms:play-services-basement:18.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\1ae9c82720aa468535e947d5bb975360\transformed\play-services-basement-18.3.0\AndroidManifest.xml:16:1-26:12
+MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\12001cda3947a74e813c92a0017ab2f0\transformed\legacy-support-core-utils-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.fragment:fragment:1.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\b16b7370518ab50f83ab3f3361d33869\transformed\fragment-1.1.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.loader:loader:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\022004ce7caf8621e22d4c5979b45d9e\transformed\loader-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.viewpager:viewpager:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\90fbf3a24dbf8bdc0cec9a6441b896fb\transformed\viewpager-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.activity:activity:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\655db3adfda9c013abab02b336736785\transformed\activity-1.0.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.customview:customview:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\5f02cc8838d7cdc08e0b3c52ed876fa6\transformed\customview-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.core:core:1.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\47ef54378ca9cf82719f3ebf773ab8b0\transformed\core-1.2.0\AndroidManifest.xml:17:1-26:12
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\b708a9bf364c1c293450e207ebe56242\transformed\versionedparcelable-1.1.0\AndroidManifest.xml:17:1-27:12
+MERGED from [androidx.documentfile:documentfile:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\1108f6c0c511bfb100269cd509561977\transformed\documentfile-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\25a27f6fd4f441e36ab74eb3aac00dba\transformed\localbroadcastmanager-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.print:print:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\77137f37e662ad40fc63591fa092e853\transformed\print-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4ec59ecd9de4bfaa0fca51531ef1bcbf\transformed\lifecycle-livedata-2.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\9ca6641a6a5b6558902ae3a246e601eb\transformed\lifecycle-livedata-core-2.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.arch.core:core-runtime:2.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\36812f01a585e5dbce217b5f18e9949a\transformed\core-runtime-2.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\40b7e95a1f12a2e8178636836f8b736c\transformed\lifecycle-runtime-2.1.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\6321482402d75c85019859d338811414\transformed\lifecycle-viewmodel-2.1.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.savedstate:savedstate:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\df9d3b5e223287d34a4bad2896d6aedf\transformed\savedstate-1.0.0\AndroidManifest.xml:17:1-24:12
+	package
+		INJECTED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml
+	android:versionName
+		INJECTED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml
+	android:versionCode
+		INJECTED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml
+	xmlns:android
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:2:11-69
+uses-permission#android.permission.CAMERA
+ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:4:5-65
+MERGED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:22:5-65
+MERGED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:22:5-65
+	android:name
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:4:22-62
+uses-permission#android.permission.INTERNET
+ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:5:5-67
+MERGED from [com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:25:5-67
+MERGED from [com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:25:5-67
+MERGED from [com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:8:5-67
+MERGED from [com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:8:5-67
+MERGED from [com.google.android.gms:play-services-cloud-messaging:17.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4fd2c4fedf46bb72f3efeb1278a4ebcd\transformed\play-services-cloud-messaging-17.2.0\AndroidManifest.xml:8:5-67
+MERGED from [com.google.android.gms:play-services-cloud-messaging:17.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4fd2c4fedf46bb72f3efeb1278a4ebcd\transformed\play-services-cloud-messaging-17.2.0\AndroidManifest.xml:8:5-67
+	android:name
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:5:22-64
+uses-permission#android.permission.POST_NOTIFICATIONS
+ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:6:5-77
+MERGED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:23:5-77
+MERGED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:23:5-77
+	android:name
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:6:22-74
+uses-permission#android.permission.FOREGROUND_SERVICE
+ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:7:5-77
+	android:name
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:7:22-74
+uses-permission#android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE
+ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:8:5-94
+	android:name
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:8:22-91
+application
+ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:10:5-39:19
+INJECTED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:10:5-39:19
+MERGED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:28:5-64:19
+MERGED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:28:5-64:19
+MERGED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:46:5-54:19
+MERGED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:46:5-54:19
+MERGED from [com.google.firebase:firebase-datatransport:18.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eab62378a7054964320c869a0cc78a90\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:21:5-29:19
+MERGED from [com.google.firebase:firebase-datatransport:18.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eab62378a7054964320c869a0cc78a90\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:21:5-29:19
+MERGED from [com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:27:5-35:19
+MERGED from [com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:27:5-35:19
+MERGED from [com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:25:5-39:19
+MERGED from [com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:25:5-39:19
+MERGED from [com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:11:5-22:19
+MERGED from [com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:11:5-22:19
+MERGED from [com.google.firebase:firebase-common-ktx:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\c346f013103237bc840060e14164e714\transformed\firebase-common-ktx-21.0.0\AndroidManifest.xml:8:5-16:19
+MERGED from [com.google.firebase:firebase-common-ktx:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\c346f013103237bc840060e14164e714\transformed\firebase-common-ktx-21.0.0\AndroidManifest.xml:8:5-16:19
+MERGED from [com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:22:5-39:19
+MERGED from [com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:22:5-39:19
+MERGED from [com.google.firebase:firebase-iid-interop:17.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\8e0fc6d31f3982c95ad7c8abf75f7760\transformed\firebase-iid-interop-17.1.0\AndroidManifest.xml:7:5-8:19
+MERGED from [com.google.firebase:firebase-iid-interop:17.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\8e0fc6d31f3982c95ad7c8abf75f7760\transformed\firebase-iid-interop-17.1.0\AndroidManifest.xml:7:5-8:19
+MERGED from [com.google.firebase:firebase-measurement-connector:19.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\85b7e6c215104929e0695490d2f4e6a8\transformed\firebase-measurement-connector-19.0.0\AndroidManifest.xml:22:5-23:19
+MERGED from [com.google.firebase:firebase-measurement-connector:19.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\85b7e6c215104929e0695490d2f4e6a8\transformed\firebase-measurement-connector-19.0.0\AndroidManifest.xml:22:5-23:19
+MERGED from [com.google.android.gms:play-services-base:18.0.1] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\88f7dd6aaba8df0a8df0ae721cafb833\transformed\play-services-base-18.0.1\AndroidManifest.xml:19:5-23:19
+MERGED from [com.google.android.gms:play-services-base:18.0.1] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\88f7dd6aaba8df0a8df0ae721cafb833\transformed\play-services-base-18.0.1\AndroidManifest.xml:19:5-23:19
+MERGED from [com.google.android.gms:play-services-stats:17.0.2] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7339da2263450fb96cdc018b38ed671b\transformed\play-services-stats-17.0.2\AndroidManifest.xml:7:5-20
+MERGED from [com.google.android.gms:play-services-stats:17.0.2] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7339da2263450fb96cdc018b38ed671b\transformed\play-services-stats-17.0.2\AndroidManifest.xml:7:5-20
+MERGED from [com.google.android.gms:play-services-tasks:18.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\096e7dd55a515643970af992cca678a2\transformed\play-services-tasks-18.1.0\AndroidManifest.xml:5:5-20
+MERGED from [com.google.android.gms:play-services-tasks:18.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\096e7dd55a515643970af992cca678a2\transformed\play-services-tasks-18.1.0\AndroidManifest.xml:5:5-20
+MERGED from [com.google.android.gms:play-services-basement:18.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\1ae9c82720aa468535e947d5bb975360\transformed\play-services-basement-18.3.0\AndroidManifest.xml:20:5-24:19
+MERGED from [com.google.android.gms:play-services-basement:18.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\1ae9c82720aa468535e947d5bb975360\transformed\play-services-basement-18.3.0\AndroidManifest.xml:20:5-24:19
+MERGED from [androidx.core:core:1.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\47ef54378ca9cf82719f3ebf773ab8b0\transformed\core-1.2.0\AndroidManifest.xml:24:5-89
+MERGED from [androidx.core:core:1.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\47ef54378ca9cf82719f3ebf773ab8b0\transformed\core-1.2.0\AndroidManifest.xml:24:5-89
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\b708a9bf364c1c293450e207ebe56242\transformed\versionedparcelable-1.1.0\AndroidManifest.xml:24:5-25:19
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\b708a9bf364c1c293450e207ebe56242\transformed\versionedparcelable-1.1.0\AndroidManifest.xml:24:5-25:19
+	android:extractNativeLibs
+		INJECTED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml
+	android:appComponentFactory
+		ADDED from [androidx.core:core:1.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\47ef54378ca9cf82719f3ebf773ab8b0\transformed\core-1.2.0\AndroidManifest.xml:24:18-86
+	android:supportsRtl
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:14:9-35
+	android:label
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:13:9-41
+	android:icon
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:12:9-44
+	android:allowBackup
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:11:9-35
+	android:theme
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:15:9-40
+activity#net.sybyline.scarlet.companion.MainActivity
+ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:17:9-24:20
+	android:exported
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:19:13-36
+	android:name
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:18:13-41
+intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
+ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:20:13-23:29
+action#android.intent.action.MAIN
+ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:21:17-69
+	android:name
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:21:25-66
+category#android.intent.category.LAUNCHER
+ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:22:17-77
+	android:name
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:22:27-74
+service#net.sybyline.scarlet.companion.DirectScarletService
+ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:26:9-29:63
+	android:exported
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:28:13-37
+	android:foregroundServiceType
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:29:13-60
+	android:name
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:27:13-49
+service#net.sybyline.scarlet.companion.ScarletFirebaseMessagingService
+ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:31:9-37:19
+	android:exported
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:33:13-37
+	android:name
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:32:13-60
+intent-filter#action:name:com.google.firebase.MESSAGING_EVENT
+ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:34:13-36:29
+action#com.google.firebase.MESSAGING_EVENT
+ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:35:17-78
+	android:name
+		ADDED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:35:25-75
+uses-sdk
+INJECTED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml
+INJECTED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml
+MERGED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:20:5-44
+MERGED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:20:5-44
+MERGED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:20:5-44
+MERGED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:20:5-44
+MERGED from [com.google.firebase:firebase-datatransport:18.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eab62378a7054964320c869a0cc78a90\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:18:5-44
+MERGED from [com.google.firebase:firebase-datatransport:18.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eab62378a7054964320c869a0cc78a90\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:18:5-44
+MERGED from [com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:18:5-20:41
+MERGED from [com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:18:5-20:41
+MERGED from [com.google.firebase:firebase-encoders-json:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\fe3383f4b6096c1b1d3fcd31708f0f70\transformed\firebase-encoders-json-18.0.0\AndroidManifest.xml:19:5-21:41
+MERGED from [com.google.firebase:firebase-encoders-json:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\fe3383f4b6096c1b1d3fcd31708f0f70\transformed\firebase-encoders-json-18.0.0\AndroidManifest.xml:19:5-21:41
+MERGED from [com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:18:5-20:41
+MERGED from [com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:18:5-20:41
+MERGED from [com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:5:5-44
+MERGED from [com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:5:5-44
+MERGED from [com.google.firebase:firebase-common-ktx:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\c346f013103237bc840060e14164e714\transformed\firebase-common-ktx-21.0.0\AndroidManifest.xml:5:5-44
+MERGED from [com.google.firebase:firebase-common-ktx:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\c346f013103237bc840060e14164e714\transformed\firebase-common-ktx-21.0.0\AndroidManifest.xml:5:5-44
+MERGED from [com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:19:5-44
+MERGED from [com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:19:5-44
+MERGED from [com.google.firebase:firebase-components:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\59d7263b0d668915083873341c223ef0\transformed\firebase-components-18.0.0\AndroidManifest.xml:18:5-44
+MERGED from [com.google.firebase:firebase-components:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\59d7263b0d668915083873341c223ef0\transformed\firebase-components-18.0.0\AndroidManifest.xml:18:5-44
+MERGED from [com.google.firebase:firebase-iid-interop:17.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\8e0fc6d31f3982c95ad7c8abf75f7760\transformed\firebase-iid-interop-17.1.0\AndroidManifest.xml:5:5-44
+MERGED from [com.google.firebase:firebase-iid-interop:17.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\8e0fc6d31f3982c95ad7c8abf75f7760\transformed\firebase-iid-interop-17.1.0\AndroidManifest.xml:5:5-44
+MERGED from [com.google.firebase:firebase-installations-interop:17.1.1] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\6a0c9ebd6c130dc19da5947355c544d5\transformed\firebase-installations-interop-17.1.1\AndroidManifest.xml:17:5-44
+MERGED from [com.google.firebase:firebase-installations-interop:17.1.1] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\6a0c9ebd6c130dc19da5947355c544d5\transformed\firebase-installations-interop-17.1.1\AndroidManifest.xml:17:5-44
+MERGED from [com.google.firebase:firebase-measurement-connector:19.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\85b7e6c215104929e0695490d2f4e6a8\transformed\firebase-measurement-connector-19.0.0\AndroidManifest.xml:20:5-44
+MERGED from [com.google.firebase:firebase-measurement-connector:19.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\85b7e6c215104929e0695490d2f4e6a8\transformed\firebase-measurement-connector-19.0.0\AndroidManifest.xml:20:5-44
+MERGED from [com.google.android.datatransport:transport-api:3.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\d37a2af46113b484a1680adada24f089\transformed\transport-api-3.1.0\AndroidManifest.xml:18:5-44
+MERGED from [com.google.android.datatransport:transport-api:3.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\d37a2af46113b484a1680adada24f089\transformed\transport-api-3.1.0\AndroidManifest.xml:18:5-44
+MERGED from [com.google.android.gms:play-services-base:18.0.1] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\88f7dd6aaba8df0a8df0ae721cafb833\transformed\play-services-base-18.0.1\AndroidManifest.xml:18:5-43
+MERGED from [com.google.android.gms:play-services-base:18.0.1] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\88f7dd6aaba8df0a8df0ae721cafb833\transformed\play-services-base-18.0.1\AndroidManifest.xml:18:5-43
+MERGED from [com.google.android.gms:play-services-cloud-messaging:17.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4fd2c4fedf46bb72f3efeb1278a4ebcd\transformed\play-services-cloud-messaging-17.2.0\AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.gms:play-services-cloud-messaging:17.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4fd2c4fedf46bb72f3efeb1278a4ebcd\transformed\play-services-cloud-messaging-17.2.0\AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.gms:play-services-stats:17.0.2] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7339da2263450fb96cdc018b38ed671b\transformed\play-services-stats-17.0.2\AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.gms:play-services-stats:17.0.2] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7339da2263450fb96cdc018b38ed671b\transformed\play-services-stats-17.0.2\AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.gms:play-services-tasks:18.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\096e7dd55a515643970af992cca678a2\transformed\play-services-tasks-18.1.0\AndroidManifest.xml:4:5-43
+MERGED from [com.google.android.gms:play-services-tasks:18.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\096e7dd55a515643970af992cca678a2\transformed\play-services-tasks-18.1.0\AndroidManifest.xml:4:5-43
+MERGED from [com.google.android.gms:play-services-basement:18.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\1ae9c82720aa468535e947d5bb975360\transformed\play-services-basement-18.3.0\AndroidManifest.xml:18:5-43
+MERGED from [com.google.android.gms:play-services-basement:18.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\1ae9c82720aa468535e947d5bb975360\transformed\play-services-basement-18.3.0\AndroidManifest.xml:18:5-43
+MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\12001cda3947a74e813c92a0017ab2f0\transformed\legacy-support-core-utils-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.legacy:legacy-support-core-utils:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\12001cda3947a74e813c92a0017ab2f0\transformed\legacy-support-core-utils-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.fragment:fragment:1.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\b16b7370518ab50f83ab3f3361d33869\transformed\fragment-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.fragment:fragment:1.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\b16b7370518ab50f83ab3f3361d33869\transformed\fragment-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.loader:loader:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\022004ce7caf8621e22d4c5979b45d9e\transformed\loader-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.loader:loader:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\022004ce7caf8621e22d4c5979b45d9e\transformed\loader-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.viewpager:viewpager:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\90fbf3a24dbf8bdc0cec9a6441b896fb\transformed\viewpager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.viewpager:viewpager:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\90fbf3a24dbf8bdc0cec9a6441b896fb\transformed\viewpager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.activity:activity:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\655db3adfda9c013abab02b336736785\transformed\activity-1.0.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.activity:activity:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\655db3adfda9c013abab02b336736785\transformed\activity-1.0.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.customview:customview:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\5f02cc8838d7cdc08e0b3c52ed876fa6\transformed\customview-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.customview:customview:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\5f02cc8838d7cdc08e0b3c52ed876fa6\transformed\customview-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.core:core:1.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\47ef54378ca9cf82719f3ebf773ab8b0\transformed\core-1.2.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.core:core:1.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\47ef54378ca9cf82719f3ebf773ab8b0\transformed\core-1.2.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\b708a9bf364c1c293450e207ebe56242\transformed\versionedparcelable-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\b708a9bf364c1c293450e207ebe56242\transformed\versionedparcelable-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.documentfile:documentfile:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\1108f6c0c511bfb100269cd509561977\transformed\documentfile-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.documentfile:documentfile:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\1108f6c0c511bfb100269cd509561977\transformed\documentfile-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\25a27f6fd4f441e36ab74eb3aac00dba\transformed\localbroadcastmanager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.localbroadcastmanager:localbroadcastmanager:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\25a27f6fd4f441e36ab74eb3aac00dba\transformed\localbroadcastmanager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.print:print:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\77137f37e662ad40fc63591fa092e853\transformed\print-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.print:print:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\77137f37e662ad40fc63591fa092e853\transformed\print-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4ec59ecd9de4bfaa0fca51531ef1bcbf\transformed\lifecycle-livedata-2.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4ec59ecd9de4bfaa0fca51531ef1bcbf\transformed\lifecycle-livedata-2.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\9ca6641a6a5b6558902ae3a246e601eb\transformed\lifecycle-livedata-core-2.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\9ca6641a6a5b6558902ae3a246e601eb\transformed\lifecycle-livedata-core-2.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.arch.core:core-runtime:2.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\36812f01a585e5dbce217b5f18e9949a\transformed\core-runtime-2.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.arch.core:core-runtime:2.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\36812f01a585e5dbce217b5f18e9949a\transformed\core-runtime-2.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\40b7e95a1f12a2e8178636836f8b736c\transformed\lifecycle-runtime-2.1.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime:2.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\40b7e95a1f12a2e8178636836f8b736c\transformed\lifecycle-runtime-2.1.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\6321482402d75c85019859d338811414\transformed\lifecycle-viewmodel-2.1.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\6321482402d75c85019859d338811414\transformed\lifecycle-viewmodel-2.1.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\df9d3b5e223287d34a4bad2896d6aedf\transformed\savedstate-1.0.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.savedstate:savedstate:1.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\df9d3b5e223287d34a4bad2896d6aedf\transformed\savedstate-1.0.0\AndroidManifest.xml:20:5-22:41
+	android:targetSdkVersion
+		INJECTED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml
+uses-permission#android.permission.ACCESS_NETWORK_STATE
+ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:22:5-79
+MERGED from [com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:24:5-79
+MERGED from [com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:24:5-79
+MERGED from [com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:22:5-79
+MERGED from [com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:22:5-79
+MERGED from [com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:7:5-79
+MERGED from [com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:7:5-79
+MERGED from [com.google.android.gms:play-services-cloud-messaging:17.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4fd2c4fedf46bb72f3efeb1278a4ebcd\transformed\play-services-cloud-messaging-17.2.0\AndroidManifest.xml:7:5-79
+MERGED from [com.google.android.gms:play-services-cloud-messaging:17.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4fd2c4fedf46bb72f3efeb1278a4ebcd\transformed\play-services-cloud-messaging-17.2.0\AndroidManifest.xml:7:5-79
+	android:name
+		ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:22:22-76
+uses-permission#android.permission.WAKE_LOCK
+ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:24:5-68
+MERGED from [com.google.android.gms:play-services-cloud-messaging:17.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4fd2c4fedf46bb72f3efeb1278a4ebcd\transformed\play-services-cloud-messaging-17.2.0\AndroidManifest.xml:9:5-68
+MERGED from [com.google.android.gms:play-services-cloud-messaging:17.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4fd2c4fedf46bb72f3efeb1278a4ebcd\transformed\play-services-cloud-messaging-17.2.0\AndroidManifest.xml:9:5-68
+	android:name
+		ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:24:22-65
+uses-permission#com.google.android.c2dm.permission.RECEIVE
+ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:26:5-82
+MERGED from [com.google.android.gms:play-services-cloud-messaging:17.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4fd2c4fedf46bb72f3efeb1278a4ebcd\transformed\play-services-cloud-messaging-17.2.0\AndroidManifest.xml:11:5-82
+MERGED from [com.google.android.gms:play-services-cloud-messaging:17.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4fd2c4fedf46bb72f3efeb1278a4ebcd\transformed\play-services-cloud-messaging-17.2.0\AndroidManifest.xml:11:5-82
+	android:name
+		ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:26:22-79
+receiver#com.google.firebase.iid.FirebaseInstanceIdReceiver
+ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:29:9-40:20
+	android:exported
+		ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:31:13-36
+	android:permission
+		ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:32:13-73
+	android:name
+		ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:30:13-78
+intent-filter#action:name:com.google.android.c2dm.intent.RECEIVE
+ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:33:13-35:29
+action#com.google.android.c2dm.intent.RECEIVE
+ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:34:17-81
+	android:name
+		ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:34:25-78
+meta-data#com.google.android.gms.cloudmessaging.FINISHED_AFTER_HANDLED
+ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:37:13-39:40
+	android:value
+		ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:39:17-37
+	android:name
+		ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:38:17-92
+service#com.google.firebase.messaging.FirebaseMessagingService
+ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:46:9-53:19
+	android:exported
+		ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:49:13-37
+	android:directBootAware
+		ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:48:13-43
+	android:name
+		ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:47:13-82
+service#com.google.firebase.components.ComponentDiscoveryService
+ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:54:9-63:19
+MERGED from [com.google.firebase:firebase-datatransport:18.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eab62378a7054964320c869a0cc78a90\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:22:9-28:19
+MERGED from [com.google.firebase:firebase-datatransport:18.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eab62378a7054964320c869a0cc78a90\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:22:9-28:19
+MERGED from [com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:12:9-21:19
+MERGED from [com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:12:9-21:19
+MERGED from [com.google.firebase:firebase-common-ktx:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\c346f013103237bc840060e14164e714\transformed\firebase-common-ktx-21.0.0\AndroidManifest.xml:9:9-15:19
+MERGED from [com.google.firebase:firebase-common-ktx:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\c346f013103237bc840060e14164e714\transformed\firebase-common-ktx-21.0.0\AndroidManifest.xml:9:9-15:19
+MERGED from [com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:30:9-38:19
+MERGED from [com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:30:9-38:19
+	android:exported
+		ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:56:13-37
+	tools:targetApi
+		ADDED from [com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:34:13-32
+	android:directBootAware
+		ADDED from [com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:32:13-43
+	android:name
+		ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:55:13-84
+meta-data#com.google.firebase.components:com.google.firebase.messaging.FirebaseMessagingKtxRegistrar
+ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:57:13-59:85
+	android:value
+		ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:59:17-82
+	android:name
+		ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:58:17-122
+meta-data#com.google.firebase.components:com.google.firebase.messaging.FirebaseMessagingRegistrar
+ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:60:13-62:85
+	android:value
+		ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:62:17-82
+	android:name
+		ADDED from [com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:61:17-119
+uses-feature#android.hardware.camera
+ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:25:5-27:36
+	android:required
+		ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:27:9-33
+	android:name
+		ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:26:9-47
+uses-feature#android.hardware.camera.front
+ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:28:5-30:36
+	android:required
+		ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:30:9-33
+	android:name
+		ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:29:9-53
+uses-feature#android.hardware.camera.autofocus
+ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:33:5-35:36
+	android:required
+		ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:35:9-33
+	android:name
+		ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:34:9-57
+uses-feature#android.hardware.camera.flash
+ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:36:5-38:36
+	android:required
+		ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:38:9-33
+	android:name
+		ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:37:9-53
+uses-feature#android.hardware.screen.landscape
+ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:39:5-41:36
+	android:required
+		ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:41:9-33
+	android:name
+		ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:40:9-57
+uses-feature#android.hardware.wifi
+ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:42:5-44:36
+	android:required
+		ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:44:9-33
+	android:name
+		ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:43:9-45
+activity#com.journeyapps.barcodescanner.CaptureActivity
+ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:47:9-53:63
+	android:screenOrientation
+		ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:50:13-56
+	android:clearTaskOnLaunch
+		ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:49:13-45
+	android:stateNotNeeded
+		ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:51:13-42
+	android:windowSoftInputMode
+		ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:53:13-60
+	android:theme
+		ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:52:13-54
+	android:name
+		ADDED from [com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:48:13-74
+meta-data#com.google.firebase.components:com.google.firebase.datatransport.TransportRegistrar
+ADDED from [com.google.firebase:firebase-datatransport:18.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eab62378a7054964320c869a0cc78a90\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:25:13-27:85
+	android:value
+		ADDED from [com.google.firebase:firebase-datatransport:18.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eab62378a7054964320c869a0cc78a90\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:27:17-82
+	android:name
+		ADDED from [com.google.firebase:firebase-datatransport:18.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eab62378a7054964320c869a0cc78a90\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:26:17-115
+service#com.google.android.datatransport.runtime.backends.TransportBackendDiscovery
+ADDED from [com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:28:9-34:19
+MERGED from [com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:36:9-38:40
+MERGED from [com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:36:9-38:40
+	android:exported
+		ADDED from [com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:30:13-37
+	android:name
+		ADDED from [com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:29:13-103
+meta-data#backend:com.google.android.datatransport.cct.CctBackendFactory
+ADDED from [com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:31:13-33:39
+	android:value
+		ADDED from [com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:33:17-36
+	android:name
+		ADDED from [com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:32:17-94
+service#com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService
+ADDED from [com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:26:9-30:19
+	android:exported
+		ADDED from [com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:28:13-37
+	android:permission
+		ADDED from [com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:29:13-69
+	android:name
+		ADDED from [com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:27:13-117
+receiver#com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver
+ADDED from [com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:32:9-34:40
+	android:exported
+		ADDED from [com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:34:13-37
+	android:name
+		ADDED from [com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:33:13-132
+meta-data#com.google.firebase.components:com.google.firebase.installations.FirebaseInstallationsKtxRegistrar
+ADDED from [com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:15:13-17:85
+	android:value
+		ADDED from [com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:17:17-82
+	android:name
+		ADDED from [com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:16:17-130
+meta-data#com.google.firebase.components:com.google.firebase.installations.FirebaseInstallationsRegistrar
+ADDED from [com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:18:13-20:85
+	android:value
+		ADDED from [com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:20:17-82
+	android:name
+		ADDED from [com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:19:17-127
+meta-data#com.google.firebase.components:com.google.firebase.ktx.FirebaseCommonLegacyRegistrar
+ADDED from [com.google.firebase:firebase-common-ktx:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\c346f013103237bc840060e14164e714\transformed\firebase-common-ktx-21.0.0\AndroidManifest.xml:12:13-14:85
+	android:value
+		ADDED from [com.google.firebase:firebase-common-ktx:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\c346f013103237bc840060e14164e714\transformed\firebase-common-ktx-21.0.0\AndroidManifest.xml:14:17-82
+	android:name
+		ADDED from [com.google.firebase:firebase-common-ktx:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\c346f013103237bc840060e14164e714\transformed\firebase-common-ktx-21.0.0\AndroidManifest.xml:13:17-116
+provider#com.google.firebase.provider.FirebaseInitProvider
+ADDED from [com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:23:9-28:39
+	android:authorities
+		ADDED from [com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:25:13-72
+	android:exported
+		ADDED from [com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:27:13-37
+	android:directBootAware
+		ADDED from [com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:26:13-43
+	android:initOrder
+		ADDED from [com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:28:13-36
+	android:name
+		ADDED from [com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:24:13-77
+meta-data#com.google.firebase.components:com.google.firebase.FirebaseCommonKtxRegistrar
+ADDED from [com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:35:13-37:85
+	android:value
+		ADDED from [com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:37:17-82
+	android:name
+		ADDED from [com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:36:17-109
+activity#com.google.android.gms.common.api.GoogleApiActivity
+ADDED from [com.google.android.gms:play-services-base:18.0.1] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\88f7dd6aaba8df0a8df0ae721cafb833\transformed\play-services-base-18.0.1\AndroidManifest.xml:20:9-22:45
+	android:exported
+		ADDED from [com.google.android.gms:play-services-base:18.0.1] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\88f7dd6aaba8df0a8df0ae721cafb833\transformed\play-services-base-18.0.1\AndroidManifest.xml:22:19-43
+	android:theme
+		ADDED from [com.google.android.gms:play-services-base:18.0.1] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\88f7dd6aaba8df0a8df0ae721cafb833\transformed\play-services-base-18.0.1\AndroidManifest.xml:21:19-78
+	android:name
+		ADDED from [com.google.android.gms:play-services-base:18.0.1] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\88f7dd6aaba8df0a8df0ae721cafb833\transformed\play-services-base-18.0.1\AndroidManifest.xml:20:19-85
+meta-data#com.google.android.gms.version
+ADDED from [com.google.android.gms:play-services-basement:18.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\1ae9c82720aa468535e947d5bb975360\transformed\play-services-basement-18.3.0\AndroidManifest.xml:21:9-23:69
+	android:value
+		ADDED from [com.google.android.gms:play-services-basement:18.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\1ae9c82720aa468535e947d5bb975360\transformed\play-services-basement-18.3.0\AndroidManifest.xml:23:13-66
+	android:name
+		ADDED from [com.google.android.gms:play-services-basement:18.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\1ae9c82720aa468535e947d5bb975360\transformed\play-services-basement-18.3.0\AndroidManifest.xml:22:13-58

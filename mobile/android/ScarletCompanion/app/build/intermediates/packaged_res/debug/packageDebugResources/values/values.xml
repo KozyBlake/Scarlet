@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Scarlet Companion</string>
+    <string name="firebase_api_key"/>
+    <string name="firebase_app_id"/>
+    <string name="firebase_project_id"/>
+    <string name="firebase_sender_id"/>
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowLightStatusBar">false</item>
+        <item name="android:statusBarColor">#171722</item>
+        <item name="android:navigationBarColor">#171722</item>
+    </style>
+</resources>

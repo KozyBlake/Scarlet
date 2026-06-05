@@ -250,9 +250,8 @@ public class ScarletVRChat implements Closeable
                     String p = ScarletVRChat.this.pendingPassword;
                     if (u != null && !u.isEmpty() && p != null && !p.isEmpty())
                     {
-                        // URL-encode first, then wrap in Basic Auth with UTF-8
-                        String uEnc = java.net.URLEncoder.encode(u, "UTF-8");
-                        String pEnc = java.net.URLEncoder.encode(p, "UTF-8");
+                        String uEnc = encodeVrchatBasicAuthComponent(u);
+                        String pEnc = encodeVrchatBasicAuthComponent(p);
                         String cred = okhttp3.Credentials.basic(uEnc, pEnc, java.nio.charset.StandardCharsets.UTF_8);
                         req = req.newBuilder()
                             .header("Authorization", cred)
@@ -327,6 +326,48 @@ public class ScarletVRChat implements Closeable
     public ApiClient getClient()
     {
         return this.client;
+    }
+
+    private static final char[] HEX = "0123456789ABCDEF".toCharArray();
+
+    private static String encodeVrchatBasicAuthComponent(String value)
+    {
+        byte[] bytes = value.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        StringBuilder encoded = new StringBuilder(bytes.length);
+        for (byte raw : bytes)
+        {
+            int b = raw & 0xFF;
+            if (isVrchatBasicAuthUnescaped(b))
+            {
+                encoded.append((char)b);
+            }
+            else
+            {
+                encoded.append('%');
+                encoded.append(HEX[b >>> 4]);
+                encoded.append(HEX[b & 0x0F]);
+            }
+        }
+        return encoded.toString();
+    }
+
+    private static boolean isVrchatBasicAuthUnescaped(int b)
+    {
+        return (b >= 'A' && b <= 'Z')
+            || (b >= 'a' && b <= 'z')
+            || (b >= '0' && b <= '9')
+            || b == '-' || b == '_' || b == '.' || b == '!'
+            || b == '~' || b == '*' || b == '\'' || b == '(' || b == ')';
+    }
+
+    private static String summarizeApiException(ApiException apiex)
+    {
+        int code = apiex.getCode();
+        String body = apiex.getResponseBody();
+        if (body == null || body.isBlank())
+            return "HTTP " + code;
+        body = body.replace('\r', ' ').replace('\n', ' ').trim();
+        return "HTTP " + code + " " + MiscUtils.maybeEllipsis(512, body);
     }
 
     private Response intercept(Interceptor.Chain chain) throws IOException
@@ -618,49 +659,55 @@ try
                 if (this.maybeEnableLegacyTrustCompatibility(ex))
                     return;
                 if (!isRefresh) LOG.info("Cached auth not valid", ex);
-                do try
+                do
                 {
-                    String username = this.username.getOrNull(),
-                           password = this.password.getOrNull();
-                    if (username == null)
+                    boolean hadStoredCredentials = false;
+                    try
                     {
-                        username = this.scarlet.settings.getStringOrRequireInput("vrc_username", "VRChat Username", false);
-                        this.scarlet.settings.getJson().remove("vrc_username");
-                        this.username.set(username);
+                        String username = this.username.getOrNull(),
+                               password = this.password.getOrNull();
+                        hadStoredCredentials = username != null || password != null;
+                        if (username == null)
+                        {
+                            username = this.scarlet.settings.getStringOrRequireInput("vrc_username", "VRChat Username", false);
+                            this.scarlet.settings.getJson().remove("vrc_username");
+                            this.username.set(username);
+                        }
+                        if (password == null)
+                        {
+                            password = this.scarlet.settings.getStringOrRequireInput("vrc_password", "VRChat Password", true);
+                            this.scarlet.settings.getJson().remove("vrc_password");
+                            this.password.set(password);
+                        }
+                        if (username == null || password == null)
+                        {
+                            LOG.info("Canceling credentials");
+                            return;
+                        }
+                        this.client.setUsername(username);
+                        this.client.setPassword(password);
+                        this.pendingUsername = username;
+                        this.pendingPassword = password;
+                        data = this.client.<JsonObject>execute(auth.getCurrentUserCall(null), JsonObject.class).getData();
+                        if (data.has("id"))
+                        {
+                            LOG.info("Logged in (credentials)");
+                            this.currentUserId = (this.currentUser = JSON.getGson().fromJson(data, CurrentUser.class)).getId();
+                            return;
+                        }
                     }
-                    if (password == null)
-                    {
-                        password = this.scarlet.settings.getStringOrRequireInput("vrc_password", "VRChat Password", true);
-                        this.scarlet.settings.getJson().remove("vrc_password");
-                        this.password.set(password);
-                    }
-                    this.client.setUsername(username);
-                    this.client.setPassword(password);
-                    this.pendingUsername = username;
-                    this.pendingPassword = password;
-                    data = this.client.<JsonObject>execute(auth.getCurrentUserCall(null), JsonObject.class).getData();
-                    if (data.has("id"))
-                    {
-                        LOG.info("Logged in (credentials)");
-                        this.currentUserId = (this.currentUser = JSON.getGson().fromJson(data, CurrentUser.class)).getId();
-                        return;
-                    }
-                }
                 catch (ApiException apiex)
                 {
                     if (this.maybeEnableLegacyTrustCompatibility(apiex))
                         return;
                     this.username.set(null);
                     this.password.set(null);
-                    LOG.error("Invalid credentials");
+                    LOG.error("Invalid credentials: " + summarizeApiException(apiex));
                     // Only offer the reset dialog when stored credentials silently
                     // failed — not when the user just typed them in this iteration
                     // (in which case the loop will simply re-prompt). Using the
                     // synchronous form so the do-while waits for the user's answer
                     // before looping back, preventing a tight spin/hang on Windows.
-                    boolean hadStoredCredentials;
-                    try { hadStoredCredentials = (this.username.getOrNull() != null || this.password.getOrNull() != null); }
-                    catch (Exception ignored) { hadStoredCredentials = false; }
                     if (hadStoredCredentials)
                     {
                         boolean reset = this.scarlet.settings.requireConfirmYesNo(
@@ -681,6 +728,7 @@ try
                     this.client.setPassword(null);
                     this.pendingUsername = null;
                     this.pendingPassword = null;
+                }
                 }
                 while (data == null);
             }
@@ -872,10 +920,12 @@ finally
                     if (this.maybeEnableLegacyTrustCompatibility(ex))
                         return null;
                     if (!isRefresh) LOG.info("Cached auth not valid: "+context, ex);
+                    boolean hadStoredAltCredentials = false;
                     do try
                     {
                         username = alt.altUsername == null ? null : alt.altUsername.getOrNull();
                         password = alt.altPassword == null ? null : alt.altPassword.getOrNull();
+                        hadStoredAltCredentials = username != null || password != null;
                         if (username == null)
                         {
                             username = this.scarlet.settings.requireInput("Alternate VRChat Username", false);
@@ -917,13 +967,8 @@ finally
                             LOG.info("Canceling credentials; alt: "+context);
                             return null;
                         }
-                        LOG.error("Invalid credentials; alt: "+context);
+                        LOG.error("Invalid credentials; alt: "+context+": "+summarizeApiException(apiex));
                         // Only offer reset when stored alt credentials silently failed.
-                        // username/password are non-null here (checked above), so check
-                        // whether they came from the registry rather than being freshly typed.
-                        boolean hadStoredAltCredentials =
-                            (alt.altUsername != null && alt.altUsername.getOrNull() != null)
-                            || (alt.altPassword != null && alt.altPassword.getOrNull() != null);
                         if (hadStoredAltCredentials)
                         {
                             boolean reset = this.scarlet.settings.requireConfirmYesNo(

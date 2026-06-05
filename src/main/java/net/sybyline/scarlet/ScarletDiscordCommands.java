@@ -160,6 +160,39 @@ public class ScarletDiscordCommands
 
     // Commands
 
+    public static enum DiscordAccountAgeThreshold implements DEnum.DEnumLong<DiscordAccountAgeThreshold>
+    {
+        DISABLED("Disabled", 0L),
+        ONE_MINUTE("1 minute", 1L),
+        FIVE_MINUTES("5 minutes", 5L),
+        TEN_MINUTES("10 minutes", 10L),
+        FIFTEEN_MINUTES("15 minutes", 15L),
+        THIRTY_MINUTES("30 minutes", 30L),
+        ONE_HOUR("1 hour", 60L),
+        TWO_HOURS("2 hours", 120L),
+        SIX_HOURS("6 hours", 360L),
+        TWELVE_HOURS("12 hours", 720L),
+        ONE_DAY("1 day", 1_440L),
+        TWO_DAYS("2 days", 2_880L),
+        THREE_DAYS("3 days", 4_320L),
+        ONE_WEEK("1 week", 10_080L),
+        TWO_WEEKS("2 weeks", 20_160L),
+        ONE_MONTH("1 month", 43_200L),
+        THREE_MONTHS("3 months", 129_600L),
+        SIX_MONTHS("6 months", 259_200L),
+        ONE_YEAR("1 year", 525_600L);
+
+        DiscordAccountAgeThreshold(String display, Long minutes)
+        {
+            this.display = display;
+            this.minutes = minutes;
+        }
+        final String display;
+        final Long minutes;
+        @Override public Long value() { return this.minutes; }
+        @Override public String display() { return this.display; }
+    }
+
     public final SlashOption<io.github.vrchatapi.model.User> _vrchatUser = SlashOption.ofString("vrchat-user", "The VRChat user id (usr_XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX)", true, null, this::_vrchatUser, true, this::_vrchatUser);
     io.github.vrchatapi.model.User _vrchatUser(String id) { return this.discord.scarlet.vrc.getUser(id); }
     void _vrchatUser(CommandAutoCompleteInteractionEvent event) {
@@ -224,6 +257,11 @@ public class ScarletDiscordCommands
     public final SlashOption<Role> _discordRole = SlashOption.ofRole("discord-role", "The Discord role", true);
     public final SlashOption<Channel> _textChannel = SlashOption.ofChannel("discord-text-channel", "The Discord text channel to use, or omit to remove entry", false, ChannelType.TEXT);
     public final SlashOption<Channel> _voiceChannel = SlashOption.ofChannel("discord-voice-channel", "The Discord voice channel to use, or omit to remove entry", false, ChannelType.VOICE);
+    public final SlashOption<Channel> _categoryChannel = SlashOption.ofChannel("discord-category", "The Discord category to use", false, ChannelType.CATEGORY);
+    public final SlashOption<DiscordAccountAgeThreshold> _discordAccountAgeThreshold = SlashOption.ofEnum("threshold", "Minimum Discord account age before flagging joins", true, DiscordAccountAgeThreshold.DISABLED);
+    public final SlashOption<Boolean> _ticketToolAutoResponseEnabled = SlashOption.ofBool("enabled", "Whether the bot should auto-respond in Ticket Tool channels", false, null);
+    public final SlashOption<Role> _ticketToolNotifyRole = SlashOption.ofRole("notify-role", "Role to ping with the ticket opener", false);
+    public final SlashOption<String> _ticketToolChannelNameRegex = SlashOption.ofString("channel-name-regex", "Optional Java regex for ticket channel names; empty clears it", false, null);
     public final SlashOption<Integer> _daysBack = SlashOption.ofInt("days-back", "The number of days into the past to search for events", false, 4).with($->$.setRequiredRange(1L, 1000L));
     public final SlashOption<Integer> _hoursBack = SlashOption.ofInt("hours-back", "The number of hours into the past to search for events", false, 24).with($->$.setRequiredRange(1L, 24_000L));
     public final SlashOption<Integer> _pagination = SlashOption.ofInt("entries-per-page", "The number of entries to show per page", false, 4).with($->$.setRequiredRange(1L, 10L));
@@ -4621,6 +4659,60 @@ public class ScarletDiscordCommands
         {
             hook.sendMessageFormat("Discord action logs will be sent to <#%s>.", channel.getId()).queue();
         }
+    }
+
+    // set-discord-account-age-alert
+
+    @SlashCmd("set-discord-account-age-alert")
+    @Desc("Set the Discord account-age alert threshold")
+    @DefaultPerms(Permission.MANAGE_SERVER)
+    @Ephemeral
+    public void setDiscordAccountAgeAlert(SlashCommandInteractionEvent event, InteractionHook hook,
+                                          @SlashOpt("threshold") DiscordAccountAgeThreshold threshold)
+    {
+        int minutes = this.discord.setDiscordAccountAgeAlertMinutes(threshold.value().intValue());
+        if (minutes <= 0)
+        {
+            hook.sendMessage("Discord account-age alerts disabled.").queue();
+        }
+        else
+        {
+            hook.sendMessage("Discord account-age alerts will flag joins under "
+                + ScarletDiscordJDA.formatDurationHuman(Duration.ofMinutes(minutes)) + ".").queue();
+        }
+    }
+
+    // set-ticket-tool-auto-response
+
+    @SlashCmd("set-ticket-tool-auto-response")
+    @Desc("Configure the Ticket Tool age-verification auto-response")
+    @DefaultPerms(Permission.MANAGE_SERVER)
+    @Ephemeral
+    public void setTicketToolAutoResponse(SlashCommandInteractionEvent event, InteractionHook hook,
+                                          @SlashOpt("enabled") Boolean enabled,
+                                          @SlashOpt("discord-category") Channel category,
+                                          @SlashOpt("notify-role") Role notifyRole,
+                                          @SlashOpt("channel-name-regex") String channelNameRegex)
+    {
+        if (!this.discord.setTicketToolAutoResponse(enabled, category, notifyRole, channelNameRegex))
+        {
+            hook.sendMessage("Invalid channel-name regex. Nothing changed.").queue();
+            return;
+        }
+        String categoryText = this.discord.ticketToolCategorySf == null
+            ? "not set"
+            : "<#" + this.discord.ticketToolCategorySf + ">";
+        String regexText = this.discord.ticketToolChannelNameRegex == null
+            ? "not set"
+            : "`" + this.discord.ticketToolChannelNameRegex + "`";
+        String notifyRoleText = this.discord.ticketToolNotifyRoleSf == null
+            ? "not set"
+            : "<@&" + this.discord.ticketToolNotifyRoleSf + ">";
+        hook.sendMessage(
+            "Ticket Tool auto-response is " + (this.discord.ticketToolAutoResponseEnabled ? "enabled" : "disabled") + ".\n" +
+            "Category: " + categoryText + "\n" +
+            "Notify role: " + notifyRoleText + "\n" +
+            "Channel-name regex: " + regexText).queue();
     }
 
     // discord-warn

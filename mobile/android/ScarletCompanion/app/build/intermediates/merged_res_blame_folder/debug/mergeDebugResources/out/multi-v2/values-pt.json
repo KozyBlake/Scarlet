@@ -1,0 +1,36 @@
+{
+    "logs": [
+        {
+            "outputFile": "net.sybyline.scarlet.companion.app-mergeDebugResources-8:/values-pt/values-pt.xml",
+            "map": [
+                {
+                    "source": "I:\\Users\\Blake Belladonna\\.gradle\\caches\\transforms-4\\4d577c7ff410e55cc322ad067f24afcf\\transformed\\zxing-android-embedded-4.3.0\\res\\values-pt\\values-pt.xml",
+                    "from": {
+                        "startLines": "2,3,4,5",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "55,114,161,317",
+                        "endColumns": "58,46,155,106",
+                        "endOffsets": "109,156,312,419"
+                    },
+                    "to": {
+                        "startLines": "3,4,5,6",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "156,215,262,418",
+                        "endColumns": "58,46,155,106",
+                        "endOffsets": "210,257,413,520"
+                    }
+                },
+                {
+                    "source": "I:\\Users\\Blake Belladonna\\.gradle\\caches\\transforms-4\\47ef54378ca9cf82719f3ebf773ab8b0\\transformed\\core-1.2.0\\res\\values-pt\\values-pt.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "100",
+                        "endOffsets": "151"
+                    }
+                }
+            ]
+        }
+    ]
+}

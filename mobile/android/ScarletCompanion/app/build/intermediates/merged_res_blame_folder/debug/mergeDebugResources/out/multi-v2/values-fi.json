@@ -1,0 +1,77 @@
+{
+    "logs": [
+        {
+            "outputFile": "net.sybyline.scarlet.companion.app-mergeDebugResources-8:/values-fi/values-fi.xml",
+            "map": [
+                {
+                    "source": "I:\\Users\\Blake Belladonna\\.gradle\\caches\\transforms-4\\88f7dd6aaba8df0a8df0ae721cafb833\\transformed\\play-services-base-18.0.1\\res\\values-fi\\values.xml",
+                    "from": {
+                        "startLines": "4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20",
+                        "startColumns": "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+                        "startOffsets": "193,300,449,576,678,817,939,1051,1154,1291,1393,1538,1660,1804,1939,2001,2067",
+                        "endColumns": "106,148,126,101,138,121,111,102,136,101,144,121,143,134,61,65,78",
+                        "endOffsets": "299,448,575,677,816,938,1050,1153,1290,1392,1537,1659,1803,1938,2000,2066,2145"
+                    },
+                    "to": {
+                        "startLines": "2,3,4,5,6,7,8,9,11,12,13,14,15,16,17,18,19",
+                        "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "55,166,319,450,556,699,825,941,1198,1339,1445,1594,1720,1868,2007,2073,2143",
+                        "endColumns": "110,152,130,105,142,125,115,106,140,105,148,125,147,138,65,69,82",
+                        "endOffsets": "161,314,445,551,694,820,936,1043,1334,1440,1589,1715,1863,2002,2068,2138,2221"
+                    }
+                },
+                {
+                    "source": "I:\\Users\\Blake Belladonna\\.gradle\\caches\\transforms-4\\1ae9c82720aa468535e947d5bb975360\\transformed\\play-services-basement-18.3.0\\res\\values-fi\\values.xml",
+                    "from": {
+                        "startLines": "4",
+                        "startColumns": "0",
+                        "startOffsets": "195",
+                        "endColumns": "145",
+                        "endOffsets": "340"
+                    },
+                    "to": {
+                        "startLines": "10",
+                        "startColumns": "4",
+                        "startOffsets": "1048",
+                        "endColumns": "149",
+                        "endOffsets": "1193"
+                    }
+                },
+                {
+                    "source": "I:\\Users\\Blake Belladonna\\.gradle\\caches\\transforms-4\\47ef54378ca9cf82719f3ebf773ab8b0\\transformed\\core-1.2.0\\res\\values-fi\\values-fi.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "100",
+                        "endOffsets": "151"
+                    },
+                    "to": {
+                        "startLines": "20",
+                        "startColumns": "4",
+                        "startOffsets": "2226",
+                        "endColumns": "100",
+                        "endOffsets": "2322"
+                    }
+                },
+                {
+                    "source": "I:\\Users\\Blake Belladonna\\.gradle\\caches\\transforms-4\\4d577c7ff410e55cc322ad067f24afcf\\transformed\\zxing-android-embedded-4.3.0\\res\\values-fi\\values-fi.xml",
+                    "from": {
+                        "startLines": "2,3,4,5",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "55,114,161,321",
+                        "endColumns": "58,46,159,103",
+                        "endOffsets": "109,156,316,420"
+                    },
+                    "to": {
+                        "startLines": "21,22,23,24",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "2327,2386,2433,2593",
+                        "endColumns": "58,46,159,103",
+                        "endOffsets": "2381,2428,2588,2692"
+                    }
+                }
+            ]
+        }
+    ]
+}

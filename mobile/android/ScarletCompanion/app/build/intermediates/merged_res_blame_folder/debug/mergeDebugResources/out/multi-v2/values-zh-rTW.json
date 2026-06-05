@@ -1,0 +1,77 @@
+{
+    "logs": [
+        {
+            "outputFile": "net.sybyline.scarlet.companion.app-mergeDebugResources-8:/values-zh-rTW/values-zh-rTW.xml",
+            "map": [
+                {
+                    "source": "I:\\Users\\Blake Belladonna\\.gradle\\caches\\transforms-4\\47ef54378ca9cf82719f3ebf773ab8b0\\transformed\\core-1.2.0\\res\\values-zh-rTW\\values-zh-rTW.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "100",
+                        "endOffsets": "151"
+                    },
+                    "to": {
+                        "startLines": "20",
+                        "startColumns": "4",
+                        "startOffsets": "1874",
+                        "endColumns": "100",
+                        "endOffsets": "1970"
+                    }
+                },
+                {
+                    "source": "I:\\Users\\Blake Belladonna\\.gradle\\caches\\transforms-4\\1ae9c82720aa468535e947d5bb975360\\transformed\\play-services-basement-18.3.0\\res\\values-zh-rTW\\values.xml",
+                    "from": {
+                        "startLines": "4",
+                        "startColumns": "0",
+                        "startOffsets": "199",
+                        "endColumns": "98",
+                        "endOffsets": "297"
+                    },
+                    "to": {
+                        "startLines": "10",
+                        "startColumns": "4",
+                        "startOffsets": "919",
+                        "endColumns": "102",
+                        "endOffsets": "1017"
+                    }
+                },
+                {
+                    "source": "I:\\Users\\Blake Belladonna\\.gradle\\caches\\transforms-4\\88f7dd6aaba8df0a8df0ae721cafb833\\transformed\\play-services-base-18.0.1\\res\\values-zh-rTW\\values.xml",
+                    "from": {
+                        "startLines": "4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20",
+                        "startColumns": "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
+                        "startOffsets": "197,294,418,529,627,730,842,938,1029,1135,1232,1357,1468,1566,1670,1722,1775",
+                        "endColumns": "96,123,110,97,102,111,95,90,105,96,124,110,97,103,51,52,69",
+                        "endOffsets": "293,417,528,626,729,841,937,1028,1134,1231,1356,1467,1565,1669,1721,1774,1844"
+                    },
+                    "to": {
+                        "startLines": "2,3,4,5,6,7,8,9,11,12,13,14,15,16,17,18,19",
+                        "startColumns": "4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4,4",
+                        "startOffsets": "55,156,284,399,501,608,724,824,1022,1132,1233,1362,1477,1579,1687,1743,1800",
+                        "endColumns": "100,127,114,101,106,115,99,94,109,100,128,114,101,107,55,56,73",
+                        "endOffsets": "151,279,394,496,603,719,819,914,1127,1228,1357,1472,1574,1682,1738,1795,1869"
+                    }
+                },
+                {
+                    "source": "I:\\Users\\Blake Belladonna\\.gradle\\caches\\transforms-4\\4d577c7ff410e55cc322ad067f24afcf\\transformed\\zxing-android-embedded-4.3.0\\res\\values-zh-rTW\\values-zh-rTW.xml",
+                    "from": {
+                        "startLines": "2,3,4,5",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "55,104,151,244",
+                        "endColumns": "48,46,92,69",
+                        "endOffsets": "99,146,239,309"
+                    },
+                    "to": {
+                        "startLines": "21,22,23,24",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "1975,2024,2071,2164",
+                        "endColumns": "48,46,92,69",
+                        "endOffsets": "2019,2066,2159,2229"
+                    }
+                }
+            ]
+        }
+    ]
+}

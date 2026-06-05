@@ -24,7 +24,6 @@ import org.slf4j.LoggerFactory;
 import com.formdev.flatlaf.FlatDarkLaf;
 import com.formdev.flatlaf.FlatSystemProperties;
 
-import net.sybyline.scarlet.util.Box;
 import net.sybyline.scarlet.util.Platform;
 import net.sybyline.scarlet.util.Throwables;
 
@@ -525,9 +524,11 @@ public class Swing
     }
     public static <T> T get(Supplier<T> func) throws InterruptedException
     {
-        Box<T> box = new Box<>();
-        invoke(() -> box.set(func.get()));
-        return box.get();
+        Object[] value = new Object[1];
+        invoke(() -> value[0] = func.get());
+        @SuppressWarnings("unchecked")
+        T ret = (T)value[0];
+        return ret;
     }
     public static void invokeWait(Runnable func)
     {
@@ -542,9 +543,11 @@ public class Swing
     }
     public static <T> T getWait(Supplier<T> func)
     {
-        Box<T> box = new Box<>();
-        invokeWait(() -> box.set(func.get()));
-        return box.get();
+        Object[] value = new Object[1];
+        invokeWait(() -> value[0] = func.get());
+        @SuppressWarnings("unchecked")
+        T ret = (T)value[0];
+        return ret;
     }
     public static <T> T getWait_x(Supplier<T> func)
     {

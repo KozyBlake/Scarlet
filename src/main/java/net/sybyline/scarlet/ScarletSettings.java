@@ -34,6 +34,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.function.UnaryOperator;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.prefs.BackingStoreException;
 import java.util.prefs.Preferences;
@@ -1103,7 +1104,31 @@ public class ScarletSettings
     }
     public void requireConfirmYesNoAsync(String message, String title, Runnable then, Runnable otherwise)
     {
-        this.scarlet.execModal.execute(() -> Optional.ofNullable(this.requireConfirmYesNo(message, title) ? then : otherwise).ifPresent(Runnable::run));
+        Runnable task = () ->
+        {
+            boolean confirmed;
+            try
+            {
+                confirmed = this.requireConfirmYesNo(message, title);
+            }
+            catch (Throwable throwable)
+            {
+                LOG.error("Exception showing confirmation dialog `{}`: {}", title, message, throwable);
+                confirmed = false;
+            }
+            Optional.ofNullable(confirmed ? then : otherwise).ifPresent(Runnable::run);
+        };
+        try
+        {
+            if (this.scarlet.execModal.isShutdown())
+                throw new RejectedExecutionException("Modal executor is shut down");
+            this.scarlet.execModal.execute(task);
+        }
+        catch (RejectedExecutionException rejected)
+        {
+            LOG.debug("Ignoring confirmation dialog `{}` because Scarlet is shutting down", title, rejected);
+            Optional.ofNullable(otherwise).ifPresent(Runnable::run);
+        }
     }
 
     public <T> void requireSelect(String message, String title, T[] selectionValues, T initialSelectionValue, Consumer<T> then)

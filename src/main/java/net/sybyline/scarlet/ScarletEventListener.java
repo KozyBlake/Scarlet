@@ -311,6 +311,7 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
             {
                 this.scarlet.discord.emitExtendedStaffJoin(this.scarlet, timestamp, this.clientLocation, userId, userDisplayName);
                 this.scarlet.data.customEvent_new(GroupAuditTypeEx.STAFF_JOIN, odt, userId, userDisplayName, this.clientLocation, null);
+                this.scarlet.mobile.notifyStaffJoined(userDisplayName, userId, this.clientLocation);
             }
             if (avatarDisplayName != null)
             {
@@ -337,6 +338,7 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
             {
                 this.scarlet.discord.emitExtendedStaffLeave(this.scarlet, timestamp, this.clientLocation, userId, userDisplayName);
                 this.scarlet.data.customEvent_new(GroupAuditTypeEx.STAFF_LEAVE, odt, userId, userDisplayName, this.clientLocation, null);
+                this.scarlet.mobile.notifyStaffLeft(userDisplayName, userId, this.clientLocation);
             }
         }
     }
@@ -400,7 +402,10 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
                           && !preamble
                           && this.announceWatchedAvatars.get();
         boolean discordWanted = this.scarlet.discord.isEmitting(GroupAuditTypeEx.USER_AVATAR);
-        if (!ttsWanted && !discordWanted)
+        boolean mobileWanted = Features.WATCHED_AVATARS_ENABLED
+                            && !preamble
+                            && this.scarlet.mobile.wants(ScarletMobile.NotificationType.WATCHED_AVATAR, ScarletMobile.Severity.CRITICAL);
+        if (!ttsWanted && !discordWanted && !mobileWanted)
             return;
 
         String[] potentialIds = null;
@@ -442,6 +447,20 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
                 });
         }
 
+        if (mobileWanted)
+        {
+            final String[] ids = potentialIds;
+            Arrays
+                .stream(ids)
+                .map(this.scarlet.watchedAvatars::getWatchedEntity)
+                .filter(Objects::nonNull)
+                .filter($ -> !$.silent)
+                .sorted(Comparator.naturalOrder())
+                .findFirst()
+                .ifPresent(watchedAvatar ->
+                    this.scarlet.mobile.notifyWatchedAvatar(userDisplayName, userId, avatarDisplayName, ids, watchedAvatar, this.clientLocation));
+        }
+
         // ── Discord emission ───────────────────────────────────────────────────
         if (discordWanted)
         {
@@ -457,12 +476,13 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         Color overall_type = null;
 
         if (!preamble
-         && this.announceMixedCharacterNames.get()
          && !Objects.equals(this.clientUserId, userId)
          && TtsService.shouldAlertMixedCharacterName(userDisplayName))
         {
-            this.scarlet.getTtsService().submitMixedCharacterNameJoinAlert(
-                "mix-"+Long.toUnsignedString(System.nanoTime()));
+            if (this.announceMixedCharacterNames.get())
+                this.scarlet.getTtsService().submitMixedCharacterNameJoinAlert(
+                    "mix-"+Long.toUnsignedString(System.nanoTime()));
+            this.scarlet.mobile.notifyMixedCharacterName(userDisplayName, userId, this.clientLocation);
         }
         
         // check user
@@ -472,6 +492,8 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
             advisories.add(watchedUser.message);
             if (!preamble && this.announceWatchedUsers.get())
                 this.scarlet.getTtsService().submit("wu-"+Long.toUnsignedString(System.nanoTime()), watchedUser.message);
+            if (!preamble)
+                this.scarlet.mobile.notifyWatchedUserJoined(userDisplayName, userId, watchedUser, this.clientLocation);
         }
         
         User user = this.scarlet.vrc.getUser(userId);
@@ -508,6 +530,8 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
                         sb.append(' ').append(wg.message);
                     this.scarlet.getTtsService().submit("wg-"+Long.toUnsignedString(System.nanoTime()), sb.toString());
                 }
+                if (!preamble)
+                    this.scarlet.mobile.notifyWatchedGroupJoined(userDisplayName, userId, wg, this.clientLocation);
                 priority[0] = wg.priority;
             }
             wgs.forEach($ -> advisories.add($.message));
@@ -522,12 +546,17 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
             }
         }
         // check new user
-        if (!preamble && user != null && this.announceNewPlayers.get())
+        boolean newPlayerTtsWanted = this.announceNewPlayers.get();
+        boolean newPlayerMobileWanted = this.scarlet.mobile.wants(ScarletMobile.NotificationType.NEW_PLAYER, ScarletMobile.Severity.WATCH);
+        if (!preamble && user != null && (newPlayerTtsWanted || newPlayerMobileWanted))
         {
             long acctAgeDays = LocalDate.now().toEpochDay() - user.getDateJoined().toEpochDay();
             if (acctAgeDays <= this.announcePlayersNewerThan.get().longValue())
             {
-                this.scarlet.getTtsService().submit("new-"+Long.toUnsignedString(System.nanoTime()), "User "+TtsService.sanitizeName(userDisplayName)+" is new to VRChat, joined "+acctAgeDays+" days ago.");
+                if (newPlayerTtsWanted)
+                    this.scarlet.getTtsService().submit("new-"+Long.toUnsignedString(System.nanoTime()), "User "+TtsService.sanitizeName(userDisplayName)+" is new to VRChat, joined "+acctAgeDays+" days ago.");
+                if (newPlayerMobileWanted)
+                    this.scarlet.mobile.notifyNewPlayerJoined(userDisplayName, userId, acctAgeDays, this.clientLocation);
             }
         }
 
@@ -540,8 +569,11 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
             {
                 advisories.add("\u26A0 Suspicious pronouns: \"" + pronouns + "\" \u2014 " + flagReason);
                 if (!preamble)
+                {
                     this.scarlet.getTtsService().submit("pron-"+Long.toUnsignedString(System.nanoTime()),
                         "Warning: " + TtsService.sanitizeName(userDisplayName) + " has suspicious pronouns: " + pronouns);
+                    this.scarlet.mobile.notifySuspiciousPronouns(userDisplayName, userId, pronouns, flagReason, this.clientLocation);
+                }
             }
         }
         
@@ -578,6 +610,7 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
                 }
                 OffsetDateTime odt = MiscUtils.odt2utc(timestamp);
                 this.scarlet.data.customEvent_new(GroupAuditTypeEx.VTK_START, odt, actorId, nullable_actorDisplayName, userId, targetDisplayName);
+                this.scarlet.mobile.notifyVoteToKick(targetDisplayName, userId, nullable_actorDisplayName, actorId, this.clientLocation);
             }
         }
     }

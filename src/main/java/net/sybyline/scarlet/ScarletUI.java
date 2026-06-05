@@ -149,6 +149,7 @@ public class ScarletUI implements IScarletUI
         this.jbutton_vrchatApiOpen.addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.VRCHAT_API_RELEASES_URL)));
         this.ssettings = Collections.synchronizedList(new ArrayList<>());
         this.propstableColumsDirty = false;
+        this.exitPromptInFlight = false;
         this.connectedPlayers = new HashMap<>();
         this.pendingUpdates = new HashMap<>();
 
@@ -404,6 +405,7 @@ public class ScarletUI implements IScarletUI
     private final JButton jbutton_vrchatApiOpen;
     private final List<GUISetting<?>> ssettings;
     private boolean propstableColumsDirty;
+    private volatile boolean exitPromptInFlight;
     private final Map<String, ConnectedPlayer> connectedPlayers;
     private final Map<String, List<Func.V1.NE<ConnectedPlayer>>> pendingUpdates;
     // ── Settings search ───────────────────────────────────────────────────────
@@ -1149,7 +1151,14 @@ public class ScarletUI implements IScarletUI
 
     private void uiModalExit()
     {
-        this.scarlet.settings.requireConfirmYesNoAsync("Are you sure you want to quit?", "Confirm exit", this.scarlet::stop, null);
+        if (!this.scarlet.running || this.exitPromptInFlight)
+            return;
+        this.exitPromptInFlight = true;
+        this.scarlet.settings.requireConfirmYesNoAsync(
+            "Are you sure you want to quit?",
+            "Confirm exit",
+            this.scarlet::stop,
+            () -> this.exitPromptInFlight = false);
     }
 
     private void messageModalAsyncInfo(Component component, Object message, String title)
@@ -2337,6 +2346,15 @@ public class ScarletUI implements IScarletUI
           "tts_announce_watched_users", "tts_announce_watched_groups", "tts_announce_watched_avatars",
           "tts_announce_new_players", "tts_announce_mixed_character_names", "tts_announce_players_newer_than_days",
           "tts_announce_votes_to_kick" },
+
+        { "Mobile Companion",
+          "mobile_enabled", "mobile_direct_enabled", "mobile_direct_port",
+          "mobile_fcm_service_account_file",
+          "mobile_relay_endpoint", "mobile_relay_auth_token", "mobile_min_severity", "mobile_pairing_expires_minutes",
+          "mobile_notify_watched_users", "mobile_notify_watched_groups", "mobile_notify_watched_avatars",
+          "mobile_notify_votes_to_kick", "mobile_notify_moderation", "mobile_notify_staff",
+          "mobile_notify_new_players", "mobile_notify_mixed_character_names", "mobile_notify_suspicious_pronouns",
+          "Create mobile pairing QR", "Send mobile test notification", "Edit mobile devices file" },
 
         { "Discord",
           "Discord bot token", "Discord guild snowflake",
