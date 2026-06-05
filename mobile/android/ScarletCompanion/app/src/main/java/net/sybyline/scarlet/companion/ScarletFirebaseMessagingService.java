@@ -28,10 +28,12 @@ public class ScarletFirebaseMessagingService extends FirebaseMessagingService {
         if ((body == null || body.isEmpty()) && message.getNotification() != null) {
             body = message.getNotification().getBody();
         }
+        String type = data.get("type");
         ScarletNotifier.showAlert(
             this,
             title == null || title.isEmpty() ? "Scarlet alert" : title,
             body == null || body.isEmpty() ? "Scarlet sent an alert." : body,
-            eventId == null ? String.valueOf(System.currentTimeMillis()) : eventId);
+            eventId == null ? String.valueOf(System.currentTimeMillis()) : eventId,
+            type);
     }
 }

@@ -118,11 +118,13 @@ public class DirectScarletService extends Service {
             String title = clean(event.optString("title", null));
             String body = clean(event.optString("body", null));
             String id = clean(event.optString("id", null));
+            String type = clean(event.optString("type", null));
             ScarletNotifier.showAlert(
                 this,
                 title == null ? "Scarlet alert" : title,
                 body == null ? "Scarlet sent an alert." : body,
-                id);
+                id,
+                type);
         } catch (Exception ignored) {
         }
     }
