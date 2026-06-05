@@ -391,14 +391,27 @@ public class ScarletMobile implements Closeable
     {
         this.scarlet.exec.execute(() ->
         {
-            boolean attempted = this.broadcastDirect(event) > 0;
-            String fallbackEndpoint = RELAY_ENDPOINT;
+            // Broadcast to any LAN SSE clients (low latency on same network)
+            this.broadcastDirect(event);
+
+            // Always also post to relay — LAN may appear alive due to TCP buffering
+            // even after the phone has left the network. Android deduplicates by
+            // notification tag (event ID hash) so no duplicate alerts appear.
+            String relaySecret = this.state.relaySecret;
+            Device relayDevice = null;
+            if (clean(relaySecret) != null)
+            {
+                relayDevice = new Device();
+                relayDevice.authToken = relaySecret;
+            }
+            this.postEvent(RELAY_ENDPOINT, relayDevice, event);
+
+            // Also handle any registered FCM/webhook devices
             List<Device> devices;
             synchronized (this)
             {
                 devices = new ArrayList<>(this.state.devices);
             }
-
             for (Device device : devices)
             {
                 if (device == null || !device.enabled)
@@ -408,35 +421,13 @@ public class ScarletMobile implements Closeable
                     continue;
                 if (clean(device.pushToken) != null && this.isFcmConfigured())
                 {
-                    attempted = true;
                     this.postFcm(device, event);
                     continue;
                 }
                 String endpoint = clean(device.pushEndpoint);
                 if (endpoint == null)
                     continue;
-                attempted = true;
                 this.postEvent(endpoint, device, event);
-            }
-
-            if (!attempted && fallbackEndpoint != null)
-            {
-                attempted = true;
-                String relaySecret = this.state.relaySecret;
-                Device relayDevice = null;
-                if (clean(relaySecret) != null)
-                {
-                    relayDevice = new Device();
-                    relayDevice.authToken = relaySecret;
-                }
-                this.postEvent(fallbackEndpoint, relayDevice, event);
-            }
-
-            if (!attempted)
-            {
-                LOG.debug("Mobile event {} was filtered or has no relay endpoint configured", event.id);
-                if (NotificationType.TEST.id.equals(event.type))
-                    this.info("No mobile app connected", "Scan the mobile pairing QR, keep the Android listener running, and make sure your phone can reach this PC on the same network.");
             }
         });
     }
