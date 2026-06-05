@@ -88,7 +88,7 @@ public class MainActivity extends android.app.Activity {
         title.setGravity(Gravity.CENTER_HORIZONTAL);
         root.addView(title);
 
-        TextView subtitle = text("Scan Scarlet's pairing QR while your phone can reach your PC on the same Wi-Fi or VPN. The app keeps a local listener connected and turns Scarlet callouts into Android notifications.", 15, Color.rgb(210, 210, 220));
+        TextView subtitle = text("Scan Scarlet's pairing QR to receive alerts anywhere in the world. Notifications are delivered as long as Scarlet is running on your host machine.", 15, Color.rgb(210, 210, 220));
         subtitle.setPadding(0, 12, 0, 24);
         root.addView(subtitle);
 
