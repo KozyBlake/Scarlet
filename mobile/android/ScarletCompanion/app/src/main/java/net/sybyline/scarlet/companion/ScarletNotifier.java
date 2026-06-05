@@ -17,10 +17,18 @@ final class ScarletNotifier {
     // Foreground service channel
     static final String SERVICE_CHANNEL_ID = "scarlet_direct_connection";
 
-    // Alert channels — one per sound
-    static final String CHANNEL_NOTICE      = "scarlet_notice";      // BL_SFX_NOTICE
-    static final String CHANNEL_SIREN_CHIRP = "scarlet_siren_chirp"; // BL_SFX_SIREN_CHIRP
-    static final String CHANNEL_ALERT       = "scarlet_alert";       // BL_SFX_ALERT
+    // Alert channels — versioned so old channels are replaced cleanly on update
+    static final String CHANNEL_NOTICE      = "scarlet_notice_v2";
+    static final String CHANNEL_SIREN_CHIRP = "scarlet_siren_chirp_v2";
+    static final String CHANNEL_ALERT       = "scarlet_alert_v2";
+
+    // All channel IDs from previous versions — deleted on startup
+    static final String[] OBSOLETE_CHANNELS = {
+        "scarlet_alerts",
+        "scarlet_alert",
+        "scarlet_siren_chirp",
+        "scarlet_notice",
+    };
 
     private ScarletNotifier() {}
 
@@ -47,6 +55,10 @@ final class ScarletNotifier {
     static void ensureChannels(Context context) {
         if (Build.VERSION.SDK_INT < 26) return;
         NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+
+        // Remove any channels from previous versions so sounds update cleanly
+        for (String obsolete : OBSOLETE_CHANNELS)
+            manager.deleteNotificationChannel(obsolete);
 
         createAlertChannel(context, manager, CHANNEL_ALERT,
             "Scarlet — watched alerts",
@@ -75,7 +87,6 @@ final class ScarletNotifier {
 
     private static void createAlertChannel(Context context, NotificationManager manager,
             String id, String name, String description, String rawSoundName) {
-        if (manager.getNotificationChannel(id) != null) return;
         NotificationChannel channel = new NotificationChannel(id, name, NotificationManager.IMPORTANCE_HIGH);
         channel.setDescription(description);
         channel.enableVibration(true);
