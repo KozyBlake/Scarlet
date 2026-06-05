@@ -458,17 +458,36 @@ public class MainActivity extends android.app.Activity {
             layout.addView(empty);
         } else {
             for (AlertLog.Entry entry : entries) {
-                TextView row = new TextView(this);
-                row.setText("[" + entry.timestamp + "] " + entry.title + "\n" + entry.body);
-                row.setTextColor(Color.rgb(220, 220, 230));
-                row.setTextSize(13);
-                row.setPadding(0, 8, 0, 8);
-                layout.addView(row);
+                int titleColor = colorForType(entry.eventType);
+
+                TextView ts = new TextView(this);
+                ts.setText(entry.timestamp);
+                ts.setTextColor(Color.rgb(130, 130, 150));
+                ts.setTextSize(11);
+                ts.setPadding(0, 10, 0, 0);
+                layout.addView(ts);
+
+                TextView titleView = new TextView(this);
+                titleView.setText(entry.title);
+                titleView.setTextColor(titleColor);
+                titleView.setTextSize(14);
+                titleView.setPadding(0, 2, 0, 0);
+                layout.addView(titleView);
+
+                if (!entry.body.isEmpty()) {
+                    TextView bodyView = new TextView(this);
+                    bodyView.setText(entry.body);
+                    bodyView.setTextColor(Color.rgb(210, 210, 225));
+                    bodyView.setTextSize(13);
+                    bodyView.setPadding(0, 2, 0, 0);
+                    layout.addView(bodyView);
+                }
 
                 View divider = new View(this);
-                divider.setBackgroundColor(Color.rgb(60, 60, 80));
+                divider.setBackgroundColor(Color.rgb(55, 55, 75));
                 divider.setLayoutParams(new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, 1));
+                divider.setPadding(0, 8, 0, 0);
                 layout.addView(divider);
             }
         }
@@ -478,6 +497,31 @@ public class MainActivity extends android.app.Activity {
             .setView(scroll)
             .setPositiveButton("Close", null)
             .show();
+    }
+
+    static int colorForType(String eventType) {
+        if (eventType == null) return Color.rgb(200, 200, 215);
+        switch (eventType) {
+            case "watched_user_join":
+            case "watched_group_join":
+                return Color.rgb(214, 74, 104);  // Scarlet red — high priority
+            case "watched_avatar":
+            case "vote_to_kick":
+                return Color.rgb(255, 165, 50);  // Orange — medium-high
+            case "moderation":
+                return Color.rgb(255, 210, 60);  // Yellow — moderation action
+            case "suspicious_pronouns":
+            case "mixed_character_name":
+                return Color.rgb(120, 180, 255); // Blue — suspicious but informational
+            case "staff":
+                return Color.rgb(140, 220, 140); // Green — staff movement
+            case "new_player":
+                return Color.rgb(180, 140, 255); // Purple — new account
+            case "test":
+                return Color.rgb(160, 160, 175); // Muted — test only
+            default:
+                return Color.rgb(200, 200, 215);
+        }
     }
 
     static String clean(String value) {
