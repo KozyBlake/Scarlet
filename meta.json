@@ -1,11 +1,11 @@
 {
-  "latest_release": "0.4.17-b2",
-  "latest_build": "0.4.17-b2",
+  "latest_release": "0.4.17-b3",
+  "latest_build": "0.4.17-b3",
   "announcement": {
-    "id": "20260515-222525-e0d6",
+    "id": "20260605-000000-b3",
     "severity": "info",
-    "title": "New release coming soon.",
-    "message": "There's going to be a new release coming into Scarlet soon which involves fixes of TTS. TTS in its current state (with your specific Scarlet logger version) will use TTS with different usernames as in \"Cryllic\" dd \"Greek\" nn \"Chinese\"... etc. This now attempts to make any username pure English rather than saying the character. If it's unable to, it will play a sound and tell you to look for a nameplate with a custom username.",
-    "expires": "2026-05-15T22:57:31Z"
+    "title": "0.4.17-b3 is now available.",
+    "message": "Scarlet 0.4.17-b3 is out! This release introduces the Scarlet Companion Android app — receive push notifications on your phone from anywhere in the world, no accounts required. Scan a pairing QR from Scarlet's settings to get started. Also includes notification sounds per alert type, an in-app alert log, and various fixes.",
+    "expires": "2026-08-01T00:00:00Z"
   }
 }

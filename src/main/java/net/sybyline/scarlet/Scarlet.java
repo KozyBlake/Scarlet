@@ -176,7 +176,7 @@ public class Scarlet implements Closeable
             if (implementationVersion != null && !implementationVersion.trim().isEmpty())
                 return implementationVersion.trim();
         }
-        return "0.4.17-b2";
+        return "0.4.17-b3";
     }
 
     public static void main(String[] args) throws Exception
@@ -594,6 +594,7 @@ public class Scarlet implements Closeable
         }
         if (this.ttsService != null)
             MiscUtils.close(this.ttsService);
+        MiscUtils.close(this.mobile);
         MiscUtils.close(this.discord);
         MiscUtils.close(this.logs);
         MiscUtils.close(this.ui);
@@ -721,6 +722,7 @@ public class Scarlet implements Closeable
     final ScarletVRChatReportTemplate vrcReport = new ScarletVRChatReportTemplate(new File(dir, "report_template.txt"));
     final ScarletData data = new ScarletData(new File(dir, "data"));
     final ScarletVRChat vrc = new ScarletVRChat(this, "global", new File(dir, "store.bin"));
+    final ScarletMobile mobile = new ScarletMobile(this, new File(dir, "mobile_devices.json"));
     final ScarletDiscord discord = new ScarletDiscordJDA(this, new File(dir, "discord_bot.json"), new File(dir, "discord_perms.json"));
     private TtsService ttsService = null;
     final ScarletCalendar calendar = new ScarletCalendar(this, new File(dir, "event_schedule.json"));
@@ -1002,6 +1004,7 @@ public class Scarlet implements Closeable
         this.ui.loadSettings();
         this.maybeShowDataFolderMigrationNotice();
         this.eventListener.settingsLoaded();
+        this.mobile.settingsLoaded();
         this.checkVrchatApiPreflight();
         // Initialize TTS after UI is ready (for dialog parent component)
         this.splash.splashSubtext("Initializing Text-to-Speech");

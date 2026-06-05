@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>net.sybyline</groupId>
   <artifactId>scarlet</artifactId>
-  <version>0.4.17-b2</version><!--scarlet-version-->
+  <version>0.4.17-b3</version><!--scarlet-version-->
   <name>Scarlet</name>
   <build>
     <plugins>
@@ -382,6 +382,11 @@
       <groupId>com.google.code.gson</groupId>
       <artifactId>gson</artifactId>
       <version>2.12.1</version>
+    </dependency>
+    <dependency>
+      <groupId>com.google.zxing</groupId>
+      <artifactId>core</artifactId>
+      <version>3.5.3</version>
     </dependency>
     <dependency>
       <!-- Used by VRChatHelpDeskURLs.normalizeSubject as the cross-script
