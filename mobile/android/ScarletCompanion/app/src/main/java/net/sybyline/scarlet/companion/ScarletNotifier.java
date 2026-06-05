@@ -13,6 +13,8 @@ import android.media.AudioAttributes;
 import android.net.Uri;
 import android.os.Build;
 
+import java.util.concurrent.atomic.AtomicInteger;
+
 final class ScarletNotifier {
     // Foreground service channel
     static final String SERVICE_CHANNEL_ID = "scarlet_direct_connection";
@@ -22,13 +24,28 @@ final class ScarletNotifier {
     static final String CHANNEL_SIREN_CHIRP = "scarlet_siren_chirp_v2";
     static final String CHANNEL_ALERT       = "scarlet_alert_v2";
 
+    // Silent summary channel — used for the group summary notification only
+    static final String CHANNEL_SUMMARY = "scarlet_summary_v2";
+
     // All channel IDs from previous versions — deleted on startup
     static final String[] OBSOLETE_CHANNELS = {
         "scarlet_alerts",
         "scarlet_alert",
         "scarlet_siren_chirp",
         "scarlet_notice",
+        "scarlet_summary",
     };
+
+    // Notification grouping
+    static final String GROUP_KEY   = "scarlet_alerts";
+    static final int    SUMMARY_ID  = 0x5CA2;
+    static final int    MAX_INDIVIDUAL = 20; // stay under Samsung's ~24 limit
+
+    // Tracks how many individual notifications are currently active.
+    // Resets when the summary is dismissed via its auto-cancel.
+    static final AtomicInteger activeCount = new AtomicInteger(0);
+    static volatile String latestTitle = "Scarlet alert";
+    static volatile String latestBody  = "";
 
     private ScarletNotifier() {}
 
@@ -74,6 +91,17 @@ final class ScarletNotifier {
             "Scarlet — notices",
             "Moderation actions, staff movement, and other notices.",
             "bl_sfx_notice");
+
+        // Summary channel — no sound, just keeps the group header visible
+        if (manager.getNotificationChannel(CHANNEL_SUMMARY) == null) {
+            NotificationChannel summary = new NotificationChannel(
+                CHANNEL_SUMMARY,
+                "Scarlet — alert summary",
+                NotificationManager.IMPORTANCE_LOW);
+            summary.setDescription("Groups multiple Scarlet alerts together.");
+            summary.setSound(null, null);
+            manager.createNotificationChannel(summary);
+        }
 
         if (manager.getNotificationChannel(SERVICE_CHANNEL_ID) == null) {
             NotificationChannel channel = new NotificationChannel(
@@ -121,16 +149,44 @@ final class ScarletNotifier {
             && context.checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             return;
         }
-        String channelId = channelForType(eventType);
-        Notification notification = builder(context, channelId)
-            .setContentTitle(title)
-            .setContentText(body)
-            .setStyle(new Notification.BigTextStyle().bigText(body))
+
+        String safeTitle = title != null ? title : "Scarlet alert";
+        String safeBody  = body  != null ? body  : "";
+        latestTitle = safeTitle;
+        latestBody  = safeBody;
+
+        int count = activeCount.incrementAndGet();
+        NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+
+        // Post individual notification only while under the limit
+        if (count <= MAX_INDIVIDUAL) {
+            String channelId = channelForType(eventType);
+            Notification notification = builder(context, channelId)
+                .setContentTitle(safeTitle)
+                .setContentText(safeBody)
+                .setStyle(new Notification.BigTextStyle().bigText(safeBody))
+                .setAutoCancel(true)
+                .setColor(Color.rgb(214, 74, 104))
+                .setGroup(GROUP_KEY)
+                .build();
+            manager.notify(tag == null ? count : tag.hashCode(), notification);
+        }
+
+        // Always update the group summary — updating an existing notification
+        // does not count against Android/Samsung rate limits
+        String summaryText = count == 1
+            ? safeTitle
+            : count + " alerts — latest: " + safeTitle;
+        Notification summary = builder(context, CHANNEL_SUMMARY)
+            .setContentTitle("Scarlet Companion")
+            .setContentText(summaryText)
+            .setStyle(new Notification.BigTextStyle().bigText(safeBody))
             .setAutoCancel(true)
             .setColor(Color.rgb(214, 74, 104))
+            .setGroup(GROUP_KEY)
+            .setGroupSummary(true)
             .build();
-        NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-        manager.notify(tag == null ? 1 : tag.hashCode(), notification);
+        manager.notify(SUMMARY_ID, summary);
     }
 
     // Overload for callers that don't have an event type (test button, etc.)
