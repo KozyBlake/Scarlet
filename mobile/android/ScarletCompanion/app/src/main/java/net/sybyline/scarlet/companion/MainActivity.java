@@ -195,7 +195,7 @@ public class MainActivity extends android.app.Activity {
                 .apply();
 
             loadSavedState();
-            registerFcmWithScarlet(pairing);
+            registerWithRelay(pairing);
             if (hasDirect) {
                 startDirectListener();
             } else {
@@ -229,11 +229,9 @@ public class MainActivity extends android.app.Activity {
         setStatus("Direct listener running.");
     }
 
-    void registerFcmWithScarlet(JSONObject pairing) {
-        refreshFcmToken(() -> io.execute(() -> {
+    void registerWithRelay(JSONObject pairing) {
+        io.execute(() -> {
             try {
-                if (fcmToken == null || fcmToken.trim().isEmpty()) return;
-
                 JSONArray pairEndpoints = directPairEndpoints(pairing);
                 String relayPairEndpoint = clean(pairing.optString("relayPairEndpoint", null));
                 if (pairEndpoints.length() == 0 && relayPairEndpoint == null) return;
@@ -241,7 +239,8 @@ public class MainActivity extends android.app.Activity {
                 JSONObject device = new JSONObject();
                 device.put("name", Build.MANUFACTURER + " " + Build.MODEL);
                 device.put("platform", "android");
-                device.put("pushToken", fcmToken);
+                if (fcmToken != null && !fcmToken.trim().isEmpty())
+                    device.put("pushToken", fcmToken);
                 device.put("notificationTypes", pairing.optJSONObject("notificationDefaults"));
 
                 JSONObject request = new JSONObject();
@@ -250,7 +249,7 @@ public class MainActivity extends android.app.Activity {
                 request.put("instanceId", pairing.optString("instanceId"));
                 request.put("device", device);
 
-                // Try direct LAN pair endpoints first, then fall back to relay
+                // Try direct LAN pair endpoints first, then relay
                 JSONArray allEndpoints = new JSONArray();
                 for (int i = 0; i < pairEndpoints.length(); i++) allEndpoints.put(pairEndpoints.getString(i));
                 if (relayPairEndpoint != null) allEndpoints.put(relayPairEndpoint);
@@ -260,7 +259,7 @@ public class MainActivity extends android.app.Activity {
                     try {
                         JSONObject response = postJson(allEndpoints.getString(i), request);
                         if (response.optBoolean("ok", false)) {
-                            runOnUiThread(() -> setStatus("Paired for anywhere notifications."));
+                            runOnUiThread(() -> setStatus("Paired successfully."));
                             return;
                         }
                     } catch (Exception ex) {
@@ -269,9 +268,9 @@ public class MainActivity extends android.app.Activity {
                 }
                 if (last != null) throw last;
             } catch (Exception ex) {
-                runOnUiThread(() -> setStatus("FCM pairing failed: " + ex.getMessage()));
+                runOnUiThread(() -> setStatus("Pairing failed: " + ex.getMessage()));
             }
-        }));
+        });
     }
 
     JSONArray directPairEndpoints(JSONObject pairing) {
