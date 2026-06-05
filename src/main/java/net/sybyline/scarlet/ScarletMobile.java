@@ -140,6 +140,10 @@ public class ScarletMobile implements Closeable
         }
     }
 
+    static final String RELAY_ENDPOINT = "https://peachpuff-swan-183728.hostingersite.com/scarlet/mobile/event";
+    static final int DIRECT_PORT = 24892;
+    static final int PAIRING_EXPIRES_MINUTES = 10;
+
     public ScarletMobile(Scarlet scarlet, File devicesFile)
     {
         this.scarlet = scarlet;
@@ -148,13 +152,7 @@ public class ScarletMobile implements Closeable
         this.load();
 
         this.enabled = scarlet.settings.new FileValuedBoolean("mobile_enabled", "Mobile companion", false);
-        this.directEnabled = scarlet.settings.new FileValuedBoolean("mobile_direct_enabled", "Mobile direct LAN connection", true);
-        this.directPort = scarlet.settings.new FileValuedIntRange("mobile_direct_port", "Mobile direct LAN port", 24892, 0, 65535);
-        this.fcmServiceAccountFile = scarlet.settings.new FileValuedStringPattern("mobile_fcm_service_account_file", "Mobile FCM service account JSON", "", ".*", false);
-        this.relayEndpoint = scarlet.settings.new FileValuedStringPattern("mobile_relay_endpoint", "Mobile relay/webhook URL", "", "(|https?://.+)", false);
-        this.relayAuthToken = scarlet.settings.new FileValuedStringPattern("mobile_relay_auth_token", "Mobile relay auth token", "", ".*", false);
         this.minSeverity = scarlet.settings.new FileValuedEnum<>("mobile_min_severity", "Mobile minimum severity", Severity.WARNING);
-        this.pairingExpiresMinutes = scarlet.settings.new FileValuedIntRange("mobile_pairing_expires_minutes", "Mobile pairing expires after minutes", 10, 1, 60);
         this.notifyWatchedUsers = scarlet.settings.new FileValuedBoolean("mobile_notify_watched_users", "Mobile: watched users", true);
         this.notifyWatchedGroups = scarlet.settings.new FileValuedBoolean("mobile_notify_watched_groups", "Mobile: watched groups", true);
         this.notifyWatchedAvatars = scarlet.settings.new FileValuedBoolean("mobile_notify_watched_avatars", "Mobile: watched avatars", true);
@@ -166,7 +164,6 @@ public class ScarletMobile implements Closeable
         this.notifySuspiciousPronouns = scarlet.settings.new FileValuedBoolean("mobile_notify_suspicious_pronouns", "Mobile: suspicious pronouns", true);
         this.createPairingQr = scarlet.settings.new FileValuedVoid("Create mobile pairing QR", "Create", this::showPairingQrDialog);
         this.sendTestNotification = scarlet.settings.new FileValuedVoid("Send mobile test notification", "Send", this::sendTestNotification);
-        this.editDevices = scarlet.settings.new FileValuedVoid("Edit mobile devices file", "Edit", this::editDevicesFile);
     }
 
     final Scarlet scarlet;
@@ -174,7 +171,6 @@ public class ScarletMobile implements Closeable
     State state;
 
     final ScarletSettings.FileValued<Boolean> enabled,
-                                            directEnabled,
                                             notifyWatchedUsers,
                                             notifyWatchedGroups,
                                             notifyWatchedAvatars,
@@ -184,13 +180,8 @@ public class ScarletMobile implements Closeable
                                             notifyNewPlayers,
                                             notifyMixedNames,
                                             notifySuspiciousPronouns;
-    final ScarletSettings.FileValued<String> relayEndpoint,
-                                      relayAuthToken,
-                                      fcmServiceAccountFile;
     final ScarletSettings.FileValued<Severity> minSeverity;
-    final ScarletSettings.FileValued<Integer> pairingExpiresMinutes,
-                                             directPort;
-    final ScarletSettings.FileValued<Void> createPairingQr, sendTestNotification, editDevices;
+    final ScarletSettings.FileValued<Void> createPairingQr, sendTestNotification;
     HttpServer directServer;
     int directServerPort;
     final List<DirectClient> directClients = Collections.synchronizedList(new ArrayList<>());
@@ -401,7 +392,7 @@ public class ScarletMobile implements Closeable
         this.scarlet.exec.execute(() ->
         {
             boolean attempted = this.broadcastDirect(event) > 0;
-            String fallbackEndpoint = clean(this.relayEndpoint.get());
+            String fallbackEndpoint = RELAY_ENDPOINT;
             List<Device> devices;
             synchronized (this)
             {
@@ -445,7 +436,7 @@ public class ScarletMobile implements Closeable
 
     boolean isFcmConfigured()
     {
-        String file = clean(this.fcmServiceAccountFile.get());
+        String file = null; // FCM not configured in this build
         return file != null && new File(file).isFile();
     }
 
@@ -511,7 +502,7 @@ public class ScarletMobile implements Closeable
 
     synchronized FcmServiceAccount loadFcmServiceAccount()
     {
-        String file = clean(this.fcmServiceAccountFile.get());
+        String file = null; // FCM not configured in this build
         if (file == null)
             return null;
         FcmServiceAccount cached = this.fcmServiceAccount;
@@ -581,7 +572,7 @@ public class ScarletMobile implements Closeable
 
     int broadcastDirect(MobileEvent event)
     {
-        if (!this.enabled.get() || !this.directEnabled.get())
+        if (!this.enabled.get())
             return 0;
         this.ensureDirectServer();
         String data = Scarlet.GSON.toJson(event, MobileEvent.class);
@@ -619,7 +610,7 @@ public class ScarletMobile implements Closeable
             .header("X-Scarlet-Mobile", "1");
         String authToken = device != null && clean(device.authToken) != null
             ? device.authToken
-            : clean(this.relayAuthToken.get());
+            : null;
         if (authToken != null)
             builder.header("Authorization", "Bearer " + authToken.trim());
 
@@ -650,7 +641,7 @@ public class ScarletMobile implements Closeable
         pending.pairingId = pairingId;
         pending.secretHash = sha256(pairingSecret);
         pending.createdAt = now;
-        pending.expiresAt = now.plusMinutes(this.pairingExpiresMinutes.get().longValue());
+        pending.expiresAt = now.plusMinutes(PAIRING_EXPIRES_MINUTES);
         this.state.pendingPairings.add(pending);
         this.save();
 
@@ -678,8 +669,8 @@ public class ScarletMobile implements Closeable
         payload.addProperty("createdAt", DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(pending.createdAt));
         String expiresAt = DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(pending.expiresAt);
         payload.addProperty("expiresAt", expiresAt);
-        String relayEndpoint = clean(this.relayEndpoint.get());
-        String authToken = clean(this.relayAuthToken.get());
+        String relayEndpoint = RELAY_ENDPOINT;
+        String authToken = null;
         payload.addProperty("relayEndpoint", relayEndpoint);
         payload.addProperty("relayPairEndpoint", pairEndpointFor(relayEndpoint));
         payload.addProperty("relayEventEndpoint", relayEventEndpointFor(relayEndpoint, this.state.instanceId));
@@ -921,13 +912,13 @@ public class ScarletMobile implements Closeable
 
     synchronized void ensureDirectServer()
     {
-        if (!this.enabled.get() || !this.directEnabled.get())
+        if (!this.enabled.get())
             return;
         if (this.directServer != null)
             return;
         try
         {
-            int requestedPort = this.directPort.get().intValue();
+            int requestedPort = DIRECT_PORT;
             HttpServer server = HttpServer.create(new InetSocketAddress("0.0.0.0", requestedPort), 16);
             server.createContext("/scarlet/mobile/health", this::handleDirectHealth);
             server.createContext("/scarlet/mobile/events", this::handleDirectEvents);
@@ -960,7 +951,7 @@ public class ScarletMobile implements Closeable
 
     List<String> directEndpoints(String path)
     {
-        if (!this.enabled.get() || !this.directEnabled.get())
+        if (!this.enabled.get())
             return Collections.emptyList();
         this.ensureDirectServer();
         int port = this.directServerPort;
