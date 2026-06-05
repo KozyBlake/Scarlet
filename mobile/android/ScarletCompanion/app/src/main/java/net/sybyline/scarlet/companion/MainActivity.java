@@ -48,6 +48,7 @@ public class MainActivity extends android.app.Activity {
     static final String KEY_DIRECT_EVENT_ENDPOINTS = "direct_event_endpoints";
     static final String KEY_DIRECT_PAIR_ENDPOINTS = "direct_pair_endpoints";
     static final String KEY_RELAY_EVENT_ENDPOINT = "relay_event_endpoint";
+    static final String KEY_PAIRING_SECRET = "pairing_secret";
     static final String KEY_FCM_TOKEN = "fcm_token";
 
     final ExecutorService io = Executors.newSingleThreadExecutor();
@@ -189,6 +190,7 @@ public class MainActivity extends android.app.Activity {
                 .putString(KEY_DIRECT_EVENT_ENDPOINTS, endpoints.toString())
                 .putString(KEY_DIRECT_PAIR_ENDPOINTS, directPairEndpoints(pairing).toString())
                 .putString(KEY_RELAY_EVENT_ENDPOINT, clean(pairing.optString("relayEventEndpoint", null)))
+                .putString(KEY_PAIRING_SECRET, clean(pairing.optString("pairingSecret", null)))
                 .putString(KEY_INSTANCE_ID, pairing.optString("instanceId", ""))
                 .apply();
 
@@ -245,6 +247,7 @@ public class MainActivity extends android.app.Activity {
                 JSONObject request = new JSONObject();
                 request.put("pairingId", pairing.optString("pairingId"));
                 request.put("pairingSecret", pairing.optString("pairingSecret"));
+                request.put("instanceId", pairing.optString("instanceId"));
                 request.put("device", device);
 
                 // Try direct LAN pair endpoints first, then fall back to relay

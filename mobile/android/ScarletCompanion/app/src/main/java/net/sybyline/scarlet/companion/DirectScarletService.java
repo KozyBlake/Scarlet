@@ -74,6 +74,10 @@ public class DirectScarletService extends Service {
             conn = (HttpURLConnection) new URL(endpoint).openConnection();
             conn.setRequestMethod("GET");
             conn.setRequestProperty("Accept", "text/event-stream");
+            String secret = getSharedPreferences(MainActivity.PREFS, MODE_PRIVATE)
+                .getString(MainActivity.KEY_PAIRING_SECRET, null);
+            if (secret != null && !secret.isEmpty())
+                conn.setRequestProperty("Authorization", "Bearer " + secret);
             conn.setConnectTimeout(10000);
             conn.setReadTimeout(0);
             int code = conn.getResponseCode();

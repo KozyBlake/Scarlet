@@ -682,7 +682,7 @@ public class ScarletMobile implements Closeable
         String authToken = clean(this.relayAuthToken.get());
         payload.addProperty("relayEndpoint", relayEndpoint);
         payload.addProperty("relayPairEndpoint", pairEndpointFor(relayEndpoint));
-        payload.addProperty("relayEventEndpoint", relayEventEndpointFor(relayEndpoint, this.state.instanceId, authToken));
+        payload.addProperty("relayEventEndpoint", relayEventEndpointFor(relayEndpoint, this.state.instanceId));
         payload.add("notificationDefaults", this.notificationDefaultsJson());
         if (authToken != null)
         {
@@ -717,6 +717,10 @@ public class ScarletMobile implements Closeable
                 device.enabled = true;
                 device.pairedAt = OffsetDateTime.now(ZoneOffset.UTC);
                 device.lastSeenAt = device.pairedAt;
+                // Store pairingSecret as device auth token so event posts are authenticated
+                // per-instance without any shared relay secret
+                if (clean(device.authToken) == null)
+                    device.authToken = pairingSecret;
                 this.state.devices.removeIf(existing -> existing != null && Objects.equals(existing.id, device.id));
                 this.state.devices.add(device);
                 this.save();
@@ -1228,7 +1232,7 @@ public class ScarletMobile implements Closeable
         }
     }
 
-    static String relayEventEndpointFor(String relayEndpoint, String instanceId, String token)
+    static String relayEventEndpointFor(String relayEndpoint, String instanceId)
     {
         relayEndpoint = clean(relayEndpoint);
         if (relayEndpoint == null || clean(instanceId) == null)
@@ -1241,10 +1245,8 @@ public class ScarletMobile implements Closeable
                 path = "/";
             int slash = path.lastIndexOf('/');
             String eventsPath = (slash < 0 ? "/" : path.substring(0, slash + 1)) + "events";
-            String query = "instance=" + urlEncode(instanceId);
-            if (clean(token) != null)
-                query += "&token=" + urlEncode(token);
-            return new URI(uri.getScheme(), uri.getAuthority(), eventsPath, query, null).toString();
+            // Auth is via Authorization header — instance ID in URL is not sensitive
+            return new URI(uri.getScheme(), uri.getAuthority(), eventsPath, "instance=" + urlEncode(instanceId), null).toString();
         }
         catch (Exception ex)
         {
