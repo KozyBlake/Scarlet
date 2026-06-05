@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Fill these from your Firebase Android app settings. This avoids needing
+         google-services.json for local builds. -->
+    <string name="firebase_app_id"></string>
+    <string name="firebase_api_key"></string>
+    <string name="firebase_project_id"></string>
+    <string name="firebase_sender_id"></string>
+</resources>

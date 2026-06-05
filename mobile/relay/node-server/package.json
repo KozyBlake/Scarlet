@@ -1,0 +1,12 @@
+{
+  "name": "scarlet-mobile-relay",
+  "version": "1.0.0",
+  "description": "Scarlet mobile relay — bridges Scarlet desktop events to Android via SSE",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=16"
+  }
+}
