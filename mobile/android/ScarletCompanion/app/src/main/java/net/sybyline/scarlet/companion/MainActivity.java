@@ -93,8 +93,8 @@ public class MainActivity extends android.app.Activity {
 
         statusText = text("Status: starting", 16, Color.rgb(230, 230, 238));
         instanceText = text("Instance: none", 14, Color.rgb(190, 190, 205));
-        endpointText = text("Direct endpoint: none", 12, Color.rgb(165, 165, 180));
-        fcmText = text("FCM: not configured", 12, Color.rgb(165, 165, 180));
+        endpointText = text("No endpoint", 12, Color.rgb(165, 165, 180));
+        fcmText = text("", 12, Color.rgb(165, 165, 180));
         root.addView(statusText);
         root.addView(instanceText);
         root.addView(endpointText);
@@ -206,9 +206,15 @@ public class MainActivity extends android.app.Activity {
         }
     }
 
+    boolean hasPairing() {
+        if (hasDirectEndpoints()) return true;
+        String relay = prefs().getString(KEY_RELAY_EVENT_ENDPOINT, null);
+        return clean(relay) != null;
+    }
+
     void startDirectListener() {
-        if (!hasDirectEndpoints()) {
-            toast("Scan a Scarlet direct QR first.");
+        if (!hasPairing()) {
+            toast("Scan a Scarlet pairing QR first.");
             return;
         }
         requestNotificationPermission();
@@ -349,12 +355,12 @@ public class MainActivity extends android.app.Activity {
 
     void updateFcmText() {
         if (fcmText == null) return;
-        if (fcmToken == null || fcmToken.trim().isEmpty()) {
-            fcmText.setText("FCM: not configured");
-            return;
+        if (fcmToken != null && !fcmToken.trim().isEmpty()) {
+            String preview = fcmToken.length() > 18 ? fcmToken.substring(0, 18) + "..." : fcmToken;
+            fcmText.setText("FCM token: " + preview);
+        } else {
+            fcmText.setText("");
         }
-        String preview = fcmToken.length() > 18 ? fcmToken.substring(0, 18) + "..." : fcmToken;
-        fcmText.setText("FCM: " + preview);
     }
 
     boolean hasDirectEndpoints() {

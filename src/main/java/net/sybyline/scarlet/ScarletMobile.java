@@ -679,11 +679,11 @@ public class ScarletMobile implements Closeable
         String expiresAt = DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(pending.expiresAt);
         payload.addProperty("expiresAt", expiresAt);
         String relayEndpoint = clean(this.relayEndpoint.get());
+        String authToken = clean(this.relayAuthToken.get());
         payload.addProperty("relayEndpoint", relayEndpoint);
         payload.addProperty("relayPairEndpoint", pairEndpointFor(relayEndpoint));
         payload.addProperty("relayEventEndpoint", relayEventEndpointFor(relayEndpoint, this.state.instanceId, authToken));
         payload.add("notificationDefaults", this.notificationDefaultsJson());
-        String authToken = clean(this.relayAuthToken.get());
         if (authToken != null)
         {
             payload.addProperty("signature", hmacSha256Hex(authToken,
