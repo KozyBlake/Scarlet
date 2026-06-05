@@ -108,6 +108,8 @@ public class MainActivity extends android.app.Activity {
         root.addView(button("Show Test Local Notification", v ->
             ScarletNotifier.showAlert(this, "Scarlet Companion", "Local notification test", "test")));
         root.addView(button("Open Notification Settings", v -> openNotificationSettings()));
+        root.addView(button("View Alert Log", v -> showAlertLog()));
+        root.addView(button("Clear Alert Log", v -> { AlertLog.clear(this); toast("Alert log cleared."); }));
 
         setContentView(scroll);
     }
@@ -438,6 +440,44 @@ public class MainActivity extends android.app.Activity {
 
     void toast(String value) {
         Toast.makeText(this, value, Toast.LENGTH_SHORT).show();
+    }
+
+    void showAlertLog() {
+        java.util.List<AlertLog.Entry> entries = AlertLog.load(this);
+        ScrollView scroll = new ScrollView(this);
+        LinearLayout layout = new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(16, 16, 16, 16);
+        scroll.addView(layout);
+
+        if (entries.isEmpty()) {
+            TextView empty = new TextView(this);
+            empty.setText("No alerts logged yet.");
+            empty.setTextColor(Color.rgb(180, 180, 190));
+            empty.setPadding(0, 16, 0, 16);
+            layout.addView(empty);
+        } else {
+            for (AlertLog.Entry entry : entries) {
+                TextView row = new TextView(this);
+                row.setText("[" + entry.timestamp + "] " + entry.title + "\n" + entry.body);
+                row.setTextColor(Color.rgb(220, 220, 230));
+                row.setTextSize(13);
+                row.setPadding(0, 8, 0, 8);
+                layout.addView(row);
+
+                View divider = new View(this);
+                divider.setBackgroundColor(Color.rgb(60, 60, 80));
+                divider.setLayoutParams(new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT, 1));
+                layout.addView(divider);
+            }
+        }
+
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("Alert Log (" + entries.size() + ")")
+            .setView(scroll)
+            .setPositiveButton("Close", null)
+            .show();
     }
 
     static String clean(String value) {
