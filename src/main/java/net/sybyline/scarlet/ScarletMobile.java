@@ -422,7 +422,14 @@ public class ScarletMobile implements Closeable
             if (!attempted && fallbackEndpoint != null)
             {
                 attempted = true;
-                this.postEvent(fallbackEndpoint, null, event);
+                String relaySecret = this.state.relaySecret;
+                Device relayDevice = null;
+                if (clean(relaySecret) != null)
+                {
+                    relayDevice = new Device();
+                    relayDevice.authToken = relaySecret;
+                }
+                this.postEvent(fallbackEndpoint, relayDevice, event);
             }
 
             if (!attempted)
@@ -643,6 +650,7 @@ public class ScarletMobile implements Closeable
         pending.createdAt = now;
         pending.expiresAt = now.plusMinutes(PAIRING_EXPIRES_MINUTES);
         this.state.pendingPairings.add(pending);
+        this.state.relaySecret = pairingSecret;
         this.save();
 
         JsonObject payload = new JsonObject();
@@ -712,6 +720,7 @@ public class ScarletMobile implements Closeable
                 // per-instance without any shared relay secret
                 if (clean(device.authToken) == null)
                     device.authToken = pairingSecret;
+                this.state.relaySecret = pairingSecret;
                 this.state.devices.removeIf(existing -> existing != null && Objects.equals(existing.id, device.id));
                 this.state.devices.add(device);
                 this.save();
@@ -1356,6 +1365,7 @@ public class ScarletMobile implements Closeable
     {
         String instanceId;
         String directToken;
+        String relaySecret;
         List<Device> devices = new ArrayList<>();
         List<PendingPairing> pendingPairings = new ArrayList<>();
     }
