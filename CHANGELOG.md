@@ -1,6 +1,55 @@
 
 # Changelog
 
+## 0.4.17-b4
+
+Moderation-callout and settings-reliability release.
+
+Highlights:
+
+- **Condensed TTS callouts.** Join-time announcements for a user (watched user, watched group(s), new account, suspicious pronouns) are now combined into a single spoken line, and multiple watched groups are read together instead of only the first.
+- **Smarter suspicious-pronoun detection.** Scarlet now recognizes real pronoun sets, including neopronouns, so fields like `she/her puppy` no longer false-flag, while genuinely abusive fields (self-harm directives, deny-listed terms, links/invites) are still caught.
+- **Settings reliability.** Dropdown settings now display their saved value instead of resetting to the default, and Discord commands that change a setting update the desktop UI live.
+- **Safer auto-invite default.** The verification auto-invite group now defaults to an obvious placeholder instead of a real group.
+
+### Added
+
+- `TTS: Announce suspicious pronouns` setting to toggle the spoken pronoun warning independently of the other announce switches.
+- Built-in recognition of common pronoun sets and neopronouns, plus more comprehensive default `good_pronoun.json` / `bad_pronoun.json` lists.
+
+### Changed
+
+- Join-time TTS callouts are consolidated into one spoken line per user; multiple watched groups are listed together; vote-to-kick and watched-avatar phrasing trimmed.
+- Suspicious-pronoun detection rewritten: a field containing a legitimate pronoun passes even with extra words, while self-harm/violence directives (including basic leetspeak), embedded deny-listed terms, and links/invites are flagged first.
+- Verification auto-invite group default changed from a real group to a placeholder.
+- Bumped Scarlet release / version metadata to `0.4.17-b4`.
+
+### Fixed
+
+- Dropdown settings (e.g. mobile minimum severity) reset to their default when the Settings tab was rebuilt; they now show the saved value, and can no longer be silently overwritten by re-selecting the shown default.
+- Settings changed via a Discord command now update the desktop Settings UI live — the change-listener registry no longer silently drops the UI updater (a `ConcurrentSkipListSet` comparator keyed only on priority treated distinct listeners as duplicates).
+
+## 0.4.17-b3
+
+Scarlet Companion (Android push notifications) release.
+
+Highlights:
+
+- **Scarlet Companion Android app.** Receive Scarlet alerts on your phone from anywhere in the world — no accounts, no third-party services. Pair by scanning a QR from Scarlet's settings.
+- **Per-alert notification sounds and an in-app alert log.**
+
+### Added
+
+- Scarlet Companion Android app, with push notifications relayed through a lightweight Node.js server, per-alert-type sounds, a persistent in-app alert log, and per-type / minimum-severity notification controls.
+
+### Changed
+
+- Bumped Scarlet release / version metadata to `0.4.17-b3`.
+
+### Fixed
+
+- Stale notification channels after app updates, notifications not arriving when switching Wi-Fi → mobile data, silent pairing failure when no Firebase was configured, and watched group/user notifications being filtered out by the default severity threshold.
+
 ## 0.4.17-b2
 
 TTS and packaging cleanup release.

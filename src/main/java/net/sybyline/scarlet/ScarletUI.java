@@ -52,6 +52,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import javax.swing.AbstractAction;
+import javax.swing.SwingUtilities;
 import javax.swing.Action;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
@@ -2994,7 +2995,11 @@ public class ScarletUI implements IScarletUI
             }
             else if (valid)
             {
-                this.render.setText(next);
+                // Defer to the EDT and to a fresh event: this may be invoked from a
+                // background thread (e.g. a Discord command), and calling setText
+                // synchronously here can re-enter the document while it's already
+                // mutating, throwing "Attempt to mutate in notification".
+                SwingUtilities.invokeLater(() -> this.render.setText(next));
             }
         }
     }
@@ -3186,7 +3191,8 @@ public class ScarletUI implements IScarletUI
             }
             else if (valid)
             {
-                this.render.setText(next.toString());
+                // May be invoked off the EDT (e.g. from a Discord command); update on the EDT.
+                SwingUtilities.invokeLater(() -> this.render.setText(next.toString()));
             }
         }
     }
@@ -3220,7 +3226,8 @@ public class ScarletUI implements IScarletUI
             }
             else if (valid)
             {
-                this.render.setSelected(next.booleanValue());
+                // May be invoked off the EDT (e.g. from a Discord command); update on the EDT.
+                SwingUtilities.invokeLater(() -> this.render.setSelected(next.booleanValue()));
             }
         }
     }
@@ -3230,7 +3237,11 @@ public class ScarletUI implements IScarletUI
         EnumSetting(ScarletSettings.FileValued<E> setting)
         {
             super(setting, new JComboBox<>(setting.ifNull.get().getDeclaringClass().getEnumConstants()));
-            this.render.setSelectedItem(setting.ifNull.get());
+            // Show the SAVED value, not the default. Using ifNull.get() here reset the
+            // dropdown to its default every time the Settings tab was rebuilt, so a saved
+            // value (e.g. mobile severity "Critical") looked like it hadn't saved — and
+            // re-selecting the shown default could silently overwrite the real value.
+            this.render.setSelectedItem(setting.get());
             this.render.addItemListener($ -> {
                 if ($.getStateChange() == ItemEvent.SELECTED)
                 {
@@ -3264,7 +3275,8 @@ public class ScarletUI implements IScarletUI
             }
             else if (valid)
             {
-                this.render.setSelectedItem(next);
+                // May be invoked off the EDT (e.g. from a Discord command); update on the EDT.
+                SwingUtilities.invokeLater(() -> this.render.setSelectedItem(next));
             }
         }
     }
@@ -3360,7 +3372,8 @@ public class ScarletUI implements IScarletUI
             }
             else if (valid && next != null)
             {
-                this.render.setSelectedItem(next);
+                // May be invoked off the EDT (e.g. from a Discord command); update on the EDT.
+                SwingUtilities.invokeLater(() -> this.render.setSelectedItem(next));
             }
         }
     }

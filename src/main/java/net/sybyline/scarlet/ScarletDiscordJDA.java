@@ -108,6 +108,7 @@ import net.dv8tion.jda.api.entities.channel.attribute.IPermissionContainer;
 import net.dv8tion.jda.api.entities.channel.concrete.TextChannel;
 import net.dv8tion.jda.api.entities.channel.concrete.ThreadChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.AudioChannel;
+import net.dv8tion.jda.api.entities.channel.middleman.GuildChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.GuildMessageChannel;
 import net.dv8tion.jda.api.entities.channel.middleman.MessageChannel;
 import net.dv8tion.jda.api.events.channel.ChannelCreateEvent;
@@ -120,6 +121,7 @@ import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.EntitySelectInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
 import net.dv8tion.jda.api.events.guild.member.GuildMemberJoinEvent;
+import net.dv8tion.jda.api.events.guild.member.GuildMemberRoleAddEvent;
 import net.dv8tion.jda.api.events.message.MessageReceivedEvent;
 import net.dv8tion.jda.api.events.session.ShutdownEvent;
 import net.dv8tion.jda.api.exceptions.InvalidTokenException;
@@ -173,7 +175,9 @@ public class ScarletDiscordJDA implements ScarletDiscord
         "If your ticket is regarding age verification;\n\n" +
         "You have 2 options.\n\n" +
         "Take a photo of your ID with everything but your birthday covered, with a piece of paper next to it with todays date, the server name, your Discord username, and your VRChat username.\n\n" +
-        "If you're an NSFW content creator and have a verified Fansly account, you can write within your bio the server name. Once that is done, take a screenshot and also send the link of your profile here.";
+        "If you're an NSFW content creator and have a verified Fansly account, you can write within your bio the server name. Once that is done, take a screenshot and also send the link of your profile here.\n\n" +
+        "Please run `/link-vrchat-account` in this ticket to link your VRChat account to get a group invite after you've verified.\n\n" +
+        "Note: you won't receive a VRChat group invite unless you've been verified and have the verified member role.";
 
     static String blockedAvatarSearchHost()
     {
@@ -467,6 +471,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
     final Map<String, InstanceCreation> instanceCreation = new ConcurrentHashMap<>();
     final Map<String, Map<String, Integer>> guildInviteUses = new ConcurrentHashMap<>();
     final Set<String> ticketToolAutoRespondedChannels = ConcurrentHashMap.newKeySet();
+    final Set<String> verifyLinkPromptedChannels = ConcurrentHashMap.newKeySet();
     final Map<String, Command.Choice> userSf2lastEdited_groupId = new ConcurrentHashMap<>();
     List<Command> currentCommands = new ArrayList<>();
     Map<String, ICommandReference> currentSlashCommandsMap = new HashMap<>();
@@ -1197,6 +1202,17 @@ public class ScarletDiscordJDA implements ScarletDiscord
         return true;
     }
 
+    /**
+     * Sets (or clears, if message is null/blank) the custom Ticket Tool age-verification
+     * auto-response message. When cleared, falls back to DEFAULT_TICKET_TOOL_AGE_VERIFICATION_MESSAGE.
+     */
+    public void setTicketToolAgeVerificationMessage(String message)
+    {
+        String trimmed = nonBlankOrNull(message);
+        this.ticketToolAgeVerificationMessage = trimmed == null ? DEFAULT_TICKET_TOOL_AGE_VERIFICATION_MESSAGE : trimmed;
+        this.save();
+    }
+
     void clearDeadPagination()
     {
         this.interactions.clearDeadPagination();
@@ -1412,6 +1428,12 @@ public class ScarletDiscordJDA implements ScarletDiscord
         public void onGuildMemberJoin(GuildMemberJoinEvent event)
         {
             ScarletDiscordJDA.this.handleGuildMemberJoin(event);
+        }
+
+        @Override
+        public void onGuildMemberRoleAdd(GuildMemberRoleAddEvent event)
+        {
+            ScarletDiscordJDA.this.handleGuildMemberRoleAdd(event);
         }
 
         @Override
@@ -1697,6 +1719,168 @@ public class ScarletDiscordJDA implements ScarletDiscord
                 this.emitDiscordJoinLog(event.getMember(), null, "Invite lookup failed: " + error.getMessage());
             }
         );
+    }
+
+    void handleGuildMemberRoleAdd(GuildMemberRoleAddEvent event)
+    {
+        if (!Objects.equals(event.getGuild().getId(), this.guildSf))
+            return;
+        if (!this.scarlet.autoInviteOnVerify.get())
+            return;
+        String verifiedRoleSf = this.scarlet.verifiedRoleSf.get();
+        if (verifiedRoleSf == null || verifiedRoleSf.isEmpty() || "1234567890".equals(verifiedRoleSf))
+            return;
+        boolean justVerified = event.getRoles().stream().anyMatch(role -> Objects.equals(role.getId(), verifiedRoleSf));
+        if (!justVerified)
+            return;
+        Member member = event.getMember();
+        String userSf = member.getId();
+        String vrcId = this.scarlet.data.globalMetadata_getSnowflakeId(userSf);
+        if (vrcId == null || vrcId.isEmpty())
+        {
+            LOG.info("Member {} ({}) was given the verified role but has no linked VRChat account; prompting them to link.", member.getEffectiveName(), userSf);
+            this.scarlet.exec.execute(() -> this.promptMemberToLinkVrchatAccount(member));
+            return;
+        }
+        this.scarlet.exec.execute(() -> this.tryAutoInviteToGroup(member, vrcId));
+    }
+
+    /**
+     * Called when a member receives the verified role but Scarlet has no Discord-to-VRChat
+     * account link on file for them (e.g. they were verified manually via a ticket, or via
+     * a separate bot like VRCLinker that doesn't share its link data with Scarlet). Finds
+     * their open ticket channel, if any, and asks them to self-link their VRChat account.
+     */
+    void promptMemberToLinkVrchatAccount(Member member)
+    {
+        Guild guild = member.getGuild();
+        GuildMessageChannel channel = this.findOpenTicketChannelFor(guild, member);
+        if (channel == null)
+        {
+            LOG.debug("No open ticket channel found for {} ({}); cannot prompt to link VRChat account.", member.getEffectiveName(), member.getId());
+            return;
+        }
+        String membersRoleSf = this.scarlet.membersRoleSf.get();
+        if (membersRoleSf != null && !membersRoleSf.isEmpty() && !"1234567890".equals(membersRoleSf))
+        {
+            if (!member.getRoles().stream().anyMatch(role -> Objects.equals(role.getId(), membersRoleSf)))
+            {
+                LOG.debug("Member {} ({}) does not have the configured members role; not prompting to link VRChat account.", member.getEffectiveName(), member.getId());
+                return;
+            }
+        }
+        if (!this.verifyLinkPromptedChannels.add(channel.getId()))
+            return;
+        String message = member.getUser().getAsMention() + "\n\n" +
+            "Thanks for getting verified! To get invited to our VRChat group, please link your VRChat account by running " +
+            "`/link-vrchat-account vrchat-user:<your VRChat user ID>` anywhere in this server. " +
+            "You can find your user ID on your VRChat profile page (it looks like `usr_XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX`).";
+        channel.sendMessage(message).queue(
+            sent -> LOG.info("Prompted {} ({}) to link their VRChat account in {} ({}).", member.getEffectiveName(), member.getId(), channel.getName(), channel.getId()),
+            error -> {
+                this.verifyLinkPromptedChannels.remove(channel.getId());
+                LOG.warn("Failed to prompt {} ({}) to link their VRChat account in {} ({}): {}", member.getEffectiveName(), member.getId(), channel.getName(), channel.getId(), error.getMessage());
+            }
+        );
+    }
+
+    /**
+     * Finds an open ticket-tool channel that the given member can view, based on the
+     * configured ticket category/channel-name pattern and per-member permission overrides.
+     */
+    GuildMessageChannel findOpenTicketChannelFor(Guild guild, Member member)
+    {
+        for (GuildChannel guildChannel : guild.getChannels())
+        {
+            if (!(guildChannel instanceof GuildMessageChannel))
+                continue;
+            GuildMessageChannel channel = (GuildMessageChannel)guildChannel;
+            if (!this.isTicketToolAutoResponseCandidate(channel))
+                continue;
+            if (!(channel instanceof IPermissionContainer))
+                continue;
+            PermissionOverride override = ((IPermissionContainer)channel).getPermissionOverride(member);
+            if (override != null && override.getAllowed().contains(Permission.VIEW_CHANNEL))
+                return channel;
+        }
+        return null;
+    }
+
+    /**
+     * Called when a member self-links their VRChat account via slash command. If they
+     * already hold the verified role, attempts the group auto-invite immediately and
+     * returns a short status message describing the result. Returns null if no invite
+     * attempt was applicable (e.g. auto-invite disabled, or member not yet verified).
+     */
+    String onSelfLinkedVrchatAccount(Member member, String vrcId)
+    {
+        if (!this.scarlet.autoInviteOnVerify.get())
+            return null;
+        String verifiedRoleSf = this.scarlet.verifiedRoleSf.get();
+        if (verifiedRoleSf == null || verifiedRoleSf.isEmpty() || "1234567890".equals(verifiedRoleSf))
+            return null;
+        if (!member.getRoles().stream().anyMatch(role -> Objects.equals(role.getId(), verifiedRoleSf)))
+            return null;
+        return this.tryAutoInviteToGroup(member, vrcId);
+    }
+
+    /**
+     * Attempts to invite the given VRChat user to the configured auto-invite group,
+     * skipping if they're already a member/invited/banned/blocking. Returns a short
+     * message describing the outcome, suitable for sending back to the Discord member.
+     */
+    String tryAutoInviteToGroup(Member member, String vrcId)
+    {
+        String groupId = this.scarlet.autoInviteGroupId.get();
+        if (groupId == null || groupId.isEmpty())
+            groupId = this.scarlet.vrc.groupId;
+        if (groupId == null || groupId.isEmpty())
+        {
+            LOG.warn("Cannot auto-invite {} to VRChat group: no group configured.", vrcId);
+            return "Could not send a VRChat group invite: no group is configured. Please contact staff.";
+        }
+        GroupMemberStatus status;
+        try
+        {
+            status = this.scarlet.vrc.getGroupMembershipStatus(groupId, vrcId);
+        }
+        catch (RuntimeException ex)
+        {
+            LOG.error("Failed to check VRChat group membership status for {} before auto-invite", vrcId, ex);
+            return "Could not check your VRChat group membership status right now. Please contact staff or try again later.";
+        }
+        // Only invite users who are neither already a member, already invited, requesting,
+        // banned, nor blocking the group; anything else risks a false/duplicate invite.
+        if (status != null && status != GroupMemberStatus.INACTIVE)
+        {
+            LOG.info("Skipping VRChat group auto-invite for {} to group {} (existing status={})", vrcId, groupId, status);
+            switch (status)
+            {
+            case MEMBER:
+                return "Looks like you're already a member of the VRChat group, so no invite was needed.";
+            case INVITED:
+                return "You already have a pending invite to the VRChat group - check your VRChat notifications.";
+            case REQUESTED:
+                return "You already have a pending join request for the VRChat group; staff will review it.";
+            case BANNED:
+                return "Could not send a VRChat group invite: please contact staff.";
+            case USERBLOCKED:
+                return "Could not send a VRChat group invite. Please contact staff if you'd like to join the group.";
+            default:
+                return "Could not send a VRChat group invite right now. Please contact staff.";
+            }
+        }
+        boolean ok = this.scarlet.vrc.inviteToGroup(groupId, vrcId, Boolean.FALSE);
+        if (ok)
+        {
+            LOG.info("Auto-invited Discord member {} (VRChat {}) to VRChat group {} after verification.", member.getId(), vrcId, groupId);
+            return "You've been sent an invite to our VRChat group - check your VRChat notifications!";
+        }
+        else
+        {
+            LOG.warn("Failed to auto-invite Discord member {} (VRChat {}) to VRChat group {} after verification.", member.getId(), vrcId, groupId);
+            return "Failed to send a VRChat group invite. Please contact staff.";
+        }
     }
 
     void handleChannelCreate(ChannelCreateEvent event)

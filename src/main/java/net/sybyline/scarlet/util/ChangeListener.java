@@ -34,6 +34,12 @@ public @FunctionalInterface interface ChangeListener<T>
         final Set<ChangeListenerHolder<T>> listeners = new ConcurrentSkipListSet<>();
         public boolean register(String source, int priority, boolean listensSelf, ChangeListener<T> listener)
         {
+            // Replace any existing listener registered under the same source. Without
+            // this, re-registering (e.g. when the settings UI is rebuilt after a
+            // relogin/reconnect/theme change) was rejected by the sorted set and left a
+            // stale listener bound to a discarded component — so live updates (like a
+            // Discord command changing a setting) never reached the visible widget.
+            this.listeners.removeIf($ -> $.source.equals(source));
             return this.listeners.add(new ChangeListenerHolder<>(source, priority, listensSelf, listener));
         }
         public boolean unregister(String source)
@@ -70,7 +76,13 @@ class ChangeListenerHolder<T> implements Comparable<ChangeListenerHolder<T>>
     @Override
     public int compareTo(ChangeListenerHolder<T> other)
     {
-        return Integer.compare(this.priority, other.priority);
+        // Tie-break by source. The backing ConcurrentSkipListSet decides element
+        // identity purely from compareTo, so comparing on priority alone made any two
+        // listeners with the same priority (every listener registers at priority 0)
+        // look "equal", silently dropping all but the first. Tie-breaking by source
+        // keeps this consistent with equals()/hashCode(), which key on source.
+        int cmp = Integer.compare(this.priority, other.priority);
+        return cmp != 0 ? cmp : this.source.compareTo(other.source);
     }
     @Override
     public int hashCode()

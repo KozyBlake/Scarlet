@@ -261,6 +261,10 @@ public class ScarletDiscordCommands
     public final SlashOption<DiscordAccountAgeThreshold> _discordAccountAgeThreshold = SlashOption.ofEnum("threshold", "Minimum Discord account age before flagging joins", true, DiscordAccountAgeThreshold.DISABLED);
     public final SlashOption<Boolean> _ticketToolAutoResponseEnabled = SlashOption.ofBool("enabled", "Whether the bot should auto-respond in Ticket Tool channels", false, null);
     public final SlashOption<Role> _ticketToolNotifyRole = SlashOption.ofRole("notify-role", "Role to ping with the ticket opener", false);
+    public final SlashOption<Boolean> _autoInviteEnabled = SlashOption.ofBool("enabled", "Whether to auto-invite newly-verified members to the VRChat group", false, null);
+    public final SlashOption<Role> _autoInviteRole = SlashOption.ofRole("verified-role", "The Discord role that, once given to a member, triggers the VRChat group invite", false);
+    public final SlashOption<Role> _membersRole = SlashOption.ofRole("members-role", "The Discord role members must have before being prompted to link their VRChat account", false);
+    public final SlashOption<String> _autoInviteGroupId = SlashOption.ofString("vrchat-group-id", "The VRChat group id to invite verified members to (grp_XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX)", false, null);
     public final SlashOption<String> _ticketToolChannelNameRegex = SlashOption.ofString("channel-name-regex", "Optional Java regex for ticket channel names; empty clears it", false, null);
     public final SlashOption<Integer> _daysBack = SlashOption.ofInt("days-back", "The number of days into the past to search for events", false, 4).with($->$.setRequiredRange(1L, 1000L));
     public final SlashOption<Integer> _hoursBack = SlashOption.ofInt("hours-back", "The number of hours into the past to search for events", false, 24).with($->$.setRequiredRange(1L, 24_000L));
@@ -4713,6 +4717,119 @@ public class ScarletDiscordCommands
             "Category: " + categoryText + "\n" +
             "Notify role: " + notifyRoleText + "\n" +
             "Channel-name regex: " + regexText).queue();
+    }
+
+    // set-ticket-tool-age-verification-message
+
+    @SlashCmd("set-ticket-age-verify-message")
+    @Desc("Set (or reset) the Ticket Tool age-verification auto-response message")
+    @DefaultPerms(Permission.MANAGE_SERVER)
+    public void setTicketToolAgeVerificationMessage(SlashCommandInteractionEvent event) throws Exception
+    {
+        Modal modal = Modal.create("settings:ticketToolAgeVerificationMessage", "Ticket age-verification message")
+            .addComponents(Label.of("Message (leave empty to reset to default)", TextInput.create("message", TextInputStyle.PARAGRAPH)
+                .setValue(this.discord.ticketToolAgeVerificationMessage)
+                .setRequired(false)
+                .setMaxLength(4000)
+                .build()))
+            .build();
+        DInteractions.ModalFlowImmediate immediate = interaction ->
+        {
+            String value = interaction.getValue("message").getAsString();
+            this.discord.setTicketToolAgeVerificationMessage(value);
+            interaction.replyFormat("Ticket Tool age-verification auto-response message updated:\n\n%s", this.discord.ticketToolAgeVerificationMessage).setEphemeral(true).queue();
+        };
+        ScarletDiscordCommands.this.discord.interactions.submitModalFlow(event, modal, immediate).queue();
+    }
+
+    // set-verification-auto-invite
+
+    @SlashCmd("set-verification-auto-invite")
+    @Desc("Configure auto-inviting newly-verified members to a VRChat group")
+    @DefaultPerms(Permission.MANAGE_SERVER)
+    @Ephemeral
+    public void setVerificationAutoInvite(SlashCommandInteractionEvent event, InteractionHook hook,
+                                          @SlashOpt("enabled") Boolean enabled,
+                                          @SlashOpt("verified-role") Role verifiedRole,
+                                          @SlashOpt("members-role") Role membersRole,
+                                          @SlashOpt("vrchat-group-id") String groupId) throws Exception
+    {
+        Scarlet scarlet = ScarletDiscordCommands.this.discord.scarlet;
+        List<String> errors = new ArrayList<>();
+
+        if (enabled != null)
+        {
+            scarlet.autoInviteOnVerify.set(enabled, "discord");
+        }
+        if (verifiedRole != null)
+        {
+            if (!scarlet.verifiedRoleSf.set(verifiedRole.getId(), "discord"))
+                errors.add("Could not save the verified role.");
+        }
+        if (membersRole != null)
+        {
+            if (!scarlet.membersRoleSf.set(membersRole.getId(), "discord"))
+                errors.add("Could not save the members role.");
+        }
+        if (groupId != null)
+        {
+            if (!VrcIds.id_group.matcher(groupId).matches())
+                errors.add("`"+groupId+"` doesn't look like a VRChat group id (expected `grp_XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX`).");
+            else if (!scarlet.autoInviteGroupId.set(groupId, "discord"))
+                errors.add("Could not save the VRChat group id.");
+        }
+
+        boolean nowEnabled = scarlet.autoInviteOnVerify.get();
+        String roleSf = scarlet.verifiedRoleSf.get();
+        String membersRoleSf = scarlet.membersRoleSf.get();
+        String currentGroupId = scarlet.autoInviteGroupId.get();
+
+        StringBuilder sb = new StringBuilder();
+        if (!errors.isEmpty())
+        {
+            sb.append("**Some changes could not be applied:**\n");
+            for (String error : errors)
+                sb.append("- ").append(error).append('\n');
+            sb.append('\n');
+        }
+        sb.append("**Verification auto-invite settings**\n");
+        sb.append("Enabled: ").append(nowEnabled ? "Yes" : "No").append('\n');
+        sb.append("Verified role: ").append(roleSf == null || roleSf.isEmpty() || "1234567890".equals(roleSf) ? "Not set" : "<@&"+roleSf+">").append('\n');
+        sb.append("Members role (required before link prompt): ").append(membersRoleSf == null || membersRoleSf.isEmpty() || "1234567890".equals(membersRoleSf) ? "Not set (no restriction)" : "<@&"+membersRoleSf+">").append('\n');
+        sb.append("VRChat group: ").append(currentGroupId == null || currentGroupId.isEmpty() ? "Not set" : MarkdownUtil.maskedLink(currentGroupId, VrcWeb.Home.group(currentGroupId)));
+
+        hook.sendMessage(sb.toString()).queue();
+    }
+
+    // link-vrchat-account
+
+    @SlashCmd("link-vrchat-account")
+    @Desc("Link your Discord account to your VRChat account")
+    @Ephemeral
+    public void linkVrchatAccount(SlashCommandInteractionEvent event, InteractionHook hook,
+                                  @SlashOpt("vrchat-user") io.github.vrchatapi.model.User vrchatUser) throws Exception
+    {
+        String vrcId = VrcIds.getAsString_user(event.getOption("vrchat-user"));
+        if (vrchatUser == null)
+        {
+            hook.sendMessageFormat("No VRChat user found with id %s", vrcId).queue();
+            return;
+        }
+        Member self = event.getMember();
+        if (self == null)
+        {
+            hook.sendMessage("Could not resolve your Discord membership.").queue();
+            return;
+        }
+        ScarletDiscordCommands.this.discord.scarlet.data.linkIdToSnowflake(vrchatUser.getId(), self.getId());
+        LOG.info("Self-link: Discord user {} ({}) linked to VRChat user {} ({})", self.getEffectiveName(), self.getId(), vrchatUser.getDisplayName(), vrchatUser.getId());
+        hook.sendMessageFormat("Linked your Discord account to VRChat user [%s](%s).", vrchatUser.getDisplayName(), VrcWeb.Home.user(vrchatUser.getId())).queue();
+        ScarletDiscordCommands.this.discord.scarlet.exec.execute(() ->
+        {
+            String inviteResult = ScarletDiscordCommands.this.discord.onSelfLinkedVrchatAccount(self, vrchatUser.getId());
+            if (inviteResult != null)
+                hook.sendMessage(inviteResult).queue();
+        });
     }
 
     // discord-warn

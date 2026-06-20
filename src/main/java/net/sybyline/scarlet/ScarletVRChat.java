@@ -2272,10 +2272,15 @@ CurrentUser getCurrentUser(AuthenticationApi auth) throws ApiException
 
     public boolean inviteToGroup(String targetUserId, Boolean confirmOverrideBlock)
     {
+        return this.inviteToGroup(this.groupId, targetUserId, confirmOverrideBlock);
+    }
+
+    public boolean inviteToGroup(String groupId, String targetUserId, Boolean confirmOverrideBlock)
+    {
         GroupsApi groups = new GroupsApi(this.client);
         try
         {
-            groups.createGroupInvite(this.groupId, new CreateGroupInviteRequest().userId(targetUserId).confirmOverrideBlock(confirmOverrideBlock));
+            groups.createGroupInvite(groupId, new CreateGroupInviteRequest().userId(targetUserId).confirmOverrideBlock(confirmOverrideBlock));
             return true;
         }
         catch (ApiException apiex)

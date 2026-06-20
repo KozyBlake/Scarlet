@@ -46,30 +46,49 @@ public class ScarletPronounLists
     // ── Default content written on first run ───────────────────────────────────
 
     private static final String[] DEFAULT_GOOD = {
+        // Binary + singular they + it
         "she/her", "she/her/hers",
         "he/him", "he/him/his",
-        "they/them", "they/them/theirs",
+        "they/them", "they/them/theirs", "they/them/themself",
+        "it/its", "one/one's",
+        // Common interchangeable mixes
         "she/they", "he/they", "they/she", "they/he", "she/he", "he/she",
-        "any", "any/all", "all/any",
-        "ask", "ask/me",
-        "xe/xem", "xe/xem/xyr",
-        "ze/hir", "ze/hir/hirs", "ze/zir",
-        "ey/em", "ey/em/eir",
-        "fae/faer",
-        "it/its",
-        "ve/ver",
-        "per/per",
-        "none", "no pronouns"
+        "he/him or she/her", "she/her or they/them", "he/him or they/them",
+        // Catch-alls people actually write
+        "any", "any/all", "all/any", "any pronouns", "any normative",
+        "ask", "ask/me", "ask me", "no pronouns", "none", "use my name",
+        // Popular neopronouns (nominative/accusative/possessive)
+        "ae/aer", "ae/aer/aers",
+        "ey/em", "ey/em/eir", "ey/em/eirs",
+        "e/em/eir", "e/em/es",
+        "fae/faer", "fae/faer/faers",
+        "xe/xem", "xe/xem/xyr", "xe/xem/xyrs", "xe/xir", "xe/xyr",
+        "ze/hir", "ze/hir/hirs", "ze/zir", "ze/zir/zirs", "zie/zir",
+        "co/cos", "hu/hum", "ne/nem", "ne/nir",
+        "per/per", "per/pers", "thon/thons",
+        "ve/ver", "ve/ver/vers", "vi/vir", "vi/vim",
+        "zhe/zher", "ki/kin"
     };
 
     private static final String[] DEFAULT_BAD = {
-        // Common username-style abuses seen in VRChat
+        // Common username-style / non-answer abuses seen in VRChat
         "nick/her",
         "nick/him",
         "call/me/daddy",
         "not/specified",
         "i/dont/care",
-        "who/cares"
+        "who/cares",
+        // Slurs and harassment commonly weaponised in the pronouns field.
+        // This is a user-editable deny-list — adjust it to taste. Self-harm and
+        // violence directives ("kill/yourself", "kys", …) are detected in code
+        // and do not need to be listed here.
+        "tranny",
+        "faggot",
+        "nigger",
+        "retard",
+        "kike",
+        "chink",
+        "spic"
     };
 
     // ──────────────────────────────────────────────────────────────────────────
@@ -101,6 +120,42 @@ public class ScarletPronounLists
     public boolean isKnownBad(String normalised)
     {
         return this.badSet.contains(normalised);
+    }
+
+    /**
+     * Returns {@code true} if any deny-list entry appears anywhere in the given
+     * field (whitespace-insensitive substring match), so embedded entries are
+     * caught — e.g. a deny-list entry {@code "call/me/daddy"} flags the field
+     * {@code "she/her call me daddy"}. Used by {@link PronounValidator}.
+     */
+    public boolean containsKnownBad(String normalised)
+    {
+        if (normalised == null || normalised.isEmpty() || this.badSet.isEmpty())
+            return false;
+        String haystack = despace(normalised);
+        synchronized (this.badSet)
+        {
+            for (String bad : this.badSet)
+            {
+                if (bad.isEmpty())
+                    continue;
+                if (haystack.contains(despace(bad)))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    private static String despace(String s)
+    {
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++)
+        {
+            char c = s.charAt(i);
+            if (!Character.isWhitespace(c))
+                sb.append(c);
+        }
+        return sb.toString();
     }
 
     // ── Load / save ────────────────────────────────────────────────────────────

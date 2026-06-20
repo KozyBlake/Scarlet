@@ -176,7 +176,7 @@ public class Scarlet implements Closeable
             if (implementationVersion != null && !implementationVersion.trim().isEmpty())
                 return implementationVersion.trim();
         }
-        return "0.4.17-b3";
+        return "0.4.17-b4";
     }
 
     public static void main(String[] args) throws Exception
@@ -735,7 +735,11 @@ public class Scarlet implements Closeable
                                      alertForAnnouncements = this.settings.new FileValuedBoolean("ui_alert_announcement", "Notify for KozyBlake announcements", true),
                                      showUiDuringLoad = this.settings.new FileValuedBoolean("ui_show_during_load", "Show UI during load", false),
                                      discordKickBanEnabled = this.settings.new FileValuedBoolean("discord_kick_ban_enabled", "Enable built-in Discord moderation commands", false),
-                                     discordKickBanPrompted = this.settings.new FileValuedBoolean("discord_kick_ban_prompted", "Discord moderation prompt shown", false);
+                                     discordKickBanPrompted = this.settings.new FileValuedBoolean("discord_kick_ban_prompted", "Discord moderation prompt shown", false),
+                                     autoInviteOnVerify = this.settings.new FileValuedBoolean("auto_invite_group_on_verify", "Auto-invite to VRChat group when the verified role is added", true);
+    final ScarletSettings.FileValued<String> verifiedRoleSf = this.settings.new FileValuedStringPattern("verified_role_snowflake", "Discord role snowflake that triggers VRChat group auto-invite", "1234567890", "\\d{1,20}", true);
+    final ScarletSettings.FileValued<String> membersRoleSf = this.settings.new FileValuedStringPattern("members_role_snowflake", "Discord role snowflake that members must have before being prompted to link their VRChat account", "1234567890", "\\d{1,20}", true);
+    final ScarletSettings.FileValued<String> autoInviteGroupId = this.settings.new FileValuedStringPattern("auto_invite_group_id", "VRChat group ID to auto-invite verified members to", "grp_abc12345-6789-0abc-def0-123456789abc", VrcIds.P_ID_GROUP, true);
     final ScarletSettings.FileValued<EnforcementAgeState> enforceInstances18plus = this.settings.new FileValuedEnum<>("enforce_instances_18_plus", "Instances: enforce 18+", EnforcementAgeState.DISABLED);
     final ScarletSettings.FileValued<EnforcementListState> enforceInstancesWorlds = this.settings.new FileValuedEnum<>("enforce_instances_worlds", "Instances: enforce worlds", EnforcementListState.DISABLED);
     final ScarletSettings.FileValued<String[]> enforceInstancesWorldList = this.settings.new FileValuedStringArrayPattern("enforce_instances_world_list", "Instances: enforce world list", new String[0], VrcIds.P_ID_WORLD, true);

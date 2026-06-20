@@ -1,11 +1,11 @@
 {
-  "latest_release": "0.4.17-b3",
-  "latest_build": "0.4.17-b3",
+  "latest_release": "0.4.17-b4",
+  "latest_build": "0.4.17-b4",
   "announcement": {
-    "id": "20260605-000000-b3",
+    "id": "20260619-000000-b4",
     "severity": "info",
-    "title": "0.4.17-b3 is now available.",
-    "message": "Scarlet 0.4.17-b3 is out! This release introduces the Scarlet Companion Android app — receive push notifications on your phone from anywhere in the world, no accounts required. Scan a pairing QR from Scarlet's settings to get started. Also includes notification sounds per alert type, an in-app alert log, and various fixes.",
-    "expires": "2026-08-01T00:00:00Z"
+    "title": "0.4.17-b4 is now available.",
+    "message": "Scarlet 0.4.17-b4 is out! This release condenses TTS join callouts into a single spoken line per user and reworks suspicious-pronoun detection — it now recognizes neopronouns (so real sets like \"she/her puppy\" stop false-flagging) while still catching genuinely abusive or troll fields. It also fixes settings dropdowns resetting their saved value when reopened, makes Discord setting commands update the desktop UI live, and changes the verification auto-invite default to a placeholder group so members are never invited into the wrong group.",
+    "expires": "2026-09-01T00:00:00Z"
   }
 }

@@ -84,6 +84,8 @@ public class DPerms
             "edit-report-template",
             "schedule-set-roles", "schedule-set-platforms");
         allowDefaults(PermType.ENTITY_SELECT);
+        allowDefaults(PermType.SLASH_COMMAND,
+            "link-vrchat-account");
     }
     static void allowDefaults(PermType permType, String... ops)
     {

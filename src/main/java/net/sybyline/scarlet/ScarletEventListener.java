@@ -73,6 +73,7 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         this.announceNewPlayers = scarlet.settings.new FileValuedBoolean("tts_announce_new_players", "TTS: Announce new players", true);
         this.announceMixedCharacterNames = scarlet.settings.new FileValuedBoolean("tts_announce_mixed_character_names", "TTS: Announce mixed-character names", true);
         this.announceVotesToKick = scarlet.settings.new FileValuedBoolean("tts_announce_votes_to_kick", "TTS: Announce Votes-to-Kick", true);
+        this.announceSuspiciousPronouns = scarlet.settings.new FileValuedBoolean("tts_announce_suspicious_pronouns", "TTS: Announce suspicious pronouns", true);
         this.announcePlayersNewerThan = scarlet.settings.new FileValuedIntRange("tts_announce_players_newer_than_days", "TTS: Announce players newer than (days)", 30, 1, 365);
 
         this.attemptAvatarImageMatch = scarlet.settings.new FileValuedBoolean("attempt_avatar_image_match", "Attempt avatar image match", false);
@@ -111,6 +112,7 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
                                      announceNewPlayers,
                                      announceMixedCharacterNames,
                                      announceVotesToKick,
+                                     announceSuspiciousPronouns,
                                      attemptAvatarImageMatch;
     final ScarletSettings.FileValued<Integer> announcePlayersNewerThan;
 
@@ -440,7 +442,7 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
                 .findFirst()
                 .ifPresent(watchedAvatar -> {
                     StringBuilder sb = new StringBuilder();
-                    sb.append("User ").append(TtsService.sanitizeName(userDisplayName)).append(" may be wearing a watched avatar.");
+                    sb.append(TtsService.sanitizeName(userDisplayName)).append(" may be wearing a watched avatar.");
                     if (watchedAvatar.message != null)
                         sb.append(' ').append(watchedAvatar.message);
                     this.scarlet.getTtsService().submit("wa-"+Long.toUnsignedString(System.nanoTime()), sb.toString());
@@ -475,6 +477,10 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         if (preamble) this.checkPlayerLimiter.await();
         Color overall_type = null;
 
+        // Spoken fragments for this join are collected here and emitted as a
+        // single combined TTS callout at the end, instead of one clip per rule.
+        List<String> ttsParts = new ArrayList<>();
+
         if (!preamble
          && !Objects.equals(this.clientUserId, userId)
          && TtsService.shouldAlertMixedCharacterName(userDisplayName))
@@ -490,8 +496,8 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         if (watchedUser != null && !watchedUser.silent)
         {
             advisories.add(watchedUser.message);
-            if (!preamble && this.announceWatchedUsers.get())
-                this.scarlet.getTtsService().submit("wu-"+Long.toUnsignedString(System.nanoTime()), watchedUser.message);
+            if (!preamble && this.announceWatchedUsers.get() && watchedUser.message != null && !watchedUser.message.trim().isEmpty())
+                ttsParts.add(endDot(watchedUser.message));
             if (!preamble)
                 this.scarlet.mobile.notifyWatchedUserJoined(userDisplayName, userId, watchedUser, this.clientLocation);
         }
@@ -524,11 +530,17 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
             {
                 if (!preamble && this.announceWatchedGroups.get())
                 {
-                    StringBuilder sb = new StringBuilder();
-                    sb.append("User ").append(TtsService.sanitizeName(userDisplayName)).append(" joined the lobby.");
-                    if (wg.message != null)
-                        sb.append(' ').append(wg.message);
-                    this.scarlet.getTtsService().submit("wg-"+Long.toUnsignedString(System.nanoTime()), sb.toString());
+                    java.util.List<String> groupMsgs = wgs.stream()
+                        .filter($ -> !$.silent)
+                        .map($ -> $.message)
+                        .filter($ -> $ != null && !$.trim().isEmpty())
+                        .collect(Collectors.toList());
+                    String clause = groupMsgs.isEmpty()
+                        ? "in a watched group"
+                        : (groupMsgs.size() == 1
+                            ? "Watched group: " + groupMsgs.get(0)
+                            : "Watched groups: " + String.join(", ", groupMsgs));
+                    ttsParts.add(endDot(clause));
                 }
                 if (!preamble)
                     this.scarlet.mobile.notifyWatchedGroupJoined(userDisplayName, userId, wg, this.clientLocation);
@@ -554,7 +566,7 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
             if (acctAgeDays <= this.announcePlayersNewerThan.get().longValue())
             {
                 if (newPlayerTtsWanted)
-                    this.scarlet.getTtsService().submit("new-"+Long.toUnsignedString(System.nanoTime()), "User "+TtsService.sanitizeName(userDisplayName)+" is new to VRChat, joined "+acctAgeDays+" days ago.");
+                    ttsParts.add("New, " + acctAgeDays + (acctAgeDays == 1L ? " day." : " days."));
                 if (newPlayerMobileWanted)
                     this.scarlet.mobile.notifyNewPlayerJoined(userDisplayName, userId, acctAgeDays, this.clientLocation);
             }
@@ -570,16 +582,39 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
                 advisories.add("\u26A0 Suspicious pronouns: \"" + pronouns + "\" \u2014 " + flagReason);
                 if (!preamble)
                 {
-                    this.scarlet.getTtsService().submit("pron-"+Long.toUnsignedString(System.nanoTime()),
-                        "Warning: " + TtsService.sanitizeName(userDisplayName) + " has suspicious pronouns: " + pronouns);
+                    if (this.announceSuspiciousPronouns.get())
+                        ttsParts.add("Suspicious pronouns: " + endDot(pronouns));
                     this.scarlet.mobile.notifySuspiciousPronouns(userDisplayName, userId, pronouns, flagReason, this.clientLocation);
                 }
             }
         }
         
         // TODO : check staff
-        
+
+        // Emit everything gathered above as one combined callout, e.g.
+        // "Vex joined the lobby. Watched groups: Raiders, Trolls. New, 5 days. Suspicious pronouns: ur/mom."
+        if (!preamble && !ttsParts.isEmpty())
+        {
+            StringBuilder line = new StringBuilder();
+            line.append(TtsService.sanitizeName(userDisplayName)).append(" joined the lobby.");
+            for (String part : ttsParts)
+                line.append(' ').append(part);
+            this.scarlet.getTtsService().submit("join-"+Long.toUnsignedString(System.nanoTime()), line.toString());
+        }
+
         return overall_type;
+    }
+
+    /** Trims a fragment and ensures it ends with sentence punctuation, for clean concatenation. */
+    static String endDot(String s)
+    {
+        if (s == null)
+            return "";
+        String t = s.trim();
+        if (t.isEmpty())
+            return "";
+        char last = t.charAt(t.length() - 1);
+        return (last == '.' || last == '!' || last == '?') ? t : t + ".";
     }
 
     @Override
@@ -604,8 +639,8 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
                 if (this.announceVotesToKick.get())
                 {
                     String vtktts = actorId == null
-                        ? ("A vote to kick was initiated against "+TtsService.sanitizeName(targetDisplayName)+".")
-                        : ("A vote to kick was initiated against "+TtsService.sanitizeName(targetDisplayName)+" by "+TtsService.sanitizeName(nullable_actorDisplayName)+".");
+                        ? ("Vote to kick against "+TtsService.sanitizeName(targetDisplayName)+".")
+                        : ("Vote to kick against "+TtsService.sanitizeName(targetDisplayName)+", by "+TtsService.sanitizeName(nullable_actorDisplayName)+".");
                     this.scarlet.getTtsService().submit("vtk-"+Long.toUnsignedString(System.nanoTime()), vtktts);
                 }
                 OffsetDateTime odt = MiscUtils.odt2utc(timestamp);
