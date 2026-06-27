@@ -519,6 +519,13 @@ public class ScarletData
         this.global.markDirty();
         return globalMeta;
     }
+    public ScarletData.GlobalMetadata globalMetadata_removeSnowflakeId(String userSnowflake)
+    {
+        ScarletData.GlobalMetadata globalMeta = this.global.get();
+        globalMeta.removeSnowflakeId(userSnowflake);
+        this.global.markDirty();
+        return globalMeta;
+    }
 
     public String liveInstancesMetadata_getLocationAudit(String location, boolean remove)
     {
@@ -666,6 +673,15 @@ public class ScarletData
             if (userSnowflake2userId == null)
                 return null;
             return userSnowflake2userId.get(userSnowflake);
+        }
+        public synchronized String removeSnowflakeId(String userSnowflake)
+        {
+            Map<String, String> userSnowflake2userId = this.userSnowflake2userId;
+            if (userSnowflake2userId == null)
+                return null;
+            if (!(userSnowflake2userId instanceof HashMap))
+                this.userSnowflake2userId = userSnowflake2userId = new HashMap<>(userSnowflake2userId);
+            return userSnowflake2userId.remove(userSnowflake);
         }
     }
 
@@ -922,6 +938,36 @@ public class ScarletData
     {
         this.userMetadata_setSnowflake(userId, userSnowflake);
         this.globalMetadata_setSnowflakeId(userSnowflake, userId);
+    }
+    /**
+     * Removes the Discord&lt;-&gt;VRChat link for the given Discord snowflake, clearing both
+     * sides of the association (the global snowflake-&gt;id map and the per-user snowflake).
+     * Returns the VRChat user id that was linked, or null if there was no link.
+     */
+    public String unlinkBySnowflake(String userSnowflake)
+    {
+        if (userSnowflake == null)
+            return null;
+        String userId = this.globalMetadata_getSnowflakeId(userSnowflake);
+        this.globalMetadata_removeSnowflakeId(userSnowflake);
+        if (userId != null)
+            this.userMetadata_setSnowflake(userId, null);
+        return userId;
+    }
+    /**
+     * Removes the Discord&lt;-&gt;VRChat link for the given VRChat user id, clearing both
+     * sides of the association (the per-user snowflake and the global snowflake-&gt;id map).
+     * Returns the Discord snowflake that was linked, or null if there was no link.
+     */
+    public String unlinkById(String userId)
+    {
+        if (userId == null)
+            return null;
+        String userSnowflake = this.userMetadata_getSnowflake(userId);
+        this.userMetadata_setSnowflake(userId, null);
+        if (userSnowflake != null)
+            this.globalMetadata_removeSnowflakeId(userSnowflake);
+        return userSnowflake;
     }
 
     public static class CustomEvent

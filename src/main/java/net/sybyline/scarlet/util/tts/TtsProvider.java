@@ -99,24 +99,24 @@ public interface TtsProvider extends Closeable
             }
         }
         
-        // Check if espeak is already installed
+        // Check if a supported Linux TTS engine is already installed.
         if (TtsPackageInstallDialogs.isPackageInstalled(Platform.$NIX))
         {
-            Scarlet.LOG.info("eSpeak is already installed, initializing TTS provider...");
+            Scarlet.LOG.info("A Linux TTS engine is already installed, initializing TTS provider...");
 
             try
             {
-                return new LinuxEspeakTtsProvider(dir);
+                return new LinuxCommandTtsProvider(dir);
             }
             catch (Exception ex)
             {
-                Scarlet.LOG.error("Failed to initialize LinuxEspeakTtsProvider even though espeak is installed", ex);
+                Scarlet.LOG.error("Failed to initialize LinuxCommandTtsProvider even though a TTS engine is installed", ex);
                 return new NullTtsProvider(dir);
             }
         }
         
         // Package not installed - show confirmation dialogs
-        Scarlet.LOG.info("eSpeak is not installed. Showing installation confirmation dialogs...");
+        Scarlet.LOG.info("No supported Linux TTS engine is installed. Showing installation confirmation dialogs...");
         
         // Show the install flow (this blocks until user responds)
         TtsPackageInstallDialogs.InstallDialogResult result = dialogs.showInstallFlow();
@@ -127,43 +127,43 @@ public interface TtsProvider extends Closeable
                 // Shouldn't happen since we checked above, but handle it
                 try
                 {
-                    return new LinuxEspeakTtsProvider(dir);
+                    return new LinuxCommandTtsProvider(dir);
                 }
                 catch (Exception ex)
                 {
-                    Scarlet.LOG.error("Failed to initialize LinuxEspeakTtsProvider", ex);
+                    Scarlet.LOG.error("Failed to initialize LinuxCommandTtsProvider", ex);
                     return new NullTtsProvider(dir);
                 }
                 
             case INSTALL_APPROVED_SUCCESS:
                 // User approved and installation succeeded
-                Scarlet.LOG.info("eSpeak installation successful, initializing TTS provider...");
+                Scarlet.LOG.info("Linux TTS engine installation successful, initializing TTS provider...");
                 try
                 {
-                    return new LinuxEspeakTtsProvider(dir);
+                    return new LinuxCommandTtsProvider(dir);
                 }
                 catch (Exception ex)
                 {
-                    Scarlet.LOG.error("Failed to initialize LinuxEspeakTtsProvider after successful installation", ex);
+                    Scarlet.LOG.error("Failed to initialize LinuxCommandTtsProvider after successful installation", ex);
                     return new NullTtsProvider(dir);
                 }
                 
             case INSTALL_APPROVED_FAILED:
                 // User approved but installation failed
-                Scarlet.LOG.warn("eSpeak installation failed, TTS will be disabled");
+                Scarlet.LOG.warn("Linux TTS engine installation failed, TTS will be disabled");
                 return new NullTtsProvider(dir);
                 
             case INSTALL_DECLINED:
                 // User declined installation
-                Scarlet.LOG.info("User declined eSpeak installation, TTS will be disabled");
+                Scarlet.LOG.info("User declined Linux TTS engine installation, TTS will be disabled");
                 return new NullTtsProvider(dir);
                 
             case HEADLESS_MODE:
-                // Running in headless mode - still try to initialize espeak if available
+                // Running in headless mode - still try to initialize a TTS engine if available.
                 Scarlet.LOG.info("Running in headless mode, attempting to initialize TTS without dialogs");
                 try
                 {
-                    return new LinuxEspeakTtsProvider(dir);
+                    return new LinuxCommandTtsProvider(dir);
                 }
                 catch (Exception ex)
                 {

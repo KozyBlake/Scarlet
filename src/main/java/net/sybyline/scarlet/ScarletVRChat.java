@@ -364,7 +364,7 @@ public class ScarletVRChat implements Closeable
     {
         int code = apiex.getCode();
         String body = apiex.getResponseBody();
-        if (body == null || body.isBlank())
+        if (body == null || body.trim().isEmpty())
             return "HTTP " + code;
         body = body.replace('\r', ' ').replace('\n', ' ').trim();
         return "HTTP " + code + " " + MiscUtils.maybeEllipsis(512, body);
@@ -1581,6 +1581,31 @@ CurrentUser getCurrentUser(AuthenticationApi auth) throws ApiException
             return null;
         }
     }
+    /**
+     * Always fetches the user straight from the API (bypassing the cache read) and refreshes
+     * the cache with the result. Use when up-to-the-moment profile data is required, e.g. to
+     * detect a bio change the user just made.
+     */
+    public User getUserFresh(String userId)
+    {
+        UsersApi users = new UsersApi(this.client);
+        try
+        {
+            User user = users.getUser(userId);
+            this.cachedUsers.put(userId, user);
+            this.cachedUsers.remove404(userId);
+            return user;
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            if (apiex.getMessage().contains("HTTP response code: 404"))
+                this.cachedUsers.add404(userId);
+            else
+                LOG.error("Error during get user (fresh): "+apiex.getMessage());
+            return null;
+        }
+    }
 
     public List<LimitedWorld> searchWorlds(String name, Integer n, Integer offset)
     {
@@ -1857,13 +1882,24 @@ CurrentUser getCurrentUser(AuthenticationApi auth) throws ApiException
         catch (ApiException apiex)
         {
             this.scarlet.checkVrcRefresh(apiex);
-            // Only return null for 404 (user not in group), propagate other errors
-            if (apiex.getCode() == 404)
+            // VRChat's GET /groups/{groupId}/members/{userId} signals a *non-member* with
+            // HTTP 403 "You're not a member" (NOT 404). A 404 means "Can't find group!".
+            // Treat both as "no membership record" so callers see a non-member (null)
+            // instead of a thrown error. Genuine permission/auth 403s (no "not a member"
+            // body) and all other codes still propagate.
+            int code = apiex.getCode();
+            String msg = String.valueOf(apiex.getMessage());
+            if (code == 403 && msg.contains("not a member"))
             {
-                LOG.debug("User {} is not a member of group {}", targetUserId, groupId);
+                LOG.debug("User {} is not a member of group {} (403 not-a-member)", targetUserId, groupId);
                 return null;
             }
-            LOG.error("Error getting group member group: "+apiex.getMessage());
+            if (code == 404)
+            {
+                LOG.warn("Group {} not found while checking membership for {} (404 can't-find-group)", groupId, targetUserId);
+                return null;
+            }
+            LOG.error("Error getting group member: "+apiex.getMessage());
             throw new RuntimeException("Failed to get group membership: " + apiex.getMessage(), apiex);
         }
     }
@@ -2277,18 +2313,111 @@ CurrentUser getCurrentUser(AuthenticationApi auth) throws ApiException
 
     public boolean inviteToGroup(String groupId, String targetUserId, Boolean confirmOverrideBlock)
     {
+        return this.inviteToGroupDetailed(groupId, targetUserId, confirmOverrideBlock).sent;
+    }
+
+    public GroupInviteResult inviteToGroupDetailed(String groupId, String targetUserId, Boolean confirmOverrideBlock)
+    {
+        if (groupId == null || groupId.isEmpty())
+            return GroupInviteResult.notConfigured(groupId, targetUserId);
         GroupsApi groups = new GroupsApi(this.client);
         try
         {
             groups.createGroupInvite(groupId, new CreateGroupInviteRequest().userId(targetUserId).confirmOverrideBlock(confirmOverrideBlock));
-            return true;
+            return GroupInviteResult.sent(groupId, targetUserId);
         }
         catch (ApiException apiex)
         {
             this.scarlet.checkVrcRefresh(apiex);
-            LOG.error("Error during invite to group: "+apiex.getMessage());
-            return false;
+            GroupInviteResult result = GroupInviteResult.failed(groupId, targetUserId, apiex);
+            if (result.expectedFailure)
+                LOG.warn("Group invite to {} for {} was not sent: {}", groupId, targetUserId, result.logSummary);
+            else
+                LOG.error("Error during invite to group: "+apiex.getMessage());
+            return result;
         }
+    }
+
+    public static final class GroupInviteResult
+    {
+        public static enum Status
+        {
+            SENT,
+            INVITER_NOT_MEMBER,
+            GROUP_NOT_FOUND,
+            TARGET_ALREADY_IN_GROUP_OR_INVITED,
+            FORBIDDEN,
+            FAILED
+        }
+
+        static GroupInviteResult sent(String groupId, String targetUserId)
+        {
+            return new GroupInviteResult(true, Status.SENT, groupId, targetUserId, 0, null, false, "sent");
+        }
+
+        static GroupInviteResult notConfigured(String groupId, String targetUserId)
+        {
+            return new GroupInviteResult(false, Status.GROUP_NOT_FOUND, groupId, targetUserId, 0, null, true, "no group configured");
+        }
+
+        static GroupInviteResult failed(String groupId, String targetUserId, ApiException apiex)
+        {
+            int code = apiex.getCode();
+            String body = apiex.getResponseBody();
+            String haystack = (String.valueOf(apiex.getMessage()) + "\n" + String.valueOf(body)).toLowerCase(java.util.Locale.ROOT);
+            Status status = Status.FAILED;
+            boolean expected = false;
+            String summary = summarizeApiException(apiex);
+
+            if (code == 403 && haystack.contains("not a member"))
+            {
+                status = Status.INVITER_NOT_MEMBER;
+                expected = true;
+                summary = "Scarlet's logged-in VRChat account is not a member of the configured auto-invite group";
+            }
+            else if (code == 404)
+            {
+                status = Status.GROUP_NOT_FOUND;
+                expected = true;
+                summary = "configured auto-invite group was not found";
+            }
+            else if ((code == 400 || code == 403 || code == 409)
+                  && (haystack.contains("already") || haystack.contains("invite") || haystack.contains("member")))
+            {
+                status = Status.TARGET_ALREADY_IN_GROUP_OR_INVITED;
+                expected = true;
+                summary = "target may already be in the group or have a pending invite";
+            }
+            else if (code == 401 || code == 403)
+            {
+                status = Status.FORBIDDEN;
+                expected = true;
+                summary = "VRChat rejected the invite; Scarlet's VRChat account may lack invite permission";
+            }
+
+            return new GroupInviteResult(false, status, groupId, targetUserId, code, body, expected, summary);
+        }
+
+        private GroupInviteResult(boolean sent, Status status, String groupId, String targetUserId, int httpCode, String responseBody, boolean expectedFailure, String logSummary)
+        {
+            this.sent = sent;
+            this.status = status;
+            this.groupId = groupId;
+            this.targetUserId = targetUserId;
+            this.httpCode = httpCode;
+            this.responseBody = responseBody;
+            this.expectedFailure = expectedFailure;
+            this.logSummary = logSummary;
+        }
+
+        public final boolean sent;
+        public final Status status;
+        public final String groupId;
+        public final String targetUserId;
+        public final int httpCode;
+        public final String responseBody;
+        public final boolean expectedFailure;
+        public final String logSummary;
     }
 
     public boolean respondToGroupJoinRequest(String targetUserId, GroupJoinRequestAction action, Boolean block)
@@ -2659,7 +2788,7 @@ CurrentUser getCurrentUser(AuthenticationApi auth) throws ApiException
                 return this.display;
             }
         }
-        AltDisplay[] alts = this.cookies.alts().stream().map(AltDisplay::new).toArray(AltDisplay[]::new);
+        AltDisplay[] alts = this.cookies.alts().stream().map(id -> new AltDisplay(id)).toArray(AltDisplay[]::new);
         this.scarlet.settings.requireSelectAsync("Select the credentials to remove", "Remove alternate credentials", alts, null, selected ->
         {
             if (selected == null)

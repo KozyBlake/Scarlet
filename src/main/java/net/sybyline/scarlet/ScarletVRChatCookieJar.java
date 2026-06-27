@@ -32,6 +32,7 @@ public class ScarletVRChatCookieJar implements CookieJar, Closeable
 
     ScarletVRChatCookieJar(Scarlet scarlet, String domain, File cookieFile)
     {
+        this.scarlet = scarlet;
         this.cookieStore = scarlet.settings.new RegistryStringEncrypted(domain+".cookieStore", true);
         this.cookieStoreAlt = scarlet.settings.new RegistryJsonEncrypted<>(domain+".cookieStoreAlt", true, null, new TypeToken<Map<String, List<String>>>(){}.getType());
         this.cookieFile = cookieFile;
@@ -40,6 +41,7 @@ public class ScarletVRChatCookieJar implements CookieJar, Closeable
         this.url = HttpUrl.parse(Scarlet.API_URL_2);
     }
 
+    private final Scarlet scarlet;
     private final ScarletSettings.RegistryStringEncrypted cookieStore;
     private final ScarletSettings.RegistryJsonEncrypted<Map<String, List<String>>> cookieStoreAlt;
     private final File cookieFile;
@@ -303,7 +305,10 @@ public class ScarletVRChatCookieJar implements CookieJar, Closeable
     @Override
     public void close() throws IOException
     {
-        this.save();
+        if (this.scarlet.shouldPersistOnShutdown())
+            this.save();
+        else
+            ScarletVRChat.LOG.info("Skipping VRChat cookie save after migration bundle import");
     }
 
 }

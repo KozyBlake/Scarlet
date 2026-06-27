@@ -88,6 +88,7 @@ import net.dv8tion.jda.api.entities.channel.Channel;
 import net.dv8tion.jda.api.entities.channel.ChannelType;
 import net.dv8tion.jda.api.events.interaction.ModalInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.CommandAutoCompleteInteractionEvent;
+import net.dv8tion.jda.api.events.interaction.component.ButtonInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.MessageContextInteractionEvent;
 import net.dv8tion.jda.api.events.interaction.command.SlashCommandInteractionEvent;
 import net.dv8tion.jda.api.interactions.InteractionHook;
@@ -105,6 +106,7 @@ import net.sybyline.scarlet.ext.AvatarSearch;
 import net.sybyline.scarlet.log.ScarletLogger;
 import net.sybyline.scarlet.server.discord.DEnum;
 import net.sybyline.scarlet.server.discord.DInteractions;
+import net.sybyline.scarlet.server.discord.DInteractions.ButtonClk;
 import net.sybyline.scarlet.server.discord.DInteractions.DefaultPerms;
 import net.sybyline.scarlet.server.discord.DInteractions.Desc;
 import net.sybyline.scarlet.server.discord.DInteractions.Ephemeral;
@@ -4783,6 +4785,9 @@ public class ScarletDiscordCommands
         String roleSf = scarlet.verifiedRoleSf.get();
         String membersRoleSf = scarlet.membersRoleSf.get();
         String currentGroupId = scarlet.autoInviteGroupId.get();
+        if (Scarlet.DEFAULT_AUTO_INVITE_GROUP_ID.equals(currentGroupId))
+            currentGroupId = null;
+        String effectiveGroupId = currentGroupId == null || currentGroupId.isEmpty() ? scarlet.vrc.groupId : currentGroupId;
 
         StringBuilder sb = new StringBuilder();
         if (!errors.isEmpty())
@@ -4796,7 +4801,9 @@ public class ScarletDiscordCommands
         sb.append("Enabled: ").append(nowEnabled ? "Yes" : "No").append('\n');
         sb.append("Verified role: ").append(roleSf == null || roleSf.isEmpty() || "1234567890".equals(roleSf) ? "Not set" : "<@&"+roleSf+">").append('\n');
         sb.append("Members role (required before link prompt): ").append(membersRoleSf == null || membersRoleSf.isEmpty() || "1234567890".equals(membersRoleSf) ? "Not set (no restriction)" : "<@&"+membersRoleSf+">").append('\n');
-        sb.append("VRChat group: ").append(currentGroupId == null || currentGroupId.isEmpty() ? "Not set" : MarkdownUtil.maskedLink(currentGroupId, VrcWeb.Home.group(currentGroupId)));
+        sb.append("VRChat group: ").append(effectiveGroupId == null || effectiveGroupId.isEmpty() ? "Not set" : MarkdownUtil.maskedLink(effectiveGroupId, VrcWeb.Home.group(effectiveGroupId)));
+        if (currentGroupId == null || currentGroupId.isEmpty())
+            sb.append(" (default)");
 
         hook.sendMessage(sb.toString()).queue();
     }
@@ -4821,15 +4828,244 @@ public class ScarletDiscordCommands
             hook.sendMessage("Could not resolve your Discord membership.").queue();
             return;
         }
-        ScarletDiscordCommands.this.discord.scarlet.data.linkIdToSnowflake(vrchatUser.getId(), self.getId());
-        LOG.info("Self-link: Discord user {} ({}) linked to VRChat user {} ({})", self.getEffectiveName(), self.getId(), vrchatUser.getDisplayName(), vrchatUser.getId());
-        hook.sendMessageFormat("Linked your Discord account to VRChat user [%s](%s).", vrchatUser.getDisplayName(), VrcWeb.Home.user(vrchatUser.getId())).queue();
+        // Everyone must prove they own the VRChat account before it's linked. Members who
+        // aren't verified yet will additionally be granted the member role once they pass.
+        boolean hadMemberRole = ScarletDiscordCommands.this.memberHasMembersRole(self);
+        if (!hadMemberRole)
+        {
+            // Not a member yet: require visible VRChat age verification before self-verifying.
+            io.github.vrchatapi.model.AgeVerificationStatus ageStatus = vrchatUser.getAgeVerificationStatus();
+            String ageValue = ageStatus == null ? null : ageStatus.getValue();
+            boolean ageVerified = "18+".equals(ageValue) || "verified".equals(ageValue);
+            if (!ageVerified)
+            {
+                LOG.info("Self-link: Discord user {} ({}) is not a member and VRChat {} age status is {}; directing to manual verification.", self.getEffectiveName(), self.getId(), vrchatUser.getId(), ageValue);
+                String manual = ScarletDiscordCommands.this.discord.scarlet.notVerifiedLinkMessage.get();
+                String body = (manual == null || manual.trim().isEmpty())
+                    ? "I couldn't verify you automatically. Please contact staff for manual verification."
+                    : "I couldn't verify you automatically.\n\n" + manual;
+                hook.sendMessage(body).setEphemeral(false).queue();
+                return;
+            }
+        }
+        String code = newVrcLinkCode();
+        ScarletDiscordCommands.this.pendingVrcLinks.put(self.getId(), new PendingVrcLink(vrchatUser.getId(), vrchatUser.getDisplayName(), code, System.currentTimeMillis() + VRC_LINK_CODE_TTL_MS, hadMemberRole));
+        LOG.info("Self-link: Discord user {} ({}) requested to link VRChat user {} ({}); awaiting bio-code verification (member={}).", self.getEffectiveName(), self.getId(), vrchatUser.getDisplayName(), vrchatUser.getId(), hadMemberRole);
+        String intro = hadMemberRole
+            ? String.format("To link [%s](%s) to your Discord account, confirm you own it.", vrchatUser.getDisplayName(), VrcWeb.Home.user(vrchatUser.getId()))
+            : String.format("You're not a verified member yet. To verify and join the VRChat group, confirm you own [%s](%s).", vrchatUser.getDisplayName(), VrcWeb.Home.user(vrchatUser.getId()));
+        hook.sendMessageFormat(
+                "%s\n\nAdd this code anywhere in your VRChat bio:\n```\n%s\n```\n"
+              + "Edit your bio at <https://vrchat.com/home/profile>, **save** it, then press the button below. You can remove the code afterward.\n"
+              + "This request expires in 30 minutes.",
+                intro, code)
+            .setComponents(ActionRow.of(Button.primary("linkvrc-verify:" + vrchatUser.getId(), "I've added the code — verify")))
+            .queue();
+    }
+
+    static final long VRC_LINK_CODE_TTL_MS = 30L * 60L * 1000L;
+
+    static String newVrcLinkCode()
+    {
+        return "VRC-VERIFY-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+    }
+
+    static final class PendingVrcLink
+    {
+        final String vrcId, displayName, code;
+        final long expiresAtEpochMs;
+        final boolean hadMemberRole;
+        PendingVrcLink(String vrcId, String displayName, String code, long expiresAtEpochMs, boolean hadMemberRole)
+        {
+            this.vrcId = vrcId;
+            this.displayName = displayName;
+            this.code = code;
+            this.expiresAtEpochMs = expiresAtEpochMs;
+            this.hadMemberRole = hadMemberRole;
+        }
+    }
+
+    final Map<String, PendingVrcLink> pendingVrcLinks = new ConcurrentHashMap<>();
+
+    boolean memberHasMembersRole(Member member)
+    {
+        String membersRoleSf = ScarletDiscordCommands.this.discord.scarlet.membersRoleSf.get();
+        if (membersRoleSf == null || membersRoleSf.isEmpty() || "1234567890".equals(membersRoleSf))
+            return false;
+        return member.getRoles().stream().anyMatch(role -> role.getId().equals(membersRoleSf));
+    }
+
+    /**
+     * Grants the configured members role to the given member if they don't already have it.
+     * Returns true if the member ends up with the role (already had it, or it was granted),
+     * false if the role isn't configured/resolvable or granting failed (e.g. missing perms).
+     */
+    boolean ensureMembersRole(Member member)
+    {
+        String membersRoleSf = ScarletDiscordCommands.this.discord.scarlet.membersRoleSf.get();
+        if (membersRoleSf == null || membersRoleSf.isEmpty() || "1234567890".equals(membersRoleSf))
+            return false;
+        net.dv8tion.jda.api.entities.Guild guild = member.getGuild();
+        Role role = guild.getRoleById(membersRoleSf);
+        if (role == null)
+            return false;
+        if (member.getRoles().contains(role))
+            return true;
+        try
+        {
+            guild.addRoleToMember(member, role).complete();
+            LOG.info("Granted members role {} to {} ({}) after VRChat bio verification.", role.getId(), member.getEffectiveName(), member.getId());
+            return true;
+        }
+        catch (RuntimeException ex)
+        {
+            LOG.error("Failed to grant members role {} to {} ({}): {}", membersRoleSf, member.getEffectiveName(), member.getId(), ex.getMessage());
+            return false;
+        }
+    }
+
+    @ButtonClk("linkvrc-verify")
+    public void linkVrchatVerify(ButtonInteractionEvent event)
+    {
+        String[] parts = event.getButton().getCustomId().split(":");
+        String vrcId = parts.length > 1 ? parts[1] : null;
+        Member self = event.getMember();
+        if (self == null)
+        {
+            event.editMessage("Could not resolve your Discord membership.").setComponents().queue();
+            return;
+        }
+        PendingVrcLink pending = ScarletDiscordCommands.this.pendingVrcLinks.get(self.getId());
+        if (pending == null || vrcId == null || !vrcId.equals(pending.vrcId))
+        {
+            event.editMessage("This link request is no longer active. Please run `/link-vrchat-account` again.").setComponents().queue();
+            return;
+        }
+        if (System.currentTimeMillis() > pending.expiresAtEpochMs)
+        {
+            ScarletDiscordCommands.this.pendingVrcLinks.remove(self.getId());
+            event.editMessage("This verification code has expired. Please run `/link-vrchat-account` again.").setComponents().queue();
+            return;
+        }
+        // Acknowledge immediately, then re-fetch the bio off-thread (forces a fresh API read).
+        event.deferEdit().queue();
         ScarletDiscordCommands.this.discord.scarlet.exec.execute(() ->
         {
-            String inviteResult = ScarletDiscordCommands.this.discord.onSelfLinkedVrchatAccount(self, vrchatUser.getId());
+            io.github.vrchatapi.model.User fresh = ScarletDiscordCommands.this.discord.scarlet.vrc.getUserFresh(pending.vrcId);
+            String bio = fresh == null ? null : fresh.getBio();
+            if (bio == null || !bio.contains(pending.code))
+            {
+                // Leave the button so they can fix their bio and retry; also offer manual verification.
+                String manual = ScarletDiscordCommands.this.discord.scarlet.notVerifiedLinkMessage.get();
+                String suffix = (manual == null || manual.trim().isEmpty()) ? "" : ("\n\n" + manual);
+                event.getHook().editOriginalFormat("I couldn't find the code `%s` in your VRChat bio. Double-check you **saved** your bio, then press the button again.%s", pending.code, suffix).queue();
+                return;
+            }
+            ScarletDiscordCommands.this.pendingVrcLinks.remove(self.getId());
+            ScarletDiscordCommands.this.discord.scarlet.data.linkIdToSnowflake(pending.vrcId, self.getId());
+            LOG.info("Self-link verified: Discord user {} ({}) linked to VRChat user {} ({}) via bio code.", self.getEffectiveName(), self.getId(), pending.displayName, pending.vrcId);
+            // Verified: grant the member role (if they don't have it yet), then invite to the group.
+            boolean roleOk = pending.hadMemberRole || ScarletDiscordCommands.this.ensureMembersRole(self);
+            String inviteResult = ScarletDiscordCommands.this.discord.tryAutoInviteToGroup(self, pending.vrcId);
+            StringBuilder sb = new StringBuilder();
+            sb.append("Verified! Linked your Discord account to VRChat user [").append(pending.displayName).append("](").append(VrcWeb.Home.user(pending.vrcId)).append(").");
+            if (!pending.hadMemberRole)
+                sb.append(roleOk ? "\nYou've been given the member role." : "\nI couldn't assign your member role automatically. Please contact staff.");
             if (inviteResult != null)
-                hook.sendMessage(inviteResult).queue();
+                sb.append('\n').append(inviteResult);
+            event.getHook().editOriginal(sb.toString()).setComponents().queue();
         });
+    }
+
+    // unlink-vrchat-account
+
+    @SlashCmd("unlink-vrchat-account")
+    @Desc("Unlink your Discord account from your linked VRChat account")
+    @Ephemeral
+    public void unlinkVrchatAccount(SlashCommandInteractionEvent event, InteractionHook hook)
+    {
+        Member self = event.getMember();
+        if (self == null)
+        {
+            hook.sendMessage("Could not resolve your Discord membership.").queue();
+            return;
+        }
+        String linkedVrcId = ScarletDiscordCommands.this.discord.scarlet.data.globalMetadata_getSnowflakeId(self.getId());
+        if (linkedVrcId == null || linkedVrcId.isEmpty())
+        {
+            hook.sendMessage("Your Discord account isn't linked to a VRChat account, so there's nothing to unlink.").queue();
+            return;
+        }
+        // Drop any in-flight verification, then clear both sides of the link.
+        ScarletDiscordCommands.this.pendingVrcLinks.remove(self.getId());
+        ScarletDiscordCommands.this.discord.scarlet.data.unlinkBySnowflake(self.getId());
+        LOG.info("Self-unlink: Discord user {} ({}) unlinked from VRChat user {}.", self.getEffectiveName(), self.getId(), linkedVrcId);
+        hook.sendMessageFormat(
+                "Unlinked your Discord account from VRChat user [%s](%s).\n"
+              + "This only removes the link record - it doesn't change your roles or VRChat group membership.\n"
+              + "You can run `/link-vrchat-account` again to re-link and test.",
+                linkedVrcId, VrcWeb.Home.user(linkedVrcId))
+            .queue();
+    }
+
+    // unlink-vrchat-account-for (staff)
+
+    @SlashCmd("unlink-vrchat-account-for")
+    @Desc("Staff: unlink another member's Discord/VRChat link (by Discord user and/or VRChat user)")
+    @DefaultPerms(Permission.MODERATE_MEMBERS)
+    @Ephemeral
+    public void unlinkVrchatAccountFor(SlashCommandInteractionEvent event, InteractionHook hook,
+                                       @Required(false) @SlashOpt("discord-user") Member discordUser,
+                                       @Required(false) @SlashOpt("vrchat-user") io.github.vrchatapi.model.User vrchatUser)
+    {
+        Member actor = event.getMember();
+        if (actor == null)
+        {
+            hook.sendMessage("Could not resolve your Discord membership.").queue();
+            return;
+        }
+        String targetSnowflake = discordUser == null ? null : discordUser.getId();
+        String targetVrcId = vrchatUser != null
+            ? vrchatUser.getId()
+            : (event.getOption("vrchat-user") == null ? null : VrcIds.getAsString_user(event.getOption("vrchat-user")));
+        if (targetSnowflake == null && (targetVrcId == null || targetVrcId.isEmpty()))
+        {
+            hook.sendMessage("Specify who to unlink: provide `discord-user` and/or `vrchat-user`.").queue();
+            return;
+        }
+        ScarletData data = ScarletDiscordCommands.this.discord.scarlet.data;
+        StringBuilder sb = new StringBuilder();
+        boolean any = false;
+        if (targetSnowflake != null)
+        {
+            String vrc = data.unlinkBySnowflake(targetSnowflake);
+            ScarletDiscordCommands.this.pendingVrcLinks.remove(targetSnowflake);
+            if (vrc != null)
+            {
+                any = true;
+                LOG.info("Staff-unlink: {} ({}) unlinked Discord {} from VRChat {}.", actor.getEffectiveName(), actor.getId(), targetSnowflake, vrc);
+                sb.append(String.format("Unlinked <@%s> from VRChat user [%s](%s).\n", targetSnowflake, vrc, VrcWeb.Home.user(vrc)));
+            }
+            else
+                sb.append(String.format("<@%s> wasn't linked to a VRChat account.\n", targetSnowflake));
+        }
+        if (targetVrcId != null && !targetVrcId.isEmpty())
+        {
+            String sf = data.unlinkById(targetVrcId);
+            if (sf != null)
+            {
+                any = true;
+                ScarletDiscordCommands.this.pendingVrcLinks.remove(sf);
+                LOG.info("Staff-unlink: {} ({}) unlinked VRChat {} from Discord {}.", actor.getEffectiveName(), actor.getId(), targetVrcId, sf);
+                sb.append(String.format("Unlinked VRChat user [%s](%s) from <@%s>.\n", targetVrcId, VrcWeb.Home.user(targetVrcId), sf));
+            }
+            else
+                sb.append(String.format("VRChat user [%s](%s) wasn't linked to a Discord account.\n", targetVrcId, VrcWeb.Home.user(targetVrcId)));
+        }
+        sb.append(any
+            ? "This only removes the link record - it doesn't change roles or VRChat group membership. They can run `/link-vrchat-account` to re-link."
+            : "Nothing was linked, so nothing changed.");
+        hook.sendMessage(sb.toString()).queue();
     }
 
     // discord-warn

@@ -4,7 +4,7 @@
   <groupId>net.sybyline</groupId>
   <artifactId>scarlet</artifactId>
   <name>Scarlet</name>
-  <version>0.4.17-b4</version>
+  <version>0.4.18</version>
   <build>
     <plugins>
       <plugin>
@@ -251,6 +251,10 @@
     <repository>
       <id>jitpack.io</id>
       <url>https://jitpack.io</url>
+    </repository>
+    <repository>
+      <id>jetbrains-intellij-dependencies</id>
+      <url>https://packages.jetbrains.team/maven/p/ij/intellij-dependencies</url>
     </repository>
   </repositories>
   <dependencyManagement>

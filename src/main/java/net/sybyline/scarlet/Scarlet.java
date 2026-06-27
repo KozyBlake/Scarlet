@@ -11,6 +11,7 @@ import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.Reader;
 import java.io.StringReader;
+import java.lang.management.ManagementFactory;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.HttpURLConnection;
@@ -33,6 +34,7 @@ import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.EnumSet;
@@ -79,6 +81,7 @@ import net.sybyline.scarlet.util.ProcLock;
 import net.sybyline.scarlet.util.SecurityRegressionChecks;
 import net.sybyline.scarlet.util.VrcIds;
 import net.sybyline.scarlet.util.VrchatApiVersionChecker;
+import net.sybyline.scarlet.util.tts.TtsPackageInstallDialogs;
 import net.sybyline.scarlet.util.tts.TtsService;
 import net.sybyline.scarlet.util.EnforcementAgeState;
 import net.sybyline.scarlet.util.EnforcementListState;
@@ -86,6 +89,7 @@ import net.sybyline.scarlet.util.EnforcementListState;
 public class Scarlet implements Closeable
 {
     private static final String DATA_FOLDER_NOTICE_ACK_FILENAME = "kozyblake-data-folder-notice-v1.flag";
+    static final String DEFAULT_AUTO_INVITE_GROUP_ID = "grp_abc12345-6789-0abc-def0-123456789abc";
     private static final long META_CACHE_BUSTER_INTERVAL_MILLIS = 5L * 60L * 1_000L;
     private static final Pattern SAFE_RELEASE_TAG = Pattern.compile("^[A-Za-z0-9._+-]+$");
 
@@ -176,11 +180,12 @@ public class Scarlet implements Closeable
             if (implementationVersion != null && !implementationVersion.trim().isEmpty())
                 return implementationVersion.trim();
         }
-        return "0.4.17-b4";
+        return "0.4.18";
     }
 
     public static void main(String[] args) throws Exception
     {
+        launchArgs = args == null ? new String[0] : args.clone();
         Thread.setDefaultUncaughtExceptionHandler(Scarlet::uncaughtException);
         int exitCode = 0;
         try
@@ -202,8 +207,91 @@ public class Scarlet implements Closeable
         }
         finally
         {
+            if (exitCode == 69 && !Boolean.getBoolean("scarlet.restart.externalOnly") && relaunchSelf())
+                exitCode = 0;
             System.exit(exitCode);
         }
+    }
+
+    private static volatile String[] launchArgs = new String[0];
+
+    private static boolean relaunchSelf()
+    {
+        List<String> command;
+        try
+        {
+            command = buildRelaunchCommand();
+        }
+        catch (Exception ex)
+        {
+            LOG.error("Could not build Scarlet restart command", ex);
+            return false;
+        }
+        try
+        {
+            ProcLock.releaseAll();
+            new ProcessBuilder(command)
+                .directory(new File(System.getProperty("user.dir")))
+                .inheritIO()
+                .start();
+            LOG.info("Started Scarlet restart process");
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LOG.error("Could not start Scarlet restart process: {}", command, ex);
+            return false;
+        }
+    }
+
+    private static List<String> buildRelaunchCommand()
+    {
+        List<String> command = new ArrayList<>();
+        command.add(javaExecutableForRelaunch());
+        command.addAll(ManagementFactory.getRuntimeMXBean().getInputArguments());
+
+        Path jar = MavenDepsLoader.jarPath();
+        if (jar != null && Files.isRegularFile(jar))
+        {
+            command.add("-jar");
+            command.add(jar.toAbsolutePath().toString());
+        }
+        else
+        {
+            command.add("-cp");
+            command.add(System.getProperty("java.class.path"));
+            command.add(mainClassForRelaunch());
+        }
+        command.addAll(Arrays.asList(launchArgs));
+        return command;
+    }
+
+    private static String javaExecutableForRelaunch()
+    {
+        File bin = new File(System.getProperty("java.home"), "bin");
+        String exe = "java";
+        if (Platform.CURRENT == Platform.NT)
+            exe = !GraphicsEnvironment.isHeadless() && System.console() == null ? "javaw.exe" : "java.exe";
+        File java = new File(bin, exe);
+        if (!java.isFile() && exe.endsWith("w.exe"))
+            java = new File(bin, "java.exe");
+        if (!java.isFile())
+            java = new File(bin, "java");
+        return java.getAbsolutePath();
+    }
+
+    private static String mainClassForRelaunch()
+    {
+        String command = System.getProperty("sun.java.command");
+        if (command != null)
+        {
+            command = command.trim();
+            int space = command.indexOf(' ');
+            String main = space < 0 ? command : command.substring(0, space);
+            if (!main.isEmpty() && !main.toLowerCase().endsWith(".jar"))
+                return main;
+        }
+        return Scarlet.class.getName();
     }
 
     public static final File user_home = new File(System.getProperty("user.home"));
@@ -511,6 +599,17 @@ public class Scarlet implements Closeable
     {
         return this.stop("shutdown", 0);
     }
+    public boolean stopAfterMigrationImport()
+    {
+        this.skipShutdownPersistence = true;
+        return this.stop("migration import", 0);
+    }
+    public boolean requestDataWipeOnShutdown()
+    {
+        this.wipeDataOnShutdown = true;
+        this.skipShutdownPersistence = true;
+        return this.stop("migration move-out wipe", 0);
+    }
     public boolean restart()
     {
         try (FileWriter fw = new FileWriter("scarlet.version"))
@@ -550,6 +649,10 @@ public class Scarlet implements Closeable
         this.running = false;
         this.exitCode = exitCode;
         return true;
+    }
+    boolean shouldPersistOnShutdown()
+    {
+        return !this.skipShutdownPersistence;
     }
 
     @Override
@@ -598,8 +701,29 @@ public class Scarlet implements Closeable
         MiscUtils.close(this.discord);
         MiscUtils.close(this.logs);
         MiscUtils.close(this.ui);
-        this.data.saveAll();
-        this.settings.updateRunVersionAndTime();
+        if (this.shouldPersistOnShutdown())
+        {
+            this.data.saveAll();
+            this.settings.updateRunVersionAndTime();
+        }
+        else
+        {
+            LOG.warn("Skipping shutdown persistence because a migration bundle was imported and must remain intact for restart");
+        }
+        // Move-out wipe runs last: executors are drained and logs are closed, so nothing can
+        // re-create the data we delete. Uses stderr/stdout since the logging system is closed.
+        if (this.wipeDataOnShutdown)
+        {
+            try
+            {
+                String summary = ScarletMigration.wipeLocalInstall();
+                System.out.println("Scarlet move-out: removed this computer's data and credentials (" + summary + ").");
+            }
+            catch (Exception ex)
+            {
+                System.err.println("Scarlet move-out wipe failed: " + ex);
+            }
+        }
         LOG.info("Finished shutdown flow");
     }
 
@@ -607,6 +731,8 @@ public class Scarlet implements Closeable
 
     volatile boolean running = true;
     volatile int exitCode = 0;
+    volatile boolean skipShutdownPersistence = false;
+    volatile boolean wipeDataOnShutdown = false;
     boolean staffMode = false;
     final String ipcAuthToken = this.loadOrCreateIpcAuthToken();
     // Whether System.in is a usable, readable handle.  Set to false the first
@@ -734,12 +860,14 @@ public class Scarlet implements Closeable
                                      alertForPreviewUpdates = this.settings.new FileValuedBoolean("ui_alert_update_preview", "Notify for preview updates", true),
                                      alertForAnnouncements = this.settings.new FileValuedBoolean("ui_alert_announcement", "Notify for KozyBlake announcements", true),
                                      showUiDuringLoad = this.settings.new FileValuedBoolean("ui_show_during_load", "Show UI during load", false),
+                                     showCliTab = this.settings.new FileValuedBoolean("ui_show_cli_tab", "Show CLI tab", true),
                                      discordKickBanEnabled = this.settings.new FileValuedBoolean("discord_kick_ban_enabled", "Enable built-in Discord moderation commands", false),
                                      discordKickBanPrompted = this.settings.new FileValuedBoolean("discord_kick_ban_prompted", "Discord moderation prompt shown", false),
                                      autoInviteOnVerify = this.settings.new FileValuedBoolean("auto_invite_group_on_verify", "Auto-invite to VRChat group when the verified role is added", true);
     final ScarletSettings.FileValued<String> verifiedRoleSf = this.settings.new FileValuedStringPattern("verified_role_snowflake", "Discord role snowflake that triggers VRChat group auto-invite", "1234567890", "\\d{1,20}", true);
     final ScarletSettings.FileValued<String> membersRoleSf = this.settings.new FileValuedStringPattern("members_role_snowflake", "Discord role snowflake that members must have before being prompted to link their VRChat account", "1234567890", "\\d{1,20}", true);
-    final ScarletSettings.FileValued<String> autoInviteGroupId = this.settings.new FileValuedStringPattern("auto_invite_group_id", "VRChat group ID to auto-invite verified members to", "grp_abc12345-6789-0abc-def0-123456789abc", VrcIds.P_ID_GROUP, true);
+    final ScarletSettings.FileValued<String> notVerifiedLinkMessage = this.settings.new FileValuedStringPattern("link_vrchat_manual_verify_message", "Message shown when a member can't be auto-verified and needs manual verification (blank to disable)", "Please open a ticket so an Orchard administrator can verify you manually.", null, true);
+    final ScarletSettings.FileValued<String> autoInviteGroupId = this.settings.new FileValuedStringPattern("auto_invite_group_id", "VRChat group ID to auto-invite verified members to", DEFAULT_AUTO_INVITE_GROUP_ID, VrcIds.P_ID_GROUP, true);
     final ScarletSettings.FileValued<EnforcementAgeState> enforceInstances18plus = this.settings.new FileValuedEnum<>("enforce_instances_18_plus", "Instances: enforce 18+", EnforcementAgeState.DISABLED);
     final ScarletSettings.FileValued<EnforcementListState> enforceInstancesWorlds = this.settings.new FileValuedEnum<>("enforce_instances_worlds", "Instances: enforce worlds", EnforcementListState.DISABLED);
     final ScarletSettings.FileValued<String[]> enforceInstancesWorldList = this.settings.new FileValuedStringArrayPattern("enforce_instances_world_list", "Instances: enforce world list", new String[0], VrcIds.P_ID_WORLD, true);
@@ -776,6 +904,12 @@ public class Scarlet implements Closeable
                                       this.splash.queueFeedbackPopup(null, 3_000L,
                                           "Pronoun lists reloaded",
                                           pronounLists.goodSet.size() + " good, " + pronounLists.badSet.size() + " bad entries");
+                                  }),
+                                  installLinuxTtsVoices = this.settings.new FileValuedVoid("Install Linux TTS voices", "Install...", () ->
+                                  {
+                                      this.execModal.execute(() ->
+                                          new TtsPackageInstallDialogs(Platform.$NIX, this.ui.getParentComponent())
+                                              .showOptionalPackageInstallDialog());
                                   }),
                                   runCliCommand = this.settings.new FileValuedVoid("Run CLI command", "Run", () ->
                                   {
@@ -1493,6 +1627,7 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
                 sb.append("\n  link <usr_id> <sf> — link a VRChat user to a Discord snowflake");
                 sb.append("\n  importgroups <file|URL>     — import watched groups (legacy CSV)");
                 sb.append("\n  importgroupsjson <file|URL> — import watched groups (JSON)");
+                sb.append("\n  reboot             - fully restart KozyBlake/Scarlet (alternate: restart)");
                 String msg = sb.toString();
                 System.out.println(msg);
                 if (out != null) out.accept(msg);
@@ -1508,6 +1643,14 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             case "stop": {
                 this.running = false;
                 String msg = "Stopping KozyBlake/Scarlet...";
+                LOG.info(msg);
+                if (out != null) out.accept(msg);
+            } break;
+            case "reboot":
+            case "restart": {
+                String msg = this.restart()
+                    ? "Restarting KozyBlake/Scarlet..."
+                    : "Restart is already queued";
                 LOG.info(msg);
                 if (out != null) out.accept(msg);
             } break;
@@ -1740,7 +1883,7 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
         VrchatApiVersionChecker.Report report = VrchatApiVersionChecker.check();
         this.vrchatApiPreflightReport = report;
         if (report.failure != null)
-            LOG.debug("VRChat API preflight check issue", report.failure);
+            this.logVrchatApiCheckFailure("VRChat API preflight check", report.failure);
         switch (report.level)
         {
         case OK:
@@ -1758,6 +1901,15 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             this.ui.refreshVrchatApiStatus();
             return;
         }
+    }
+
+    void logVrchatApiCheckFailure(String context, Throwable failure)
+    {
+        String summary = VrchatApiVersionChecker.summarizeFailure(failure);
+        if (VrchatApiVersionChecker.isExpectedUnavailable(failure))
+            LOG.debug("{} unavailable: {}", context, summary);
+        else
+            LOG.debug(context + " issue: " + summary, failure);
     }
 
     void showVrchatApiPreflightWarning(VrchatApiVersionChecker.Report report)

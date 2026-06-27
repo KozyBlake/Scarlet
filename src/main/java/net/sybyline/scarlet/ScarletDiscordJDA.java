@@ -272,7 +272,10 @@ public class ScarletDiscordJDA implements ScarletDiscord
     @Override
     public void close() throws IOException
     {
-        this.save();
+        if (this.scarlet.shouldPersistOnShutdown())
+            this.save();
+        else
+            LOG.info("Skipping Discord settings save after migration bundle import");
         if (this.jda == null)
             return;
         this.jda.shutdown();
@@ -1832,54 +1835,38 @@ public class ScarletDiscordJDA implements ScarletDiscord
     String tryAutoInviteToGroup(Member member, String vrcId)
     {
         String groupId = this.scarlet.autoInviteGroupId.get();
-        if (groupId == null || groupId.isEmpty())
+        if (groupId == null || groupId.isEmpty() || Scarlet.DEFAULT_AUTO_INVITE_GROUP_ID.equals(groupId))
             groupId = this.scarlet.vrc.groupId;
         if (groupId == null || groupId.isEmpty())
         {
             LOG.warn("Cannot auto-invite {} to VRChat group: no group configured.", vrcId);
             return "Could not send a VRChat group invite: no group is configured. Please contact staff.";
         }
-        GroupMemberStatus status;
-        try
-        {
-            status = this.scarlet.vrc.getGroupMembershipStatus(groupId, vrcId);
-        }
-        catch (RuntimeException ex)
-        {
-            LOG.error("Failed to check VRChat group membership status for {} before auto-invite", vrcId, ex);
-            return "Could not check your VRChat group membership status right now. Please contact staff or try again later.";
-        }
-        // Only invite users who are neither already a member, already invited, requesting,
-        // banned, nor blocking the group; anything else risks a false/duplicate invite.
-        if (status != null && status != GroupMemberStatus.INACTIVE)
-        {
-            LOG.info("Skipping VRChat group auto-invite for {} to group {} (existing status={})", vrcId, groupId, status);
-            switch (status)
-            {
-            case MEMBER:
-                return "Looks like you're already a member of the VRChat group, so no invite was needed.";
-            case INVITED:
-                return "You already have a pending invite to the VRChat group - check your VRChat notifications.";
-            case REQUESTED:
-                return "You already have a pending join request for the VRChat group; staff will review it.";
-            case BANNED:
-                return "Could not send a VRChat group invite: please contact staff.";
-            case USERBLOCKED:
-                return "Could not send a VRChat group invite. Please contact staff if you'd like to join the group.";
-            default:
-                return "Could not send a VRChat group invite right now. Please contact staff.";
-            }
-        }
-        boolean ok = this.scarlet.vrc.inviteToGroup(groupId, vrcId, Boolean.FALSE);
-        if (ok)
+        // Eligibility (VRChat age-verification OR the Discord member role) is already
+        // enforced upstream at /link-vrchat-account, so by the time we reach here the user
+        // has earned an invite. We deliberately do NOT pre-check their VRChat group
+        // membership: the invite result classifies already-members, pending invites,
+        // permission issues, and setup errors so the Discord reply can be precise.
+        ScarletVRChat.GroupInviteResult invite = this.scarlet.vrc.inviteToGroupDetailed(groupId, vrcId, Boolean.FALSE);
+        if (invite.sent)
         {
             LOG.info("Auto-invited Discord member {} (VRChat {}) to VRChat group {} after verification.", member.getId(), vrcId, groupId);
             return "You've been sent an invite to our VRChat group - check your VRChat notifications!";
         }
-        else
+        LOG.warn("Auto-invite to VRChat group {} for {} (VRChat {}) was not sent: {}", groupId, member.getId(), vrcId, invite.logSummary);
+        switch (invite.status)
         {
-            LOG.warn("Failed to auto-invite Discord member {} (VRChat {}) to VRChat group {} after verification.", member.getId(), vrcId, groupId);
-            return "Failed to send a VRChat group invite. Please contact staff.";
+        case INVITER_NOT_MEMBER:
+            return "I couldn't send a VRChat group invite because Scarlet's VRChat account is not a member of the configured group. Staff need to update the auto-invite group or log Scarlet into a VRChat account that can invite there.";
+        case GROUP_NOT_FOUND:
+            return "I couldn't send a VRChat group invite because the configured VRChat group could not be found. Staff need to update the auto-invite group setting.";
+        case FORBIDDEN:
+            return "I couldn't send a VRChat group invite because VRChat rejected Scarlet's group permissions. Staff need to make sure Scarlet's VRChat account has permission to invite members.";
+        case TARGET_ALREADY_IN_GROUP_OR_INVITED:
+            return "I couldn't send a VRChat group invite - you may already be in the group or have a pending invite. Check your VRChat notifications, and contact staff if you still need access.";
+        case FAILED:
+        default:
+            return "I couldn't send a VRChat group invite because VRChat rejected the request. Please contact staff if you still need access.";
         }
     }
 

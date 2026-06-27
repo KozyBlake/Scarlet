@@ -1,11 +1,11 @@
 {
-  "latest_release": "0.4.17-b4",
-  "latest_build": "0.4.17-b4",
+  "latest_release": "0.4.18",
+  "latest_build": "0.4.18",
   "announcement": {
     "id": "20260619-000000-b4",
     "severity": "info",
-    "title": "0.4.17-b4 is now available.",
-    "message": "Scarlet 0.4.17-b4 is out! This release condenses TTS join callouts into a single spoken line per user and reworks suspicious-pronoun detection — it now recognizes neopronouns (so real sets like \"she/her puppy\" stop false-flagging) while still catching genuinely abusive or troll fields. It also fixes settings dropdowns resetting their saved value when reopened, makes Discord setting commands update the desktop UI live, and changes the verification auto-invite default to a placeholder group so members are never invited into the wrong group.",
-    "expires": "2026-09-01T00:00:00Z"
+    "title": "0.4.18 is now available!",
+    "message": "Scarlet 0.4.18 ships desktop notifications with per-category toggles (Windows native tray, Linux notify-send, macOS osascript) and one-file PIN-encrypted migration bundles for moving your entire identity between machines. The main window gains right-click column hiding and a View menu to hide the CLI tab. Linux users get live package-install progress with an embedded terminal, guided TTS voice/audio-player install, and TTS now plays through the system sound server so it follows your selected device. You can now self-service unlink your VRChat account, and suspicious-pronoun detection has a master toggle. Dozens of fixes landed: Linux installs actually run, auto-invite 403s are handled correctly, Linux TTS plays on the right output, popups match the dark theme, and the migration path is hardened against zip bombs and XXE attacks.",
+    "expires": "2026-07-04T00:00:00Z"
   }
 }

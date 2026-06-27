@@ -344,6 +344,38 @@ public class Swing
         UIManager.put("ToolTip.background",            BG_PANEL);
         UIManager.put("ToolTip.foreground",            FG_MAIN);
         UIManager.put("ToolTip.border",                BorderFactory.createMatteBorder(1, 1, 1, 1, accent));
+
+        // ── Dialogs / popups ───────────────────────────────────────────────────
+        // Without these, JOptionPane popups and their text components fall back to
+        // FlatLaf's lighter default grey, which clashes with the darker custom palette
+        // used by the main window. Match them to the main UI so popups look consistent.
+        UIManager.put("OptionPane.background",         BG_BASE);
+        UIManager.put("OptionPane.foreground",         FG_MAIN);
+        UIManager.put("OptionPane.messageForeground",  FG_MAIN);
+
+        UIManager.put("TextArea.background",           BG_INPUT);
+        UIManager.put("TextArea.foreground",           FG_MAIN);
+        UIManager.put("TextArea.caretForeground",      accent);
+        UIManager.put("TextArea.selectionBackground",  selBg);
+        UIManager.put("TextArea.selectionForeground",  Color.WHITE);
+        UIManager.put("TextArea.inactiveForeground",   FG_DIM);
+
+        UIManager.put("TextPane.background",           BG_INPUT);
+        UIManager.put("TextPane.foreground",           FG_MAIN);
+        UIManager.put("TextPane.caretForeground",      accent);
+        UIManager.put("TextPane.selectionBackground",  selBg);
+        UIManager.put("TextPane.selectionForeground",  Color.WHITE);
+
+        UIManager.put("EditorPane.background",         BG_INPUT);
+        UIManager.put("EditorPane.foreground",         FG_MAIN);
+        UIManager.put("EditorPane.caretForeground",    accent);
+        UIManager.put("EditorPane.selectionBackground", selBg);
+        UIManager.put("EditorPane.selectionForeground", Color.WHITE);
+
+        UIManager.put("List.background",               BG_INPUT);
+        UIManager.put("List.foreground",               FG_MAIN);
+        UIManager.put("List.selectionBackground",      selBg);
+        UIManager.put("List.selectionForeground",      Color.WHITE);
     }
 
     /**

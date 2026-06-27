@@ -1,4 +1,4 @@
-# Scarlet 0.4.17-b4 Release Notes
+# Scarlet 0.4.18 Release Notes
 
 A moderation-callout and settings-reliability release. The headline changes are shorter, less noisy TTS callouts and a much smarter suspicious-pronoun check, plus two settings fixes that make configuration behave the way you'd expect.
 
@@ -39,8 +39,8 @@ The default **VRChat group to auto-invite verified members to** was previously a
 
 | File | Description |
 |------|-------------|
-| `scarlet-0.4.17-b4.jar` | Scarlet desktop application |
-| `scarlet-0.4.17-b4-android.jar` | Scarlet Android application |
+| `scarlet-0.4.18.jar` | Scarlet desktop application |
+| `scarlet-0.4.18-android.jar` | Scarlet Android application |
 
 The **Scarlet Companion** Android app is unchanged since `0.4.17-b3`; keep using the APK from that release.
 

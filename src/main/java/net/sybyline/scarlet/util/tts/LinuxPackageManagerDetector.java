@@ -18,7 +18,7 @@ import net.sybyline.scarlet.util.Platform;
  * Comprehensive Linux Package Manager Detection and Management.
  * 
  * This class detects available package managers on Linux systems and provides
- * appropriate installation commands for packages like espeak.
+ * appropriate installation commands for Scarlet's Linux TTS engine packages.
  * 
  * Supported package managers:
  * - apt (Debian/Ubuntu)
@@ -77,10 +77,47 @@ public class LinuxPackageManagerDetector {
             return installCommand;
         }
 
+        public String getInstallCommand() {
+            return getFullInstallCommand().replace("{pkg}", packageName);
+        }
+
         @Override
         public String toString() {
             return String.format("PackageManager[%s, available=%s, cmd=%s]", 
-                name, isAvailable, getFullInstallCommand());
+                name, isAvailable, getInstallCommand());
+        }
+    }
+
+    /**
+     * A command-line TTS engine package Scarlet knows how to use directly.
+     */
+    public static class TtsPackageOption {
+        public final String id;
+        public final String displayName;
+        public final String commandName;
+        public final String packageName;
+        public final String description;
+
+        public TtsPackageOption(String id, String displayName, String commandName,
+                                String packageName, String description) {
+            this.id = id;
+            this.displayName = displayName;
+            this.commandName = commandName;
+            this.packageName = packageName;
+            this.description = description;
+        }
+
+        public boolean isInstalled() {
+            return LinuxCommandTtsProvider.isCommandAvailable(this.commandName);
+        }
+
+        public String getInstallCommand(PackageManager pm) {
+            return pm.getFullInstallCommand().replace("{pkg}", this.packageName);
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s (%s)", this.displayName, this.packageName);
         }
     }
 
@@ -94,31 +131,31 @@ public class LinuxPackageManagerDetector {
     private static final Map<String, String[]> PACKAGE_MANAGER_DEFINITIONS = new LinkedHashMap<>();
     
     static {
-        // Format: name -> {install_cmd_format, search_cmd_format, package_name, requires_sudo}
-        // The install command format uses {pkg} as placeholder for package name
+        // Format: name -> {install_cmd_format, search_cmd_format, default_tts_package_name, requires_sudo}
+        // The install command format uses {pkg} as placeholder for package names.
         
         // Debian/Ubuntu family
         PACKAGE_MANAGER_DEFINITIONS.put("pkg", new String[]{
             "pkg install -y {pkg}", "pkg search {pkg}", "espeak", "false"
         });
         PACKAGE_MANAGER_DEFINITIONS.put("apt", new String[]{
-            "apt install -y {pkg}", "apt search {pkg}", "espeak", "true"
+            "apt install -y {pkg}", "apt search {pkg}", "espeak-ng", "true"
         });
         PACKAGE_MANAGER_DEFINITIONS.put("apt-get", new String[]{
-            "apt-get install -y {pkg}", "apt-cache search {pkg}", "espeak", "true"
+            "apt-get install -y {pkg}", "apt-cache search {pkg}", "espeak-ng", "true"
         });
         
         // Red Hat family
         PACKAGE_MANAGER_DEFINITIONS.put("dnf", new String[]{
-            "dnf install -y {pkg}", "dnf search {pkg}", "espeak", "true"
+            "dnf install -y {pkg}", "dnf search {pkg}", "espeak-ng", "true"
         });
         PACKAGE_MANAGER_DEFINITIONS.put("yum", new String[]{
-            "yum install -y {pkg}", "yum search {pkg}", "espeak", "true"
+            "yum install -y {pkg}", "yum search {pkg}", "espeak-ng", "true"
         });
         
         // Arch Linux family
         PACKAGE_MANAGER_DEFINITIONS.put("pacman", new String[]{
-            "pacman -S --noconfirm {pkg}", "pacman -Ss {pkg}", "espeak", "true"
+            "pacman -S --noconfirm --needed {pkg}", "pacman -Ss {pkg}", "espeak-ng", "true"
         });
         PACKAGE_MANAGER_DEFINITIONS.put("yay", new String[]{
             "yay -S --noconfirm --needed {pkg}", "yay -Ss {pkg}", "espeak-ng", "false"
@@ -127,32 +164,32 @@ public class LinuxPackageManagerDetector {
             "paru -S --noconfirm --needed {pkg}", "paru -Ss {pkg}", "espeak-ng", "false"
         });
         PACKAGE_MANAGER_DEFINITIONS.put("pamac", new String[]{
-            "pamac install --no-confirm {pkg}", "pamac search {pkg}", "espeak", "false"
+            "pamac install --no-confirm {pkg}", "pamac search {pkg}", "espeak-ng", "false"
         });
         
         // openSUSE
         PACKAGE_MANAGER_DEFINITIONS.put("zypper", new String[]{
-            "zypper install -y {pkg}", "zypper search {pkg}", "espeak", "true"
+            "zypper install -y {pkg}", "zypper search {pkg}", "espeak-ng", "true"
         });
         
         // Alpine Linux
         PACKAGE_MANAGER_DEFINITIONS.put("apk", new String[]{
-            "apk add {pkg}", "apk search {pkg}", "espeak", "true"
+            "apk add {pkg}", "apk search {pkg}", "espeak-ng", "true"
         });
         
         // Void Linux
         PACKAGE_MANAGER_DEFINITIONS.put("xbps-install", new String[]{
-            "xbps-install -y {pkg}", "xbps-query -Rs {pkg}", "espeak", "true"
+            "xbps-install -y {pkg}", "xbps-query -Rs {pkg}", "espeak-ng", "true"
         });
         
         // Gentoo
         PACKAGE_MANAGER_DEFINITIONS.put("emerge", new String[]{
-            "emerge --ask n {pkg}", "emerge --search {pkg}", "app-accessibility/espeak", "true"
+            "emerge --ask=n {pkg}", "emerge --search {pkg}", "app-accessibility/espeak-ng", "true"
         });
         
         // Solus
         PACKAGE_MANAGER_DEFINITIONS.put("eopkg", new String[]{
-            "eopkg install -y {pkg}", "eopkg search {pkg}", "espeak", "true"
+            "eopkg install -y {pkg}", "eopkg search {pkg}", "espeak-ng", "true"
         });
         
         // Clear Linux
@@ -162,27 +199,146 @@ public class LinuxPackageManagerDetector {
         
         // Nix family
         PACKAGE_MANAGER_DEFINITIONS.put("nix-env", new String[]{
-            "nix-env -iA nixpkgs.{pkg}", "nix-env -qaP {pkg}", "espeak", "false"
+            "nix-env -iA {pkg}", "nix-env -qaP {pkg}", "nixpkgs.espeak", "false"
         });
         PACKAGE_MANAGER_DEFINITIONS.put("nix-shell", new String[]{
             "nix-shell -p {pkg}", "nix-env -qaP {pkg}", "espeak", "false"
         });
         PACKAGE_MANAGER_DEFINITIONS.put("nix", new String[]{
-            "nix profile install nixpkgs#{pkg}", "nix search nixpkgs {pkg}", "espeak", "false"
+            "nix profile install {pkg}", "nix search nixpkgs {pkg}", "nixpkgs#espeak", "false"
         });
         
         // Universal package managers
         PACKAGE_MANAGER_DEFINITIONS.put("flatpak", new String[]{
-            "flatpak install -y flathub {pkg}", "flatpak search {pkg}", "espeak", "false"
+            "flatpak install -y flathub {pkg}", "flatpak search {pkg}", "", "false"
         });
         PACKAGE_MANAGER_DEFINITIONS.put("snap", new String[]{
-            "snap install {pkg}", "snap find {pkg}", "espeak-ng", "true"
+            "snap install {pkg}", "snap find {pkg}", "mimic --beta", "true"
         });
         
         // Homebrew Linux
         PACKAGE_MANAGER_DEFINITIONS.put("brew", new String[]{
-            "brew install {pkg}", "brew search {pkg}", "espeak", "false"
+            "brew install {pkg}", "brew search {pkg}", "espeak-ng", "false"
         });
+    }
+
+    private static final Map<String, String[][]> TTS_PACKAGE_OPTIONS = new LinkedHashMap<>();
+    private static final Map<String, String> DESKTOP_NOTIFICATION_PACKAGES = new LinkedHashMap<>();
+
+    static {
+        // Format: {id, display_name, command_name, package_names, description}
+        TTS_PACKAGE_OPTIONS.put("pkg", new String[][]{
+            opt("espeak", "eSpeak", "espeak", "espeak", "Termux's compact fallback TTS engine")
+        });
+
+        String[][] debianLike = new String[][]{
+            opt("espeak-ng", "eSpeak NG", "espeak-ng", "espeak-ng", "Broad language support and the default Linux fallback"),
+            opt("flite", "Flite", "flite", "flite", "Lightweight CMU voices that are often clearer than eSpeak"),
+            opt("festival", "Festival", "text2wave", "festival", "Classic Festival/text2wave voices"),
+            opt("mimic", "Mimic", "mimic", "mimic", "Mycroft's Flite-derived voices with better English output"),
+            opt("pico2wave", "Pico TTS", "pico2wave", "libttspico-utils", "SVOX Pico voices via pico2wave"),
+            opt("espeak", "Legacy eSpeak", "espeak", "espeak", "Older eSpeak package for compatibility")
+        };
+        TTS_PACKAGE_OPTIONS.put("apt", debianLike);
+        TTS_PACKAGE_OPTIONS.put("apt-get", debianLike);
+
+        String[][] fedoraLike = new String[][]{
+            opt("espeak-ng", "eSpeak NG", "espeak-ng", "espeak-ng", "Broad language support and the default Linux fallback"),
+            opt("flite", "Flite", "flite", "flite", "Lightweight CMU voices that are often clearer than eSpeak"),
+            opt("festival", "Festival", "text2wave", "festival", "Classic Festival/text2wave voices"),
+            opt("mimic", "Mimic", "mimic", "mimic", "Mycroft's Flite-derived voices with better English output")
+        };
+        TTS_PACKAGE_OPTIONS.put("dnf", fedoraLike);
+        TTS_PACKAGE_OPTIONS.put("yum", fedoraLike);
+
+        String[][] archOfficial = new String[][]{
+            opt("espeak-ng", "eSpeak NG", "espeak-ng", "espeak-ng", "Broad language support and the default Linux fallback"),
+            opt("flite", "Flite", "flite", "flite", "Lightweight CMU voices that are often clearer than eSpeak"),
+            opt("festival", "Festival", "text2wave", "festival festival-english", "Classic Festival/text2wave voices")
+        };
+        String[][] archAur = new String[][]{
+            opt("espeak-ng", "eSpeak NG", "espeak-ng", "espeak-ng", "Broad language support and the default Linux fallback"),
+            opt("flite", "Flite", "flite", "flite", "Lightweight CMU voices that are often clearer than eSpeak"),
+            opt("festival", "Festival", "text2wave", "festival festival-english", "Classic Festival/text2wave voices"),
+            opt("mimic", "Mimic", "mimic", "mimic", "Mycroft's Flite-derived voices with better English output")
+        };
+        TTS_PACKAGE_OPTIONS.put("pacman", archOfficial);
+        TTS_PACKAGE_OPTIONS.put("yay", archAur);
+        TTS_PACKAGE_OPTIONS.put("paru", archAur);
+        TTS_PACKAGE_OPTIONS.put("pamac", archAur);
+
+        String[][] suseLike = new String[][]{
+            opt("espeak-ng", "eSpeak NG", "espeak-ng", "espeak-ng", "Broad language support and the default Linux fallback"),
+            opt("flite", "Flite", "flite", "flite", "Lightweight CMU voices that are often clearer than eSpeak"),
+            opt("festival", "Festival", "text2wave", "festival", "Classic Festival/text2wave voices")
+        };
+        TTS_PACKAGE_OPTIONS.put("zypper", suseLike);
+
+        String[][] alpineLike = new String[][]{
+            opt("espeak-ng", "eSpeak NG", "espeak-ng", "espeak-ng", "Broad language support and the default Linux fallback"),
+            opt("flite", "Flite", "flite", "flite", "Lightweight CMU voices that are often clearer than eSpeak"),
+            opt("festival", "Festival", "text2wave", "festival", "Classic Festival/text2wave voices"),
+            opt("mimic", "Mimic", "mimic", "mimic", "Mycroft's Flite-derived voices with better English output"),
+            opt("pico2wave", "Pico TTS", "pico2wave", "svox-pico", "SVOX Pico voices via pico2wave")
+        };
+        TTS_PACKAGE_OPTIONS.put("apk", alpineLike);
+
+        String[][] voidLike = new String[][]{
+            opt("espeak-ng", "eSpeak NG", "espeak-ng", "espeak-ng", "Broad language support and the default Linux fallback"),
+            opt("flite", "Flite", "flite", "flite", "Lightweight CMU voices that are often clearer than eSpeak"),
+            opt("mimic", "Mimic", "mimic", "mimic", "Mycroft's Flite-derived voices with better English output")
+        };
+        TTS_PACKAGE_OPTIONS.put("xbps-install", voidLike);
+
+        TTS_PACKAGE_OPTIONS.put("emerge", new String[][]{
+            opt("espeak-ng", "eSpeak NG", "espeak-ng", "app-accessibility/espeak-ng", "Broad language support and the default Linux fallback"),
+            opt("flite", "Flite", "flite", "app-accessibility/flite", "Lightweight CMU voices that are often clearer than eSpeak")
+        });
+
+        TTS_PACKAGE_OPTIONS.put("eopkg", new String[][]{
+            opt("espeak-ng", "eSpeak NG", "espeak-ng", "espeak-ng", "Broad language support and the default Linux fallback")
+        });
+        TTS_PACKAGE_OPTIONS.put("swupd", new String[][]{
+            opt("espeak", "eSpeak", "espeak", "espeak", "Clear Linux bundle fallback")
+        });
+        TTS_PACKAGE_OPTIONS.put("nix-env", new String[][]{
+            opt("espeak", "eSpeak NG", "espeak-ng", "nixpkgs.espeak", "Nixpkgs eSpeak NG alias")
+        });
+        TTS_PACKAGE_OPTIONS.put("nix-shell", new String[][]{
+            opt("espeak", "eSpeak NG", "espeak-ng", "espeak", "Nixpkgs eSpeak NG alias")
+        });
+        TTS_PACKAGE_OPTIONS.put("nix", new String[][]{
+            opt("espeak", "eSpeak NG", "espeak-ng", "nixpkgs#espeak", "Nixpkgs eSpeak NG alias")
+        });
+        TTS_PACKAGE_OPTIONS.put("snap", new String[][]{
+            opt("mimic", "Mimic", "mimic", "mimic --beta", "Mycroft's Flite-derived voices with better English output")
+        });
+        TTS_PACKAGE_OPTIONS.put("brew", new String[][]{
+            opt("espeak-ng", "eSpeak NG", "espeak-ng", "espeak-ng", "Broad language support and the default Linux fallback"),
+            opt("mimic", "Mimic", "mimic", "mimic", "Mycroft's Flite-derived voices with better English output")
+        });
+        TTS_PACKAGE_OPTIONS.put("flatpak", new String[0][0]);
+
+        DESKTOP_NOTIFICATION_PACKAGES.put("apt", "libnotify-bin");
+        DESKTOP_NOTIFICATION_PACKAGES.put("apt-get", "libnotify-bin");
+        DESKTOP_NOTIFICATION_PACKAGES.put("dnf", "libnotify");
+        DESKTOP_NOTIFICATION_PACKAGES.put("yum", "libnotify");
+        DESKTOP_NOTIFICATION_PACKAGES.put("pacman", "libnotify");
+        DESKTOP_NOTIFICATION_PACKAGES.put("yay", "libnotify");
+        DESKTOP_NOTIFICATION_PACKAGES.put("paru", "libnotify");
+        DESKTOP_NOTIFICATION_PACKAGES.put("pamac", "libnotify");
+        DESKTOP_NOTIFICATION_PACKAGES.put("zypper", "libnotify-tools");
+        DESKTOP_NOTIFICATION_PACKAGES.put("apk", "libnotify");
+        DESKTOP_NOTIFICATION_PACKAGES.put("xbps-install", "libnotify");
+        DESKTOP_NOTIFICATION_PACKAGES.put("emerge", "x11-libs/libnotify");
+        DESKTOP_NOTIFICATION_PACKAGES.put("eopkg", "libnotify");
+        DESKTOP_NOTIFICATION_PACKAGES.put("nix-env", "nixpkgs.libnotify");
+        DESKTOP_NOTIFICATION_PACKAGES.put("nix", "nixpkgs#libnotify");
+        DESKTOP_NOTIFICATION_PACKAGES.put("brew", "libnotify");
+    }
+
+    private static String[] opt(String id, String displayName, String commandName, String packageName, String description) {
+        return new String[] { id, displayName, commandName, packageName, description };
     }
 
     /**
@@ -364,33 +520,188 @@ public class LinuxPackageManagerDetector {
     }
 
     /**
-     * Get the install command for espeak using the primary package manager.
+     * Detect package managers that can install a usable command-line TTS engine.
      */
-    public static String getEspeakInstallCommand() {
-        PackageManager pm = getPrimaryPackageManager();
+    public static List<PackageManager> detectAllTtsPackageManagers() {
+        List<PackageManager> managers = detectAllPackageManagers();
+        List<PackageManager> result = new ArrayList<>();
+        for (PackageManager pm : managers) {
+            if (!getTtsPackageOptions(pm).isEmpty()) {
+                result.add(pm);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Get the primary package manager that can install Scarlet's default TTS engine.
+     */
+    public static PackageManager getPrimaryTtsPackageManager() {
+        List<PackageManager> managers = detectAllTtsPackageManagers();
+        if (managers.isEmpty()) {
+            LOG.warn("No TTS-capable package manager available");
+            return null;
+        }
+        return managers.get(0);
+    }
+
+    /**
+     * Detect package managers that can install the host notify-send command.
+     */
+    public static List<PackageManager> detectAllDesktopNotificationPackageManagers() {
+        List<PackageManager> managers = detectAllPackageManagers();
+        List<PackageManager> result = new ArrayList<>();
+        for (PackageManager pm : managers) {
+            if (getDesktopNotificationPackageName(pm) != null) {
+                result.add(pm);
+            }
+        }
+        return result;
+    }
+
+    /**
+     * Get the primary package manager that can install notify-send.
+     */
+    public static PackageManager getPrimaryDesktopNotificationPackageManager() {
+        List<PackageManager> managers = detectAllDesktopNotificationPackageManagers();
+        if (managers.isEmpty()) {
+            LOG.warn("No notify-send-capable package manager available");
+            return null;
+        }
+        return managers.get(0);
+    }
+
+    /**
+     * Get the package name that provides notify-send for a package manager.
+     */
+    public static String getDesktopNotificationPackageName(PackageManager pm) {
+        if (pm == null) {
+            return null;
+        }
+        String packageName = DESKTOP_NOTIFICATION_PACKAGES.get(pm.name);
+        if (packageName == null || packageName.trim().isEmpty()) {
+            return null;
+        }
+        return packageName;
+    }
+
+    /**
+     * Build an install command for the package that provides notify-send.
+     */
+    public static String getDesktopNotificationInstallCommand(PackageManager pm) {
+        String packageName = getDesktopNotificationPackageName(pm);
+        if (pm == null || packageName == null) {
+            return "";
+        }
+        return pm.getFullInstallCommand().replace("{pkg}", packageName);
+    }
+
+    /**
+     * Get the install command for Scarlet's default Linux TTS engine using the
+     * primary package manager.
+     */
+    public static String getTtsInstallCommand() {
+        PackageManager pm = getPrimaryTtsPackageManager();
         if (pm == null) {
             if (Platform.isTermux()) {
                 return "pkg install -y espeak";
             }
-            return "sudo apt-get install -y espeak"; // Default fallback
+            return "sudo apt-get install -y espeak-ng"; // Default fallback
         }
-        return pm.getFullInstallCommand().replace("{pkg}", pm.packageName);
+        return pm.getInstallCommand();
     }
 
     /**
-     * Get all available install commands for espeak.
+     * Backward-compatible wrapper for callers that still use the older eSpeak name.
+     */
+    public static String getEspeakInstallCommand() {
+        return getTtsInstallCommand();
+    }
+
+    /**
+     * Get all available install commands for Scarlet's default Linux TTS engine.
      * Useful for showing a menu to the user.
      */
-    public static List<String> getAllEspeakInstallCommands() {
-        List<PackageManager> managers = detectAllPackageManagers();
+    public static List<String> getAllTtsInstallCommands() {
+        List<PackageManager> managers = detectAllTtsPackageManagers();
         List<String> commands = new ArrayList<>();
         
         for (PackageManager pm : managers) {
-            String cmd = pm.getFullInstallCommand().replace("{pkg}", pm.packageName);
-            commands.add(cmd);
+            commands.add(pm.getInstallCommand());
         }
         
         return commands;
+    }
+
+    /**
+     * Backward-compatible wrapper for callers that still use the older eSpeak name.
+     */
+    public static List<String> getAllEspeakInstallCommands() {
+        return getAllTtsInstallCommands();
+    }
+
+    /**
+     * Get the TTS packages Scarlet can offer for the given package manager.
+     */
+    public static List<TtsPackageOption> getTtsPackageOptions(PackageManager pm) {
+        List<TtsPackageOption> options = new ArrayList<>();
+        if (pm == null) {
+            return options;
+        }
+        String[][] defs = TTS_PACKAGE_OPTIONS.get(pm.name);
+        if (defs == null) {
+            return options;
+        }
+        for (String[] def : defs) {
+            if (def.length >= 5 && def[3] != null && !def[3].trim().isEmpty()) {
+                options.add(new TtsPackageOption(def[0], def[1], def[2], def[3], def[4]));
+            }
+        }
+        return options;
+    }
+
+    /**
+     * Build one install command for the selected optional TTS packages.
+     */
+    public static String buildTtsInstallCommand(PackageManager pm, List<TtsPackageOption> options) {
+        if (pm == null || options == null || options.isEmpty()) {
+            return "";
+        }
+        if ("snap".equals(pm.name)) {
+            List<String> commands = new ArrayList<>();
+            for (TtsPackageOption option : options) {
+                commands.add(option.getInstallCommand(pm));
+            }
+            return join(commands, " && ");
+        }
+        StringBuilder packages = new StringBuilder();
+        for (TtsPackageOption option : options) {
+            if (option.packageName == null || option.packageName.trim().isEmpty()) {
+                continue;
+            }
+            if (packages.length() > 0) {
+                packages.append(' ');
+            }
+            packages.append(option.packageName.trim());
+        }
+        if (packages.length() == 0) {
+            return "";
+        }
+        return pm.getFullInstallCommand().replace("{pkg}", packages.toString());
+    }
+
+    private static String join(List<String> strings, String delimiter) {
+        StringBuilder sb = new StringBuilder();
+        for (String string : strings) {
+            if (string == null || string.isEmpty()) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append(delimiter);
+            }
+            sb.append(string);
+        }
+        return sb.toString();
     }
 
     /**
@@ -443,12 +754,24 @@ public class LinuxPackageManagerDetector {
      * Check if espeak is available in the package manager's repositories.
      */
     public static boolean isEspeakAvailableInRepo(PackageManager pm) {
+        return isTtsPackageAvailableInRepo(pm);
+    }
+
+    /**
+     * Check if the default TTS package is available in the package
+     * manager's repositories.
+     */
+    public static boolean isTtsPackageAvailableInRepo(PackageManager pm) {
         if (pm.searchCommand == null || pm.searchCommand.isEmpty()) {
             return true; // Assume available if we can't check
         }
+        String searchPackage = firstSearchablePackage(pm.packageName);
+        if (searchPackage.isEmpty()) {
+            return false;
+        }
 
         try {
-            String searchCmd = pm.searchCommand.replace("{pkg}", pm.packageName);
+            String searchCmd = pm.searchCommand.replace("{pkg}", searchPackage);
             ProcessBuilder pb = new ProcessBuilder("sh", "-c", searchCmd);
             pb.redirectErrorStream(true);
             Process p = pb.start();
@@ -456,7 +779,7 @@ public class LinuxPackageManagerDetector {
             try (BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    if (line.toLowerCase().contains(pm.packageName.toLowerCase())) {
+                    if (line.toLowerCase().contains(searchPackage.toLowerCase())) {
                         return true;
                     }
                 }
@@ -470,20 +793,43 @@ public class LinuxPackageManagerDetector {
         }
     }
 
+    private static String firstSearchablePackage(String packageNames) {
+        if (packageNames == null) {
+            return "";
+        }
+        String[] parts = packageNames.trim().split("\\s+");
+        for (String part : parts) {
+            if (part == null || part.isEmpty() || part.startsWith("-")) {
+                continue;
+            }
+            if (part.startsWith("nixpkgs#")) {
+                return part.substring("nixpkgs#".length());
+            }
+            if (part.startsWith("nixpkgs.")) {
+                return part.substring("nixpkgs.".length());
+            }
+            int slash = part.indexOf('/');
+            if (slash >= 0 && slash + 1 < part.length()) {
+                return part.substring(slash + 1);
+            }
+            return part;
+        }
+        return "";
+    }
+
     /**
-     * Get recommended alternative package managers for espeak.
-     * Some package managers may not have espeak but have alternatives like espeak-ng.
+     * Get recommended fallback package names for older callers.
      */
     public static Map<String, String> getEspeakAlternatives() {
         Map<String, String> alternatives = new LinkedHashMap<>();
         
-        // For Arch-based systems, espeak-ng is available in AUR
+        // For Arch-based systems, espeak-ng is the maintained eSpeak implementation.
         alternatives.put("yay", "espeak-ng");
         alternatives.put("paru", "espeak-ng");
         alternatives.put("pamac", "espeak-ng");
         
-        // Snap has espeak-ng
-        alternatives.put("snap", "espeak-ng");
+        // Snap currently has Mimic as the usable command-line TTS option.
+        alternatives.put("snap", "mimic --beta");
         
         return alternatives;
     }
@@ -504,8 +850,8 @@ public class LinuxPackageManagerDetector {
         LOG.info("=== Detected Package Managers ===");
         for (int i = 0; i < managers.size(); i++) {
             PackageManager pm = managers.get(i);
-            LOG.info("{}. {} - {} (sudo: {})", 
-                i + 1, pm.displayName, pm.getFullInstallCommand().replace("{pkg}", pm.packageName), 
+            LOG.info("{}. {} - {} (sudo: {})",
+                i + 1, pm.displayName, pm.getInstallCommand(),
                 pm.requiresSudo);
         }
         LOG.info("================================");

@@ -3,11 +3,14 @@ package net.sybyline.scarlet.util.tts;
 import java.awt.Component;
 import java.io.Closeable;
 import java.io.File;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.text.Normalizer;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -15,6 +18,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
+import javax.sound.sampled.AudioFileFormat;
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Clip;
@@ -289,6 +293,25 @@ public class TtsService implements Closeable
     private final java.util.concurrent.atomic.AtomicReference<Clip> activeClip =
         new java.util.concurrent.atomic.AtomicReference<>(null);
 
+    /**
+     * Holds the external player {@link Process} (pw-play / paplay / aplay)
+     * currently rendering a clip, or {@code null} when none is running. Used by
+     * {@link #skip()} to terminate playback mid-clip.
+     */
+    private final java.util.concurrent.atomic.AtomicReference<Process> activeProcess =
+        new java.util.concurrent.atomic.AtomicReference<>(null);
+
+    /** Ordered external players to try; the first one found on PATH wins. */
+    private static final List<String> PLAYER_CANDIDATES = Arrays.asList("pw-play", "paplay", "aplay");
+
+    /** Lazily-resolved player command prefix (e.g. {@code [paplay]} or {@code [aplay, -q]}); null once probed and none found. Guarded by {@code this}. */
+    private List<String> playerPrefix;
+    private boolean playerProbed;
+
+    /** Ensures the "install an audio player" prompt is shown at most once per session. */
+    private final java.util.concurrent.atomic.AtomicBoolean playerInstallPrompted =
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+
     private void playPreparedAudio(String marker, File file)
     {
         if (file == null || !file.isFile())
@@ -298,7 +321,12 @@ public class TtsService implements Closeable
         }
         if (this.eventListener != null && this.eventListener.getTtsUseDefaultAudioDevice())
         {
-            playOnSystemAudio(marker, file, this.activeClip);
+            // Prefer an external player (pw-play/paplay/aplay): unlike Java Sound, it
+            // routes through PipeWire/PulseAudio, so it appears in the volume mixer and
+            // follows the user's selected output device. Fall back to Java Sound only
+            // when no such player is available (e.g. Windows/macOS).
+            if (!this.playViaSubprocess(marker, file))
+                playOnSystemAudio(marker, file, this.activeClip);
         }
         else if (this.discord != null)
         {
@@ -321,6 +349,13 @@ public class TtsService implements Closeable
      */
     public boolean skip()
     {
+        Process proc = this.activeProcess.getAndSet(null);
+        if (proc != null && proc.isAlive())
+        {
+            proc.destroy(); // SIGTERM → player exits → playViaSubprocess returns → executor continues
+            Scarlet.LOG.info("TTS: Skipped active external player");
+            return true;
+        }
         Clip clip = this.activeClip.getAndSet(null);
         if (clip != null && clip.isRunning())
         {
@@ -328,8 +363,198 @@ public class TtsService implements Closeable
             Scarlet.LOG.info("TTS: Skipped active clip");
             return true;
         }
-        Scarlet.LOG.debug("TTS: skip() called but no clip was active");
+        Scarlet.LOG.debug("TTS: skip() called but no clip or player was active");
         return false;
+    }
+
+    /**
+     * Plays a WAV file through an external system player, trying {@code pw-play},
+     * {@code paplay}, then {@code aplay} (overridable via the {@code scarlet.tts.player}
+     * system property or {@code SCARLET_TTS_PLAYER} environment variable). These route
+     * through PipeWire/PulseAudio, so playback shows up in the system volume mixer and
+     * follows the user's selected output device — unlike Java Sound, which opens the ALSA
+     * hardware device directly and bypasses the sound server.
+     *
+     * <p>Blocks until playback finishes so the serial {@code playbackExecutor} keeps clips
+     * from overlapping. Returns {@code true} when an external player handled the request
+     * (played to completion, was skipped, or errored), or {@code false} when no external
+     * player is available — in which case the caller falls back to Java Sound.
+     */
+    private boolean playViaSubprocess(String marker, File file)
+    {
+        List<String> prefix = this.resolvePlayerPrefix();
+        if (prefix == null || prefix.isEmpty())
+        {
+            Scarlet.LOG.warn("TTS({}): No external audio player (pw-play/paplay/aplay) found on PATH; "
+                + "falling back to Java Sound for this clip.", marker);
+            this.maybePromptAudioPlayerInstall();
+            return false;
+        }
+        List<String> command = new ArrayList<>(prefix);
+        command.add(file.getAbsolutePath());
+        Scarlet.LOG.info("TTS({}): Playing via external player '{}': {}", marker, prefix.get(0), file);
+
+        File parent = file.getParentFile();
+        File playLog = new File(parent != null ? parent : new File("."), ".tts-player.log");
+        Process proc = null;
+        try
+        {
+            proc = new ProcessBuilder(command)
+                .redirectOutput(playLog)
+                .redirectError(playLog)
+                .start();
+            this.activeProcess.set(proc);
+
+            long timeoutSeconds = estimatePlaybackTimeoutSeconds(file);
+            if (!proc.waitFor(timeoutSeconds, TimeUnit.SECONDS))
+            {
+                Scarlet.LOG.warn("TTS({}): External player timed out after {}s, terminating", marker, timeoutSeconds);
+                proc.destroyForcibly();
+                return true;
+            }
+            int exit = proc.exitValue();
+            if (exit == 0)
+                Scarlet.LOG.info("TTS({}): External player playback complete", marker);
+            else
+                // A non-zero exit here is normal when skip() destroys the process mid-clip.
+                Scarlet.LOG.info("TTS({}): External player exited with code {} (file={})", marker, exit, file);
+            return true;
+        }
+        catch (IOException ex)
+        {
+            // Player vanished between the PATH probe and exec, or could not launch.
+            Scarlet.LOG.warn("TTS({}): Could not start external player '{}', falling back to Java Sound: {}",
+                marker, prefix.get(0), ex.toString());
+            return false;
+        }
+        catch (InterruptedException ex)
+        {
+            Thread.currentThread().interrupt();
+            if (proc != null)
+                proc.destroyForcibly();
+            Scarlet.LOG.warn("TTS({}): Interrupted during external player playback", marker);
+            return true;
+        }
+        finally
+        {
+            if (proc != null)
+                this.activeProcess.compareAndSet(proc, null);
+        }
+    }
+
+    /** Lazily resolves (once) the external player command prefix, or null if none is available. */
+    private synchronized List<String> resolvePlayerPrefix()
+    {
+        if (!this.playerProbed)
+        {
+            this.playerProbed = true;
+            this.playerPrefix = detectPlayerPrefix();
+        }
+        return this.playerPrefix;
+    }
+
+    /**
+     * On desktop Linux, offers to install a CLI audio player (via the system
+     * package manager) the first time playback finds none. Runs the prompt on a
+     * background thread so the playback queue is not blocked, and re-arms player
+     * detection if an install succeeds. No-op on Windows/macOS (Java Sound works
+     * there) and on Android/Termux (TTS is routed to Discord).
+     */
+    private void maybePromptAudioPlayerInstall()
+    {
+        if (net.sybyline.scarlet.util.Platform.CURRENT != net.sybyline.scarlet.util.Platform.$NIX
+            || net.sybyline.scarlet.util.Platform.isTermux()
+            || net.sybyline.scarlet.util.Platform.isAndroid())
+            return;
+        if (!this.playerInstallPrompted.compareAndSet(false, true))
+            return;
+        final Component parent = this.parentComponent;
+        Thread thread = new Thread(() ->
+        {
+            try
+            {
+                LinuxAudioPlayerInstallDialogs.InstallDialogResult result =
+                    LinuxAudioPlayerInstallDialogs.showInstallFlowIfNeeded(parent);
+                if (result == LinuxAudioPlayerInstallDialogs.InstallDialogResult.INSTALL_APPROVED_SUCCESS)
+                {
+                    synchronized (this)
+                    {
+                        this.playerProbed = false;
+                        this.playerPrefix = null;
+                    }
+                    Scarlet.LOG.info("TTS: Audio player installed; future announcements will use it");
+                }
+            }
+            catch (Throwable ex)
+            {
+                Scarlet.LOG.warn("TTS: Audio player install prompt failed", ex);
+            }
+        }, "TTS-Player-Install");
+        thread.setDaemon(true);
+        thread.start();
+    }
+
+    private static List<String> detectPlayerPrefix()
+    {
+        String override = System.getProperty("scarlet.tts.player");
+        if (override == null || override.trim().isEmpty())
+            override = System.getenv("SCARLET_TTS_PLAYER");
+        if (override != null && !override.trim().isEmpty())
+        {
+            List<String> prefix = new ArrayList<>();
+            for (String part : override.trim().split("\\s+"))
+                if (!part.isEmpty())
+                    prefix.add(part);
+            Scarlet.LOG.info("TTS: Using configured audio player override: {}", prefix);
+            return prefix;
+        }
+        for (String exe : PLAYER_CANDIDATES)
+        {
+            if (isExecutableOnPath(exe))
+            {
+                List<String> prefix = new ArrayList<>();
+                prefix.add(exe);
+                if ("aplay".equals(exe))
+                    prefix.add("-q");
+                Scarlet.LOG.info("TTS: Selected system audio player '{}' for local TTS playback", exe);
+                return prefix;
+            }
+        }
+        return null;
+    }
+
+    private static boolean isExecutableOnPath(String exe)
+    {
+        String path = System.getenv("PATH");
+        if (path == null || path.isEmpty())
+            return false;
+        for (String dir : path.split(File.pathSeparator))
+        {
+            if (dir.isEmpty())
+                continue;
+            File candidate = new File(dir, exe);
+            if (candidate.isFile() && candidate.canExecute())
+                return true;
+        }
+        return false;
+    }
+
+    /** Estimates a generous playback timeout from the WAV header, defaulting to 60s on any error. */
+    private static long estimatePlaybackTimeoutSeconds(File file)
+    {
+        try
+        {
+            AudioFileFormat aff = AudioSystem.getAudioFileFormat(file);
+            long frames = aff.getFrameLength();
+            float frameRate = aff.getFormat().getFrameRate();
+            if (frames > 0 && frameRate > 0)
+                return Math.max(30L, (long) (frames / frameRate) + 10L);
+        }
+        catch (Exception ignored)
+        {
+            // fall through to default
+        }
+        return 60L;
     }
 
     /**

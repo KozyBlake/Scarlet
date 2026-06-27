@@ -39,9 +39,28 @@ public class ProcLock
     }
 
     private static final List<Runnable> locks = Collections.synchronizedList(new ArrayList<>());
+    public static void releaseAll()
+    {
+        List<Runnable> copy;
+        synchronized (locks)
+        {
+            copy = new ArrayList<>(locks);
+            locks.clear();
+        }
+        for (Runnable lock : copy)
+        {
+            try
+            {
+                lock.run();
+            }
+            catch (Throwable ignored)
+            {
+            }
+        }
+    }
     static
     {
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> locks.forEach(Runnable::run), "ProcLock.shutdownHook"));
+        Runtime.getRuntime().addShutdownHook(new Thread(ProcLock::releaseAll, "ProcLock.shutdownHook"));
     }
 
 }

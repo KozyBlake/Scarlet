@@ -382,6 +382,20 @@ General settings for Scarlet:
     
     // The VRChat groupId of the relevant group
     "vrchat_group_id": "grp_00000000-0000-0000-0000-000000000000",
+
+    // Whether members are automatically invited to a VRChat group after they verify/link
+    "auto_invite_group_on_verify": true,
+
+    // Discord role snowflake that makes a linked member eligible for the auto-invite
+    "verified_role_snowflake": "123456789123456789",
+
+    // Optional Discord role snowflake required before Scarlet prompts a member to link their VRChat account
+    "members_role_snowflake": "123456789123456789",
+
+    // Optional VRChat group id to auto-invite verified members to.
+    // Leave unset/default to use "vrchat_group_id". Scarlet's VRChat account must be a member
+    // of the chosen group and must have permission to invite members.
+    "auto_invite_group_id": "grp_00000000-0000-0000-0000-000000000000",
     
     // Whether the generated report link appends a footer containing the Group ID, Audit ID, and Scarlet version
     "vrchat_report_template_footer": "username@example.com",
@@ -389,7 +403,9 @@ General settings for Scarlet:
     // Whether to announce watched groups with TTS
     "tts_announce_watched_groups": true,
     
-    // The voice in which TTS speaks
+    // The voice in which TTS speaks.
+    // On Linux, command-line engines are prefixed, e.g. "flite/slt", "pico2wave/en-US", "festival/default", or "espeak-ng/en".
+    // Extra Linux engines can be installed from Settings -> Text-to-Speech -> Install Linux TTS voices.
     "tts_voice_name": "Microsoft Zira Desktop",
     
     // Whether to output TTS to the default system audio device
@@ -407,8 +423,44 @@ General settings for Scarlet:
     // Whether to announce new players with TTS
     "tts_announce_new_players": true,
 
+    // Whether watched-user advisories appear in the Instance table.
+    // When false, the matching join-time TTS callout is also suppressed.
+    "advisory_show_watched_users": true,
+
+    // Whether watched-group advisories appear in the Instance table.
+    // When false, the matching join-time TTS callout is also suppressed.
+    "advisory_show_watched_groups": true,
+
+    // Whether watched-avatar advisories appear in the Instance table.
+    // When false, the matching avatar TTS callout is also suppressed.
+    "advisory_show_watched_avatars": true,
+
+    // Whether new-account advisories appear in the Instance table.
+    // When false, the matching join-time TTS callout is also suppressed.
+    "advisory_show_new_players": true,
+
+    // Whether mixed-character-name advisories appear in the Instance table.
+    // When false, the matching join-time TTS cue is also suppressed.
+    "advisory_show_mixed_character_names": true,
+
+    // Whether vote-to-kick advisory audio is enabled.
+    // When false, the matching vote-to-kick TTS callout is suppressed.
+    "advisory_show_votes_to_kick": true,
+
+    // Whether suspicious-pronoun advisories appear in the Instance table.
+    // When false, the matching join-time TTS callout and row highlight are also suppressed.
+    "advisory_show_suspicious_pronouns": true,
+
     // Whether to play a cue and announce when a joined user's display name mixes letter scripts
     "tts_announce_mixed_character_names": true,
+
+    // Master switch for suspicious-pronoun detection. When false, Scarlet does not flag pronoun fields
+    // at all: no Advisory entry, no TTS announcement, no mobile alert, and no player-list highlight
+    "tts_flag_suspicious_pronouns": true,
+
+    // Whether to speak a TTS line when a pronoun field is flagged
+    // (only applies when "tts_flag_suspicious_pronouns" above is enabled)
+    "tts_announce_suspicious_pronouns": true,
     
     // Threshold for what account age qualifies as a 'new' player for the above (in days, 1 to 365, default 30)
     "tts_announce_players_newer_than_days": 30,
@@ -422,6 +474,9 @@ General settings for Scarlet:
     // Whether the UI becomes visible immediately or after loading is complete
     "ui_show_during_load": false,
     
+    // Whether the CLI tab is shown in the main window (toggle live via the View menu)
+    "ui_show_cli_tab": true,
+
     // The time, in seconds, between successive polls for audit events (10-300 inclusive)
     "audit_polling_interval": 60,
     

@@ -73,8 +73,16 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         this.announceNewPlayers = scarlet.settings.new FileValuedBoolean("tts_announce_new_players", "TTS: Announce new players", true);
         this.announceMixedCharacterNames = scarlet.settings.new FileValuedBoolean("tts_announce_mixed_character_names", "TTS: Announce mixed-character names", true);
         this.announceVotesToKick = scarlet.settings.new FileValuedBoolean("tts_announce_votes_to_kick", "TTS: Announce Votes-to-Kick", true);
+        this.flagSuspiciousPronouns = scarlet.settings.new FileValuedBoolean("tts_flag_suspicious_pronouns", "TTS: Flag suspicious pronouns", true);
         this.announceSuspiciousPronouns = scarlet.settings.new FileValuedBoolean("tts_announce_suspicious_pronouns", "TTS: Announce suspicious pronouns", true);
         this.announcePlayersNewerThan = scarlet.settings.new FileValuedIntRange("tts_announce_players_newer_than_days", "TTS: Announce players newer than (days)", 30, 1, 365);
+        this.advisoryShowWatchedUsers = scarlet.settings.new FileValuedBoolean("advisory_show_watched_users", "Advisory: watched users", true);
+        this.advisoryShowWatchedGroups = scarlet.settings.new FileValuedBoolean("advisory_show_watched_groups", "Advisory: watched groups", true);
+        this.advisoryShowWatchedAvatars = scarlet.settings.new FileValuedBoolean("advisory_show_watched_avatars", "Advisory: watched avatars", true);
+        this.advisoryShowNewPlayers = scarlet.settings.new FileValuedBoolean("advisory_show_new_players", "Advisory: new players", true);
+        this.advisoryShowMixedCharacterNames = scarlet.settings.new FileValuedBoolean("advisory_show_mixed_character_names", "Advisory: mixed-character names", true);
+        this.advisoryShowVotesToKick = scarlet.settings.new FileValuedBoolean("advisory_show_votes_to_kick", "Advisory: votes-to-kick", true);
+        this.advisoryShowSuspiciousPronouns = scarlet.settings.new FileValuedBoolean("advisory_show_suspicious_pronouns", "Advisory: suspicious pronouns", true);
 
         this.attemptAvatarImageMatch = scarlet.settings.new FileValuedBoolean("attempt_avatar_image_match", "Attempt avatar image match", false);
     }
@@ -112,7 +120,15 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
                                      announceNewPlayers,
                                      announceMixedCharacterNames,
                                      announceVotesToKick,
+                                     flagSuspiciousPronouns,
                                      announceSuspiciousPronouns,
+                                     advisoryShowWatchedUsers,
+                                     advisoryShowWatchedGroups,
+                                     advisoryShowWatchedAvatars,
+                                     advisoryShowNewPlayers,
+                                     advisoryShowMixedCharacterNames,
+                                     advisoryShowVotesToKick,
+                                     advisoryShowSuspiciousPronouns,
                                      attemptAvatarImageMatch;
     final ScarletSettings.FileValued<Integer> announcePlayersNewerThan;
 
@@ -146,6 +162,14 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
     public boolean getTtsUseDefaultAudioDevice()
     {
         return this.ttsUseDefaultAudioDevice.get().booleanValue();
+    }
+    public boolean getFlagSuspiciousPronouns()
+    {
+        return this.flagSuspiciousPronouns.get().booleanValue();
+    }
+    public boolean getShowSuspiciousPronounAdvisory()
+    {
+        return this.getFlagSuspiciousPronouns() && this.advisoryShowSuspiciousPronouns.get().booleanValue();
     }
 
     /**
@@ -294,7 +318,7 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         this.pendingOrNow(preamble, () ->
         {
             Color text_color = this.checkPlayer(advisories, priority, true, userDisplayName, userId);
-            String advisory = advisories == null || advisories.isEmpty() ? null : advisories.stream().collect(Collectors.joining("\n"));
+            String advisory = formatAdvisories(advisories);
             this.scarlet.ui.playerJoin(!this.isTailerLive, userId, userDisplayName, timestamp, advisory, text_color, priority[0], isRejoinFromPrev);
             this.scarlet.ui.playerUpdate(!this.isTailerLive, userId, $ -> $.avatarName = avatarDisplayName);
         });
@@ -400,14 +424,17 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         // We need to run avatar search if EITHER TTS or Discord emission is active.
         // Previously the entire method returned early when Discord wasn't emitting,
         // which silently killed the TTS callout even when announceWatchedAvatars was on.
+        boolean avatarAdvisoryWanted = Features.WATCHED_AVATARS_ENABLED
+                                    && this.advisoryShowWatchedAvatars.get();
         boolean ttsWanted  = Features.WATCHED_AVATARS_ENABLED
                           && !preamble
+                          && avatarAdvisoryWanted
                           && this.announceWatchedAvatars.get();
         boolean discordWanted = this.scarlet.discord.isEmitting(GroupAuditTypeEx.USER_AVATAR);
         boolean mobileWanted = Features.WATCHED_AVATARS_ENABLED
                             && !preamble
                             && this.scarlet.mobile.wants(ScarletMobile.NotificationType.WATCHED_AVATAR, ScarletMobile.Severity.CRITICAL);
-        if (!ttsWanted && !discordWanted && !mobileWanted)
+        if (!avatarAdvisoryWanted && !ttsWanted && !discordWanted && !mobileWanted)
             return;
 
         String[] potentialIds = null;
@@ -429,38 +456,40 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         if (potentialIds == null || potentialIds.length == 0)
             potentialIds = this.searchAvatar(avatarDisplayName);
 
-        // ── TTS callout ────────────────────────────────────────────────────────
-        if (ttsWanted)
+        List<ScarletWatchedEntities.WatchedEntity> watchedAvatars = Arrays
+            .stream(potentialIds)
+            .map(this.scarlet.watchedAvatars::getWatchedEntity)
+            .filter(Objects::nonNull)
+            .filter($ -> !$.silent)
+            .sorted(Comparator.naturalOrder())
+            .collect(Collectors.toList());
+        ScarletWatchedEntities.WatchedEntity watchedAvatar = watchedAvatars.isEmpty() ? null : watchedAvatars.get(0);
+
+        if (Features.WATCHED_AVATARS_ENABLED)
         {
-            final String[] ids = potentialIds;
-            Arrays
-                .stream(ids)
-                .map(this.scarlet.watchedAvatars::getWatchedEntity)
-                .filter(Objects::nonNull)
-                .filter($ -> !$.silent)
-                .sorted(Comparator.naturalOrder())
-                .findFirst()
-                .ifPresent(watchedAvatar -> {
-                    StringBuilder sb = new StringBuilder();
-                    sb.append(TtsService.sanitizeName(userDisplayName)).append(" may be wearing a watched avatar.");
-                    if (watchedAvatar.message != null)
-                        sb.append(' ').append(watchedAvatar.message);
-                    this.scarlet.getTtsService().submit("wa-"+Long.toUnsignedString(System.nanoTime()), sb.toString());
-                });
+            final String avatarAdvisory = avatarAdvisoryWanted && watchedAvatar != null ? watchedAvatarAdvisory(watchedAvatar) : null;
+            final Color avatarColor = avatarAdvisoryWanted && watchedAvatar != null && watchedAvatar.type != null ? watchedAvatar.type.text_color : null;
+            final int avatarPriority = avatarAdvisoryWanted && watchedAvatar != null ? watchedAvatar.priority : Integer.MIN_VALUE + 1;
+            this.scarlet.ui.playerUpdate(!this.isTailerLive, userId, $ ->
+            {
+                $.setAvatarAdvisory(avatarAdvisory, avatarColor, avatarPriority);
+            });
         }
 
-        if (mobileWanted)
+        // ── TTS callout ────────────────────────────────────────────────────────
+        if (ttsWanted && watchedAvatar != null)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.append(TtsService.sanitizeName(userDisplayName)).append(" may be wearing a watched avatar.");
+            if (watchedAvatar.message != null)
+                sb.append(' ').append(watchedAvatar.message);
+            this.scarlet.getTtsService().submit("wa-"+Long.toUnsignedString(System.nanoTime()), sb.toString());
+        }
+
+        if (mobileWanted && watchedAvatar != null)
         {
             final String[] ids = potentialIds;
-            Arrays
-                .stream(ids)
-                .map(this.scarlet.watchedAvatars::getWatchedEntity)
-                .filter(Objects::nonNull)
-                .filter($ -> !$.silent)
-                .sorted(Comparator.naturalOrder())
-                .findFirst()
-                .ifPresent(watchedAvatar ->
-                    this.scarlet.mobile.notifyWatchedAvatar(userDisplayName, userId, avatarDisplayName, ids, watchedAvatar, this.clientLocation));
+            this.scarlet.mobile.notifyWatchedAvatar(userDisplayName, userId, avatarDisplayName, ids, watchedAvatar, this.clientLocation);
         }
 
         // ── Discord emission ───────────────────────────────────────────────────
@@ -481,22 +510,27 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         // single combined TTS callout at the end, instead of one clip per rule.
         List<String> ttsParts = new ArrayList<>();
 
-        if (!preamble
-         && !Objects.equals(this.clientUserId, userId)
+        if (!Objects.equals(this.clientUserId, userId)
          && TtsService.shouldAlertMixedCharacterName(userDisplayName))
         {
-            if (this.announceMixedCharacterNames.get())
+            boolean mixedNameAdvisoryWanted = this.advisoryShowMixedCharacterNames.get();
+            if (mixedNameAdvisoryWanted)
+                addAdvisory(advisories, "Mixed-character name");
+            if (!preamble && mixedNameAdvisoryWanted && this.announceMixedCharacterNames.get())
                 this.scarlet.getTtsService().submitMixedCharacterNameJoinAlert(
                     "mix-"+Long.toUnsignedString(System.nanoTime()));
-            this.scarlet.mobile.notifyMixedCharacterName(userDisplayName, userId, this.clientLocation);
+            if (!preamble)
+                this.scarlet.mobile.notifyMixedCharacterName(userDisplayName, userId, this.clientLocation);
         }
         
         // check user
         ScarletWatchedEntities.WatchedEntity watchedUser = this.scarlet.watchedUsers.getWatchedEntity(userId);
         if (watchedUser != null && !watchedUser.silent)
         {
-            advisories.add(watchedUser.message);
-            if (!preamble && this.announceWatchedUsers.get() && watchedUser.message != null && !watchedUser.message.trim().isEmpty())
+            boolean watchedUserAdvisoryWanted = this.advisoryShowWatchedUsers.get();
+            if (watchedUserAdvisoryWanted)
+                addAdvisory(advisories, watchedUser.message);
+            if (!preamble && watchedUserAdvisoryWanted && this.announceWatchedUsers.get() && watchedUser.message != null && !watchedUser.message.trim().isEmpty())
                 ttsParts.add(endDot(watchedUser.message));
             if (!preamble)
                 this.scarlet.mobile.notifyWatchedUserJoined(userDisplayName, userId, watchedUser, this.clientLocation);
@@ -510,7 +544,7 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
 //            List<LimitedUserGroups> lugs1 = ScarletVRChatCookieJar.contextGet(alt, () -> this.scarlet.vrc.getMutualsGroups(userId));
             List<LimitedUserGroups> lugs1 = ScarletVRChatCookieJar.contextGet(alt, () -> this.scarlet.vrc.getUserGroups(userId));
             if (lugs1 != null && !lugs1.isEmpty())
-                lugs = lugs == null ? lugs1.stream() : Stream.concat(lugs, lugs0.stream());
+                lugs = lugs == null ? lugs1.stream() : Stream.concat(lugs, lugs1.stream());
         }
         // check groups
         if (lugs != null)
@@ -528,7 +562,8 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
                 ;
             if (wg != null)
             {
-                if (!preamble && this.announceWatchedGroups.get())
+                boolean watchedGroupAdvisoryWanted = this.advisoryShowWatchedGroups.get();
+                if (!preamble && watchedGroupAdvisoryWanted && this.announceWatchedGroups.get())
                 {
                     java.util.List<String> groupMsgs = wgs.stream()
                         .filter($ -> !$.silent)
@@ -546,7 +581,8 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
                     this.scarlet.mobile.notifyWatchedGroupJoined(userDisplayName, userId, wg, this.clientLocation);
                 priority[0] = wg.priority;
             }
-            wgs.forEach($ -> advisories.add($.message));
+            if (this.advisoryShowWatchedGroups.get())
+                wgs.forEach($ -> addAdvisory(advisories, $.message));
             if (overall_type == null)
             {
             overall_type = wgs.stream()
@@ -558,31 +594,36 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
             }
         }
         // check new user
-        boolean newPlayerTtsWanted = this.announceNewPlayers.get();
+        boolean newPlayerAdvisoryWanted = this.advisoryShowNewPlayers.get();
+        boolean newPlayerTtsWanted = newPlayerAdvisoryWanted && this.announceNewPlayers.get();
         boolean newPlayerMobileWanted = this.scarlet.mobile.wants(ScarletMobile.NotificationType.NEW_PLAYER, ScarletMobile.Severity.WATCH);
-        if (!preamble && user != null && (newPlayerTtsWanted || newPlayerMobileWanted))
+        if (user != null && (newPlayerAdvisoryWanted || (!preamble && (newPlayerTtsWanted || newPlayerMobileWanted))))
         {
             long acctAgeDays = LocalDate.now().toEpochDay() - user.getDateJoined().toEpochDay();
             if (acctAgeDays <= this.announcePlayersNewerThan.get().longValue())
             {
-                if (newPlayerTtsWanted)
+                if (newPlayerAdvisoryWanted)
+                    addAdvisory(advisories, "New account: " + acctAgeDays + (acctAgeDays == 1L ? " day" : " days"));
+                if (!preamble && newPlayerTtsWanted)
                     ttsParts.add("New, " + acctAgeDays + (acctAgeDays == 1L ? " day." : " days."));
-                if (newPlayerMobileWanted)
+                if (!preamble && newPlayerMobileWanted)
                     this.scarlet.mobile.notifyNewPlayerJoined(userDisplayName, userId, acctAgeDays, this.clientLocation);
             }
         }
 
         // check pronouns — flag if the field looks like a username, phrase, or troll content
-        if (Features.PRONOUNS_ENABLED && user != null)
+        if (Features.PRONOUNS_ENABLED && user != null && this.flagSuspiciousPronouns.get())
         {
             String pronouns = user.getPronouns();
             String flagReason = PronounValidator.flagReason(pronouns);
             if (flagReason != null)
             {
-                advisories.add("\u26A0 Suspicious pronouns: \"" + pronouns + "\" \u2014 " + flagReason);
+                boolean pronounAdvisoryWanted = this.advisoryShowSuspiciousPronouns.get();
+                if (pronounAdvisoryWanted)
+                    addAdvisory(advisories, "\u26A0 Suspicious pronouns");
                 if (!preamble)
                 {
-                    if (this.announceSuspiciousPronouns.get())
+                    if (pronounAdvisoryWanted && this.announceSuspiciousPronouns.get())
                         ttsParts.add("Suspicious pronouns: " + endDot(pronouns));
                     this.scarlet.mobile.notifySuspiciousPronouns(userDisplayName, userId, pronouns, flagReason, this.clientLocation);
                 }
@@ -617,6 +658,35 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         return (last == '.' || last == '!' || last == '?') ? t : t + ".";
     }
 
+    static void addAdvisory(List<String> advisories, String advisory)
+    {
+        if (advisories == null || advisory == null)
+            return;
+        String trimmed = advisory.trim();
+        if (!trimmed.isEmpty())
+            advisories.add(trimmed);
+    }
+
+    static String formatAdvisories(List<String> advisories)
+    {
+        if (advisories == null || advisories.isEmpty())
+            return null;
+        String advisory = advisories.stream()
+            .filter(Objects::nonNull)
+            .map(String::trim)
+            .filter($ -> !$.isEmpty())
+            .distinct()
+            .collect(Collectors.joining(" / "));
+        return advisory.isEmpty() ? null : advisory;
+    }
+
+    static String watchedAvatarAdvisory(ScarletWatchedEntities.WatchedEntity watchedAvatar)
+    {
+        if (watchedAvatar == null || watchedAvatar.message == null || watchedAvatar.message.trim().isEmpty())
+            return "Watched avatar";
+        return "Watched avatar: " + watchedAvatar.message.trim();
+    }
+
     @Override
     public void log_vtkInit(boolean preamble, LocalDateTime timestamp, String targetDisplayName, String nullable_actorDisplayName)
     {
@@ -636,7 +706,7 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
             if (this.isInGroupInstance)
             {
                 this.scarlet.discord.emitExtendedVtkInitiated(this.scarlet, timestamp, this.clientLocation, userId, targetDisplayName, actorId, nullable_actorDisplayName);
-                if (this.announceVotesToKick.get())
+                if (this.advisoryShowVotesToKick.get() && this.announceVotesToKick.get())
                 {
                     String vtktts = actorId == null
                         ? ("Vote to kick against "+TtsService.sanitizeName(targetDisplayName)+".")

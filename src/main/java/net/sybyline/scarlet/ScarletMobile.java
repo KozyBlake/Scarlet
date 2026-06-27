@@ -46,6 +46,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -72,7 +73,11 @@ import com.sun.net.httpserver.HttpServer;
 
 import io.github.vrchatapi.model.GroupAuditLogEntry;
 import io.github.vrchatapi.model.User;
+
+import net.sybyline.scarlet.util.ScarletToast;
+import net.sybyline.scarlet.util.LinuxNotificationInstallDialogs;
 import net.sybyline.scarlet.util.MiscUtils;
+import net.sybyline.scarlet.util.Platform;
 import okhttp3.MediaType;
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -164,6 +169,18 @@ public class ScarletMobile implements Closeable
         this.notifySuspiciousPronouns = scarlet.settings.new FileValuedBoolean("mobile_notify_suspicious_pronouns", "Mobile: suspicious pronouns", true);
         this.createPairingQr = scarlet.settings.new FileValuedVoid("Create mobile pairing QR", "Create", this::showPairingQrDialog);
         this.sendTestNotification = scarlet.settings.new FileValuedVoid("Send mobile test notification", "Send", this::sendTestNotification);
+
+        this.toastEnabled = scarlet.settings.new FileValuedBoolean("notify_desktop_enabled", "Desktop notifications", false);
+        this.toastWatchedUsers = scarlet.settings.new FileValuedBoolean("toast_notify_watched_users", "Toast: watched users", true);
+        this.toastWatchedGroups = scarlet.settings.new FileValuedBoolean("toast_notify_watched_groups", "Toast: watched groups", true);
+        this.toastWatchedAvatars = scarlet.settings.new FileValuedBoolean("toast_notify_watched_avatars", "Toast: watched avatars", true);
+        this.toastVotesToKick = scarlet.settings.new FileValuedBoolean("toast_notify_votes_to_kick", "Toast: votes-to-kick", true);
+        this.toastModeration = scarlet.settings.new FileValuedBoolean("toast_notify_moderation", "Toast: moderation", true);
+        this.toastStaff = scarlet.settings.new FileValuedBoolean("toast_notify_staff", "Toast: staff joins/leaves", false);
+        this.toastNewPlayers = scarlet.settings.new FileValuedBoolean("toast_notify_new_players", "Toast: new players", false);
+        this.toastMixedNames = scarlet.settings.new FileValuedBoolean("toast_notify_mixed_character_names", "Toast: mixed-character names", false);
+        this.toastSuspiciousPronouns = scarlet.settings.new FileValuedBoolean("toast_notify_suspicious_pronouns", "Toast: suspicious pronouns", true);
+        this.sendToastTest = scarlet.settings.new FileValuedVoid("Send desktop test notification", "Send", this::sendToastTest);
     }
 
     final Scarlet scarlet;
@@ -179,15 +196,26 @@ public class ScarletMobile implements Closeable
                                             notifyStaff,
                                             notifyNewPlayers,
                                             notifyMixedNames,
-                                            notifySuspiciousPronouns;
+                                            notifySuspiciousPronouns,
+                                            toastEnabled,
+                                            toastWatchedUsers,
+                                            toastWatchedGroups,
+                                            toastWatchedAvatars,
+                                            toastVotesToKick,
+                                            toastModeration,
+                                            toastStaff,
+                                            toastNewPlayers,
+                                            toastMixedNames,
+                                            toastSuspiciousPronouns;
     final ScarletSettings.FileValued<Severity> minSeverity;
-    final ScarletSettings.FileValued<Void> createPairingQr, sendTestNotification;
+    final ScarletSettings.FileValued<Void> createPairingQr, sendTestNotification, sendToastTest;
     HttpServer directServer;
     int directServerPort;
     final List<DirectClient> directClients = Collections.synchronizedList(new ArrayList<>());
     volatile FcmServiceAccount fcmServiceAccount;
     volatile String fcmAccessToken;
     volatile long fcmAccessTokenExpiresAtMillis;
+    final AtomicBoolean toastInstallPrompted = new AtomicBoolean(false);
 
     public boolean wants(NotificationType type, Severity severity)
     {
@@ -358,6 +386,9 @@ public class ScarletMobile implements Closeable
 
     void emit(NotificationType type, Severity severity, String title, String body, String location, EventEditor editor)
     {
+        // Desktop toasts fire independently of the mobile companion (own toggles), so this runs
+        // before the mobile gate below. emit() is only reached for live joins, so no load flood.
+        this.maybeToast(type, title, body);
         if (type != NotificationType.TEST && !this.wants(type, severity))
             return;
         if (type == NotificationType.TEST && !this.enabled.get())
@@ -832,6 +863,95 @@ public class ScarletMobile implements Closeable
         }
     }
 
+    boolean toastEnabledFor(NotificationType type)
+    {
+        switch (type)
+        {
+        case WATCHED_USER_JOIN: return this.toastWatchedUsers.get();
+        case WATCHED_GROUP_JOIN: return this.toastWatchedGroups.get();
+        case WATCHED_AVATAR: return this.toastWatchedAvatars.get();
+        case VOTE_TO_KICK: return this.toastVotesToKick.get();
+        case MODERATION: return this.toastModeration.get();
+        case STAFF: return this.toastStaff.get();
+        case NEW_PLAYER: return this.toastNewPlayers.get();
+        case MIXED_CHARACTER_NAME: return this.toastMixedNames.get();
+        case SUSPICIOUS_PRONOUNS: return this.toastSuspiciousPronouns.get();
+        case TEST: return true;
+        default: return true;
+        }
+    }
+
+    void maybeToast(NotificationType type, String title, String body)
+    {
+        if (type == NotificationType.TEST)
+            return;
+        if (!this.toastEnabled.get() || !this.toastEnabledFor(type))
+            return;
+        try
+        {
+            boolean ok = ScarletToast.show(title, body);
+            if (!ok)
+                this.promptLinuxNotifierInstall(false);
+        }
+        catch (Throwable ex)
+        {
+            LOG.debug("Desktop toast failed for {}", type, ex);
+        }
+    }
+
+    void sendToastTest()
+    {
+        if (!this.toastEnabled.get())
+        {
+            this.info("Desktop notifications are disabled", "Enable Desktop notifications first.");
+            return;
+        }
+        boolean ok = ScarletToast.show("Scarlet", "Desktop notifications are working.");
+        if (!ok)
+        {
+            if (this.promptLinuxNotifierInstall(true))
+                return;
+            this.info("No desktop notifier available",
+                "Scarlet could not find a way to show a desktop notification on this system. "
+              + "On Linux, install 'notify-send' (the libnotify / libnotify-bin package).");
+        }
+    }
+
+    boolean promptLinuxNotifierInstall(boolean userInitiated)
+    {
+        if (Platform.CURRENT != Platform.$NIX || Platform.isAndroid() || Platform.isTermux())
+            return false;
+        if (LinuxNotificationInstallDialogs.isNotifierInstalled())
+        {
+            if (!userInitiated && !this.toastInstallPrompted.compareAndSet(false, true))
+                return true;
+            if (userInitiated)
+                this.info("Desktop notifier failed",
+                    "Scarlet found notify-send, but the notification command failed. "
+                  + "Make sure your desktop notification service and DBus session are running, "
+                  + "and that notifications are not blocked or muted.");
+            else
+                LOG.warn("notify-send is installed, but the desktop notification command failed");
+            return true;
+        }
+        if (!userInitiated && !this.toastInstallPrompted.compareAndSet(false, true))
+            return true;
+
+        this.scarlet.execModal.execute(() ->
+        {
+            Component parent = this.scarlet.ui == null ? null : this.scarlet.ui.getParentComponent();
+            LinuxNotificationInstallDialogs.InstallDialogResult result =
+                LinuxNotificationInstallDialogs.showInstallFlowIfNeeded(parent);
+            if (result == LinuxNotificationInstallDialogs.InstallDialogResult.INSTALL_APPROVED_SUCCESS
+             || result == LinuxNotificationInstallDialogs.InstallDialogResult.ALREADY_INSTALLED)
+            {
+                ScarletToast.resetAvailabilityCache();
+                ScarletToast.show("Scarlet", "Desktop notifications are working.");
+            }
+        });
+        return true;
+    }
+
     void editDevicesFile()
     {
         synchronized (this)
@@ -907,7 +1027,10 @@ public class ScarletMobile implements Closeable
     public void close()
     {
         this.stopDirectServer();
-        this.save();
+        if (this.scarlet.shouldPersistOnShutdown())
+            this.save();
+        else
+            LOG.info("Skipping mobile companion save after migration bundle import");
     }
 
     synchronized void ensureDirectServer()

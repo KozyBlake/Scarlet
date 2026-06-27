@@ -2,7 +2,7 @@
   <modelVersion>4.0.0</modelVersion>
   <groupId>net.sybyline</groupId>
   <artifactId>scarlet</artifactId>
-  <version>0.4.17-b4</version><!--scarlet-version-->
+  <version>0.4.18</version><!--scarlet-version-->
   <name>Scarlet</name>
   <build>
     <plugins>
@@ -171,6 +171,10 @@
     <repository>
       <id>jitpack.io</id>
       <url>https://jitpack.io</url>
+    </repository>
+    <repository>
+      <id>jetbrains-intellij-dependencies</id>
+      <url>https://packages.jetbrains.team/maven/p/ij/intellij-dependencies</url>
     </repository>
   </repositories>
   <properties>
@@ -428,6 +432,11 @@
       <groupId>net.java.dev.jna</groupId>
       <artifactId>jna-platform</artifactId>
       <version>${jna.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.jetbrains.pty4j</groupId>
+      <artifactId>pty4j</artifactId>
+      <version>0.11.4</version>
     </dependency>
     <!-- DAVE/E2EE Protocol Support -->
     <dependency>

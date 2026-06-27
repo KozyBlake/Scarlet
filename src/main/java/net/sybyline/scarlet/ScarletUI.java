@@ -57,6 +57,8 @@ import javax.swing.Action;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
+import javax.swing.JDialog;
+import javax.swing.JPasswordField;
 import javax.swing.JComboBox;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
@@ -223,13 +225,11 @@ public class ScarletUI implements IScarletUI
             }
             player.acctdays = period;
             player.left = null;
-            player.advisory = advisory;
-            player.text_color = text_color;
-            player.priority = priority;
+            player.setBaseAdvisory(advisory, text_color, priority);
             player.ageVerificationStatus = user == null ? null : user.getAgeVerificationStatus();
             player.avatarInfo = this.scarlet.eventListener.clientLocation_userDisplayName2avatarBundleInfo.get(name);
             player.pronouns = user == null ? null : user.getPronouns();
-            player.pronounsFlagged = PronounValidator.isFlagged(player.pronouns);
+            player.pronounsFlagged = this.scarlet.eventListener.getShowSuspiciousPronounAdvisory() && PronounValidator.isFlagged(player.pronouns);
             this.updatePending(id, player);
             if (initialPreamble)
             {
@@ -250,13 +250,11 @@ public class ScarletUI implements IScarletUI
                 player.joined = joined;
             }
             player.acctdays = period;
-            player.advisory = advisory;
-            player.text_color = text_color;
-            player.priority = priority;
+            player.setBaseAdvisory(advisory, text_color, priority);
             player.ageVerificationStatus = user == null ? null : user.getAgeVerificationStatus();
             player.avatarInfo = this.scarlet.eventListener.clientLocation_userDisplayName2avatarBundleInfo.get(name);
             player.pronouns = user == null ? null : user.getPronouns();
-            player.pronounsFlagged = PronounValidator.isFlagged(player.pronouns);
+            player.pronounsFlagged = this.scarlet.eventListener.getShowSuspiciousPronounAdvisory() && PronounValidator.isFlagged(player.pronouns);
             this.updatePending(id, player);
             this.connectedPlayers.put(id, player);
             if (initialPreamble)
@@ -394,9 +392,30 @@ public class ScarletUI implements IScarletUI
         });
     }
 
+    static String joinAdvisoryParts(String first, String second)
+    {
+        first = normalizeAdvisoryPart(first);
+        second = normalizeAdvisoryPart(second);
+        if (first == null)
+            return second;
+        if (second == null || first.equals(second))
+            return first;
+        return first + " / " + second;
+    }
+
+    private static String normalizeAdvisoryPart(String value)
+    {
+        if (value == null)
+            return null;
+        String trimmed = value.trim();
+        return trimmed.isEmpty() ? null : trimmed;
+    }
+
     private final Scarlet scarlet;
     private final JFrame jframe;
     private final JTabbedPane jtabs;
+    private JPanel tabCli;
+    private javax.swing.JCheckBoxMenuItem cliTabMenuItem;
     private final PropsTable<ConnectedPlayer> propstable;
     private final JPanel jpanel_settings;
     private final JLabel jlabel_lastSavedAt;
@@ -439,6 +458,8 @@ public class ScarletUI implements IScarletUI
         LocalDateTime joined;
         LocalDateTime left;
         String advisory;
+        String baseAdvisory;
+        String avatarAdvisory;
         Action profile = new AbstractAction("Open") {
             private static final long serialVersionUID = -7804449090453940172L;
             @Override
@@ -507,10 +528,45 @@ public class ScarletUI implements IScarletUI
             }
         };
         Color text_color;
+        Color baseTextColor;
+        Color avatarTextColor;
         int priority;
+        int basePriority = Integer.MIN_VALUE + 1;
+        int avatarPriority = Integer.MIN_VALUE + 1;
         AgeVerificationStatus ageVerificationStatus;
         String pronouns;
         boolean pronounsFlagged;
+
+        void setBaseAdvisory(String advisory, Color textColor, int priority)
+        {
+            this.baseAdvisory = advisory;
+            this.baseTextColor = textColor;
+            this.basePriority = priority;
+            this.rebuildAdvisoryAndStyle();
+        }
+
+        void setAvatarAdvisory(String advisory, Color textColor, int priority)
+        {
+            this.avatarAdvisory = advisory;
+            this.avatarTextColor = textColor;
+            this.avatarPriority = priority;
+            this.rebuildAdvisoryAndStyle();
+        }
+
+        void rebuildAdvisoryAndStyle()
+        {
+            this.advisory = ScarletUI.joinAdvisoryParts(this.baseAdvisory, this.avatarAdvisory);
+            if (this.avatarPriority > this.basePriority)
+            {
+                this.priority = this.avatarPriority;
+                this.text_color = this.avatarTextColor;
+            }
+            else
+            {
+                this.priority = this.basePriority;
+                this.text_color = this.baseTextColor;
+            }
+        }
     }
     static final Comparator<ConnectedPlayer> COMPARE = Comparator
         .<ConnectedPlayer>comparingInt($ -> 0) // dummy
@@ -589,6 +645,20 @@ public class ScarletUI implements IScarletUI
                     ScarletUI.this.propstableColumsDirty = true;
                 }
             });
+            // Right-click the table header to show/hide columns (same list as Edit -> Columns).
+            javax.swing.table.JTableHeader propsHeader = this.propstable.getTableHeader();
+            if (propsHeader != null)
+                propsHeader.addMouseListener(new MouseAdapter()
+                {
+                    @Override public void mousePressed(MouseEvent e)  { popup(e); }
+                    @Override public void mouseReleased(MouseEvent e) { popup(e); }
+                    void popup(MouseEvent e)
+                    {
+                        if (e.isPopupTrigger())
+                            ScarletUI.this.propstable.getColumnSelectMenu().getPopupMenu()
+                                .show(e.getComponent(), e.getX(), e.getY());
+                    }
+                });
             this.propstable.setPropsTableExt(this.propstable.new PropsTableExt()
             {
                 @Override
@@ -606,7 +676,7 @@ public class ScarletUI implements IScarletUI
                     if (this.isRowSelected(row))
                         return null; // let selection colour through
                     // Flagged pronouns — amber background to draw attention
-                    if (element.pronounsFlagged && element.left == null)
+                    if (element.pronounsFlagged && element.left == null && element.text_color == null)
                         return new Color(80, 55, 10);
                     // Subtle alternating stripe using the FlatLaf table colours
                     if (row % 2 == 1)
@@ -637,10 +707,10 @@ public class ScarletUI implements IScarletUI
                             return MiscUtils.lerp(fg, bg, 0.55f);
                     }
                     // Flagged pronouns — bright amber foreground
-                    if (element.pronounsFlagged)
-                        return new Color(255, 190, 60);
                     if (element.text_color != null)
                         return element.text_color;
+                    if (element.pronounsFlagged)
+                        return new Color(255, 190, 60);
                     return super.getOverrideForegroundColor(element, prev);
                 }
             });
@@ -682,6 +752,24 @@ public class ScarletUI implements IScarletUI
                     jmenu_edit.add(jmenu_advanced);
                 }
                 jmenubar.add(jmenu_edit);
+            }
+            {
+                JMenu jmenu_view = new JMenu("View");
+                {
+                    // Default to shown; the persisted value is applied in loadSettings(), because
+                    // the FileValued settings block is initialized AFTER the UI is built.
+                    this.cliTabMenuItem = new javax.swing.JCheckBoxMenuItem("CLI tab", true);
+                    this.cliTabMenuItem.setToolTipText("Show or hide the CLI tab");
+                    this.cliTabMenuItem.addActionListener($ ->
+                    {
+                        boolean show = this.cliTabMenuItem.isSelected();
+                        this.scarlet.showCliTab.set(Boolean.valueOf(show), "view-menu");
+                        this.setCliTabVisible(show);
+                        this.saveSettings(false);
+                    });
+                    jmenu_view.add(this.cliTabMenuItem);
+                }
+                jmenubar.add(jmenu_view);
             }
             {
                 JMenu jmenu_help = new JMenu("Help");
@@ -986,6 +1074,8 @@ public class ScarletUI implements IScarletUI
                 cliInputRow.add(cliRunBtn,  BorderLayout.EAST);
                 cliPanel.add(cliInputRow, BorderLayout.SOUTH);
 
+                this.tabCli = cliPanel;
+                // Added unconditionally; loadSettings() hides it if the user turned it off.
                 this.jtabs.addTab("  CLI  ", cliPanel);
             }
             this.jframe.add(this.jtabs, BorderLayout.CENTER);
@@ -1150,6 +1240,23 @@ public class ScarletUI implements IScarletUI
         this.scarlet.settings.setObject("ui_instance_columns", UIPropsInfo.MAPOF, map);
     }
 
+    /** Shows or hides the CLI tab live. CLI is always the last tab, so no index math is needed. */
+    private void setCliTabVisible(boolean show)
+    {
+        if (this.tabCli == null)
+            return;
+        int idx = this.jtabs.indexOfComponent(this.tabCli);
+        if (show)
+        {
+            if (idx < 0)
+                this.jtabs.addTab("  CLI  ", this.tabCli);
+        }
+        else if (idx >= 0)
+        {
+            this.jtabs.removeTabAt(idx);
+        }
+    }
+
     private void uiModalExit()
     {
         if (!this.scarlet.running || this.exitPromptInFlight)
@@ -1165,6 +1272,313 @@ public class ScarletUI implements IScarletUI
     private void messageModalAsyncInfo(Component component, Object message, String title)
     {
         this.scarlet.execModal.execute(() -> JOptionPane.showMessageDialog(component != null ? component : this.jframe, message, title, JOptionPane.INFORMATION_MESSAGE));
+    }
+
+    private void uiExportMigrationBundle()
+    {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Export Scarlet migration bundle");
+        chooser.setFileFilter(new FileNameExtensionFilter("Zip bundle", "zip"));
+        chooser.setSelectedFile(new File("scarlet-migration.zip"));
+        if (chooser.showSaveDialog(this.jframe) != JFileChooser.APPROVE_OPTION)
+            return;
+        File chosen = chooser.getSelectedFile();
+        final File file = chosen.getName().toLowerCase().endsWith(".zip")
+            ? chosen
+            : new File(chosen.getParentFile(), chosen.getName() + ".zip");
+
+        // Mandatory PIN (encrypts the whole bundle, AES-GCM) plus an optional move-out.
+        JPasswordField pinField = new JPasswordField(16);
+        JPasswordField pinConfirm = new JPasswordField(16);
+        JCheckBox movingBox = new JCheckBox("I'm moving to another computer (offer to remove this copy after export)");
+        JPanel pinPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints pgbc = new GridBagConstraints();
+        pgbc.gridx = 0; pgbc.gridy = 0; pgbc.gridwidth = 2;
+        pgbc.fill = GridBagConstraints.HORIZONTAL; pgbc.weightx = 1.0;
+        pgbc.anchor = GridBagConstraints.WEST; pgbc.insets = new Insets(0, 0, 8, 0);
+        pinPanel.add(new JLabel("<html>Set a PIN to encrypt this bundle (required, at least 4 characters).<br>"
+            + "You'll need the same PIN to import it. A lost PIN cannot be recovered.</html>"), pgbc);
+        pgbc.gridy++; pgbc.gridwidth = 1; pgbc.weightx = 0; pgbc.fill = GridBagConstraints.NONE;
+        pgbc.insets = new Insets(0, 0, 4, 8);
+        pinPanel.add(new JLabel("PIN"), pgbc);
+        pgbc.gridx = 1; pgbc.weightx = 1.0; pgbc.fill = GridBagConstraints.HORIZONTAL;
+        pinPanel.add(pinField, pgbc);
+        pgbc.gridx = 0; pgbc.gridy++; pgbc.weightx = 0; pgbc.fill = GridBagConstraints.NONE;
+        pgbc.insets = new Insets(0, 0, 8, 8);
+        pinPanel.add(new JLabel("Confirm"), pgbc);
+        pgbc.gridx = 1; pgbc.weightx = 1.0; pgbc.fill = GridBagConstraints.HORIZONTAL;
+        pinPanel.add(pinConfirm, pgbc);
+        pgbc.gridx = 0; pgbc.gridy++; pgbc.gridwidth = 2; pgbc.weightx = 1.0;
+        pgbc.fill = GridBagConstraints.HORIZONTAL; pgbc.insets = new Insets(0, 0, 0, 0);
+        pinPanel.add(movingBox, pgbc);
+        if (JOptionPane.showConfirmDialog(this.jframe, pinPanel, "Encrypt bundle",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION)
+            return;
+        char[] entered = pinField.getPassword();
+        char[] confirm = pinConfirm.getPassword();
+        try
+        {
+            if (entered.length < 4)
+            {
+                JOptionPane.showMessageDialog(this.jframe, "A PIN of at least 4 characters is required to encrypt the bundle.",
+                    "Encrypt bundle", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            if (!java.util.Arrays.equals(entered, confirm))
+            {
+                JOptionPane.showMessageDialog(this.jframe, "The PINs did not match.",
+                    "Encrypt bundle", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+        }
+        finally
+        {
+            java.util.Arrays.fill(confirm, '\0');
+        }
+        final char[] pin = entered;
+        final boolean offerWipe = movingBox.isSelected();
+
+        this.scarlet.execModal.execute(() ->
+        {
+            try
+            {
+                String summary = ScarletMigration.exportBundle(file, pin);
+                boolean exportedOk = file.isFile() && file.length() > 0L && ScarletMigration.isEncryptedBundle(file);
+                boolean bundleInData = this.isInsideDataFolder(file);
+                if (offerWipe && exportedOk && !bundleInData
+                    && Boolean.TRUE.equals(Swing.getWait(this::uiConfirmTimedWipe)))
+                {
+                    this.scarlet.requestDataWipeOnShutdown();
+                    JOptionPane.showMessageDialog(this.jframe,
+                        "<html>Bundle saved to:<br><b>" + file.getAbsolutePath() + "</b><br><br>"
+                      + "This computer's Scarlet data and credentials will be removed as Scarlet quits now.</html>",
+                        "Moving out", JOptionPane.INFORMATION_MESSAGE);
+                    return;
+                }
+                String tail = offerWipe && exportedOk && bundleInData
+                    ? "<br><br>Move-out removal was skipped because the bundle is saved inside the data folder it would delete."
+                    : "";
+                this.messageModalAsyncInfo(null,
+                    "<html>Saved migration bundle to:<br><b>" + file.getAbsolutePath() + "</b><br><br>"
+                  + "Bundled " + summary + ".<br><br>"
+                  + "This bundle is <b>PIN-encrypted</b> - you'll need the same PIN to import it, and a lost PIN cannot be recovered."
+                  + tail
+                  + "</html>",
+                    "Export complete");
+            }
+            catch (Exception ex)
+            {
+                LOG.error("Migration export to {} failed", file, ex);
+                this.messageModalAsyncInfo(null, "Export failed: " + ex.getMessage(), "Export failed");
+            }
+            finally
+            {
+                java.util.Arrays.fill(pin, '\0');
+            }
+        });
+    }
+
+    private boolean isInsideDataFolder(File file)
+    {
+        try
+        {
+            File data = Scarlet.dir;
+            if (data == null)
+                return false;
+            String base = data.getCanonicalPath() + File.separator;
+            return file.getCanonicalPath().startsWith(base);
+        }
+        catch (java.io.IOException ex)
+        {
+            return false;
+        }
+    }
+
+    /**
+     * Confirmation for the destructive move-out wipe. The "Keep" button is immediate; the
+     * "Remove all" button is disabled and counts down ~10s before it can be pressed, so the
+     * removal can't be triggered reflexively. Must run on the EDT (via {@code Swing.getWait}).
+     */
+    private boolean uiConfirmTimedWipe()
+    {
+        JLabel message = new JLabel("<html><div style='width:390px'>"
+            + "<b>Remove all Scarlet data and credentials from THIS computer?</b><br><br>"
+            + "This deletes this machine's data folder (settings, watched lists, Discord config, metadata) "
+            + "and clears its stored credentials (bot token, VRChat login, 2FA secret, session cookie).<br><br>"
+            + "Do this only after you've imported your bundle on the new computer and confirmed it works. "
+            + "This cannot be undone."
+            + "</div></html>");
+
+        JButton keepBtn = new JButton("Keep on this computer");
+        JButton removeBtn = new JButton("Remove all settings… 10");
+        removeBtn.setEnabled(false);
+
+        JOptionPane pane = new JOptionPane(message, JOptionPane.WARNING_MESSAGE,
+            JOptionPane.YES_NO_OPTION, null, new Object[] { keepBtn, removeBtn }, keepBtn);
+        JDialog dialog = pane.createDialog(this.jframe, "Remove this computer's copy");
+
+        final boolean[] confirmed = { false };
+        keepBtn.addActionListener(e -> { confirmed[0] = false; dialog.dispose(); });
+        removeBtn.addActionListener(e -> { confirmed[0] = true; dialog.dispose(); });
+
+        final int[] remaining = { 10 };
+        javax.swing.Timer timer = new javax.swing.Timer(1000, null);
+        timer.addActionListener(e ->
+        {
+            remaining[0]--;
+            if (remaining[0] > 0)
+            {
+                removeBtn.setText("Remove all settings… " + remaining[0]);
+            }
+            else
+            {
+                removeBtn.setText("Remove all settings");
+                removeBtn.setEnabled(true);
+                removeBtn.setForeground(new Color(226, 100, 104));
+                timer.stop();
+            }
+        });
+        timer.setRepeats(true);
+        timer.start();
+
+        dialog.setDefaultCloseOperation(JDialog.DISPOSE_ON_CLOSE);
+        dialog.setVisible(true);   // modal; the Swing timer keeps firing in the dialog's event pump
+        timer.stop();
+        return confirmed[0];
+    }
+
+    private void uiImportMigrationBundle()
+    {
+        int proceed = JOptionPane.showConfirmDialog(this.jframe,
+            "<html>Importing a bundle can <b>overwrite</b> this machine's Scarlet data and/or credentials "
+          + "with the contents of the bundle. You'll choose which parts to import next.<br><br>"
+          + "Scarlet will first create an automatic backup of this machine's current data and credentials. "
+          + "If that backup fails, import will stop.<br><br>"
+          + "Scarlet will need to be restarted afterward. Continue?</html>",
+            "Import migration bundle", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+        if (proceed != JOptionPane.OK_OPTION)
+            return;
+        JFileChooser chooser = new JFileChooser();
+        chooser.setDialogTitle("Import Scarlet migration bundle");
+        chooser.setFileFilter(new FileNameExtensionFilter("Zip bundle", "zip"));
+        if (chooser.showDialog(this.jframe, "Import") != JFileChooser.APPROVE_OPTION)
+            return;
+        final File file = chooser.getSelectedFile();
+
+        // PIN-protected bundle? Ask for the PIN up front so a wrong PIN fails before any change.
+        char[] enteredPin = null;
+        try
+        {
+            if (ScarletMigration.isEncryptedBundle(file))
+            {
+                JPasswordField pinField = new JPasswordField(16);
+                JPanel pinPanel = new JPanel(new GridBagLayout());
+                GridBagConstraints pgbc = new GridBagConstraints();
+                pgbc.gridx = 0; pgbc.gridy = 0; pgbc.gridwidth = GridBagConstraints.REMAINDER;
+                pgbc.fill = GridBagConstraints.HORIZONTAL; pgbc.weightx = 1.0;
+                pgbc.anchor = GridBagConstraints.WEST; pgbc.insets = new Insets(0, 0, 8, 0);
+                pinPanel.add(new JLabel("This bundle is PIN-protected. Enter its PIN to import."), pgbc);
+                pgbc.gridy++;
+                pinPanel.add(pinField, pgbc);
+                if (JOptionPane.showConfirmDialog(this.jframe, pinPanel, "Enter bundle PIN",
+                        JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION)
+                    return;
+                enteredPin = pinField.getPassword();
+                if (enteredPin.length == 0)
+                {
+                    JOptionPane.showMessageDialog(this.jframe, "A PIN is required to import this bundle.",
+                        "Import bundle", JOptionPane.WARNING_MESSAGE);
+                    return;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            LOG.error("Could not read migration bundle {}", file, ex);
+            JOptionPane.showMessageDialog(this.jframe, "Could not read that bundle: " + ex.getMessage(),
+                "Import bundle", JOptionPane.ERROR_MESSAGE);
+            return;
+        }
+
+        final ScarletMigration.ImportOptions options = this.uiChooseMigrationImportOptions();
+        if (options == null)
+        {
+            if (enteredPin != null)
+                java.util.Arrays.fill(enteredPin, '\0');
+            return;
+        }
+        final char[] pin = enteredPin;
+        this.scarlet.execModal.execute(() ->
+        {
+            try
+            {
+                ScarletMigration.ImportResult result = ScarletMigration.importBundle(file, options, pin);
+                this.scarlet.stopAfterMigrationImport();
+                JOptionPane.showMessageDialog(this.jframe,
+                    "<html>Import complete (" + result.summary + ").<br><br>"
+                  + "Pre-import backup saved to:<br><b>" + result.backupFile.getAbsolutePath() + "</b><br><br>"
+                  + "Scarlet will quit now. Start it again to load the imported credentials and data.</html>",
+                    "Import complete", JOptionPane.INFORMATION_MESSAGE);
+            }
+            catch (Exception ex)
+            {
+                LOG.error("Migration import from {} failed", file, ex);
+                this.messageModalAsyncInfo(null, "Import failed: " + ex.getMessage(), "Import failed");
+            }
+            finally
+            {
+                if (pin != null)
+                    java.util.Arrays.fill(pin, '\0');
+            }
+        });
+    }
+
+    private ScarletMigration.ImportOptions uiChooseMigrationImportOptions()
+    {
+        JCheckBox importDataFiles = new JCheckBox("Data/config files", true);
+        JCheckBox importCredentials = new JCheckBox("Secure credentials and sign-ins", true);
+
+        JPanel panel = new JPanel(new GridBagLayout());
+        GridBagConstraints ogbc = new GridBagConstraints();
+        ogbc.gridx = 0;
+        ogbc.gridy = 0;
+        ogbc.gridwidth = GridBagConstraints.REMAINDER;
+        ogbc.fill = GridBagConstraints.HORIZONTAL;
+        ogbc.anchor = GridBagConstraints.WEST;
+        ogbc.weightx = 1.0;
+        ogbc.insets = new Insets(0, 0, 8, 0);
+        panel.add(new JLabel("<html>Select what to import from the bundle.</html>"), ogbc);
+
+        ogbc.gridy++;
+        ogbc.insets = new Insets(0, 0, 2, 0);
+        panel.add(importDataFiles, ogbc);
+
+        ogbc.gridy++;
+        ogbc.insets = new Insets(0, 24, 8, 0);
+        panel.add(new JLabel("<html>Settings, watched lists, Discord config, metadata, cache/data files. "
+            + "If credentials are not selected, Scarlet skips credential key files so this PC's sign-ins stay usable.</html>"), ogbc);
+
+        ogbc.gridy++;
+        ogbc.insets = new Insets(0, 0, 2, 0);
+        panel.add(importCredentials, ogbc);
+
+        ogbc.gridy++;
+        ogbc.insets = new Insets(0, 24, 0, 0);
+        panel.add(new JLabel("<html>Discord bot token, VRChat username/password, 2FA secret, session cookies, "
+            + "alternate credentials, Java Preferences, and <code>global-prefs.key</code>.</html>"), ogbc);
+
+        int choice = JOptionPane.showConfirmDialog(this.jframe, panel,
+            "Choose what to import", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (choice != JOptionPane.OK_OPTION)
+            return null;
+        if (!importDataFiles.isSelected() && !importCredentials.isSelected())
+        {
+            JOptionPane.showMessageDialog(this.jframe,
+                "Select at least one part of the bundle to import.",
+                "Import bundle", JOptionPane.WARNING_MESSAGE);
+            return null;
+        }
+        return new ScarletMigration.ImportOptions(importDataFiles.isSelected(), importCredentials.isSelected());
     }
 
     private void uiCreateGroupInstance()
@@ -1624,7 +2038,7 @@ public class ScarletUI implements IScarletUI
             VrchatApiVersionChecker.Report report = VrchatApiVersionChecker.check();
             this.scarlet.vrchatApiPreflightReport = report;
             if (report.failure != null)
-                LOG.debug("Manual VRChat API status check issue", report.failure);
+                this.scarlet.logVrchatApiCheckFailure("Manual VRChat API status check", report.failure);
             this.refreshVrchatApiStatus();
             Swing.invokeLater(() ->
             {
@@ -1831,6 +2245,8 @@ public class ScarletUI implements IScarletUI
         message.append("Bundled VRChat API: ").append(bundled);
         message.append("\nLatest upstream VRChat API: ").append(latest);
         message.append("\n\n").append(report.message);
+        if (report.failure != null)
+            message.append("\nReason: ").append(VrchatApiVersionChecker.summarizeFailure(report.failure));
         if (report.updateAvailable)
         {
             message.append("\n\nSome systems may keep working fine while others start failing when");
@@ -2318,8 +2734,15 @@ public class ScarletUI implements IScarletUI
     @Override
     public void close()
     {
-        this.saveSettings(false);
-        this.saveInstanceColumns();
+        if (this.scarlet.shouldPersistOnShutdown())
+        {
+            this.saveSettings(false);
+            this.saveInstanceColumns();
+        }
+        else
+        {
+            LOG.info("Skipping UI settings save after migration bundle import");
+        }
         this.jframe.dispose();
     }
 
@@ -2342,11 +2765,24 @@ public class ScarletUI implements IScarletUI
           "audit_polling_interval",
           "heuristicKickCount", "heuristicPeriodDays", "outstandingPeriodDays" },
 
+        { "Advisories",
+          "advisory_show_watched_users", "advisory_show_watched_groups", "advisory_show_watched_avatars",
+          "advisory_show_new_players", "advisory_show_mixed_character_names", "advisory_show_votes_to_kick",
+          "advisory_show_suspicious_pronouns" },
+
         { "Text-to-Speech",
-          "tts_voice_name", "tts_use_default_audio_device",
+          "tts_voice_name", "Install Linux TTS voices", "tts_use_default_audio_device",
           "tts_announce_watched_users", "tts_announce_watched_groups", "tts_announce_watched_avatars",
           "tts_announce_new_players", "tts_announce_mixed_character_names", "tts_announce_players_newer_than_days",
-          "tts_announce_votes_to_kick" },
+          "tts_announce_votes_to_kick",
+          "tts_flag_suspicious_pronouns", "tts_announce_suspicious_pronouns" },
+
+        { "Desktop Notifications",
+          "notify_desktop_enabled",
+          "toast_notify_watched_users", "toast_notify_watched_groups", "toast_notify_watched_avatars",
+          "toast_notify_votes_to_kick", "toast_notify_moderation", "toast_notify_staff",
+          "toast_notify_new_players", "toast_notify_mixed_character_names", "toast_notify_suspicious_pronouns",
+          "Send desktop test notification" },
 
         { "Mobile Companion",
           "mobile_enabled", "mobile_direct_enabled", "mobile_direct_port",
@@ -2364,6 +2800,10 @@ public class ScarletUI implements IScarletUI
           "moderation_summary_only_activity",
           "discord_ping_instance_warn", "discord_ping_instance_kick",
           "discord_ping_member_remove", "discord_ping_user_ban", "discord_ping_user_unban" },
+
+        { "Verification",
+          "auto_invite_group_on_verify", "verified_role_snowflake", "members_role_snowflake",
+          "link_vrchat_manual_verify_message", "auto_invite_group_id" },
 
         { "Discord — Outstanding Moderation",
           "discord_ping_outstanding_instance_warn", "discord_ping_outstanding_instance_kick",
@@ -2401,7 +2841,9 @@ public class ScarletUI implements IScarletUI
             return false;
         if (!Features.DISCORD_KICK_BAN_ENABLED && "discord_kick_ban_enabled".equals(id))
             return true;
-        if (!Features.WATCHED_AVATARS_ENABLED && "tts_announce_watched_avatars".equals(id))
+        if (!Features.WATCHED_AVATARS_ENABLED
+            && ("tts_announce_watched_avatars".equals(id)
+                || "advisory_show_watched_avatars".equals(id)))
             return true;
         if (!Features.EVIDENCE_ENABLED
             && ("evidence_enabled".equals(id)
@@ -2417,13 +2859,19 @@ public class ScarletUI implements IScarletUI
         if (!Features.PRONOUNS_ENABLED
             && ("Edit good_pronoun.json".equals(id)
                 || "Edit bad_pronoun.json".equals(id)
-                || "Reload pronoun lists".equals(id)))
+                || "Reload pronoun lists".equals(id)
+                || "tts_flag_suspicious_pronouns".equals(id)
+                || "tts_announce_suspicious_pronouns".equals(id)
+                || "advisory_show_suspicious_pronouns".equals(id)))
             return true;
         if (!Features.VRCHAT_REPORTS_ENABLED
             && ("vrchat_report_email".equals(id)
                 || "vrchat_report_template_footer".equals(id)))
             return true;
         if (!Features.CLI_COMMANDS_ENABLED && "Run CLI command".equals(id))
+            return true;
+        if ("Install Linux TTS voices".equals(id)
+            && net.sybyline.scarlet.util.Platform.CURRENT != net.sybyline.scarlet.util.Platform.$NIX)
             return true;
         return false;
     }
@@ -2539,6 +2987,88 @@ public class ScarletUI implements IScarletUI
         this.settingsCardPanels.add(vrchatApiCard);
         this.settingsCardSearchText.add("vrchat api status update version compatibility ticket blakebelladonna vinyarion");
         this.refreshVrchatApiStatus();
+
+        JPanel migrationCard = new JPanel(new GridBagLayout())
+        {
+            private static final long serialVersionUID = 1L;
+            @Override
+            protected void paintComponent(java.awt.Graphics g)
+            {
+                java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+                try
+                {
+                    g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                                        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                    java.awt.Shape viewportClip = g2.getClip();
+                    java.awt.Shape cardShape = new java.awt.geom.RoundRectangle2D.Float(
+                        0, 0, getWidth(), getHeight(), 10, 10);
+                    if (viewportClip == null)
+                    {
+                        g2.setClip(cardShape);
+                    }
+                    else
+                    {
+                        java.awt.geom.Area clipped = new java.awt.geom.Area(viewportClip);
+                        clipped.intersect(new java.awt.geom.Area(cardShape));
+                        g2.setClip(clipped);
+                    }
+                    g2.setColor(CARD_BG);
+                    g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
+                    g2.setColor(Swing.ACCENT);
+                    g2.fillRect(0, 0, 4, getHeight());
+                    g2.setClip(viewportClip);
+                    g2.setColor(CARD_BORDER);
+                    g2.setStroke(new java.awt.BasicStroke(1f));
+                    g2.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 10, 10);
+                }
+                finally
+                {
+                    g2.dispose();
+                }
+            }
+        };
+        migrationCard.setOpaque(false);
+        migrationCard.setBorder(BorderFactory.createEmptyBorder(10, 16, 12, 16));
+
+        GridBagConstraints mgbc = new GridBagConstraints();
+        mgbc.gridy = 0;
+        mgbc.gridx = 0;
+        mgbc.gridwidth = GridBagConstraints.REMAINDER;
+        mgbc.fill = GridBagConstraints.HORIZONTAL;
+        mgbc.anchor = GridBagConstraints.WEST;
+        mgbc.weightx = 1.0;
+        mgbc.insets = new Insets(0, 0, 8, 0);
+        JLabel migrationTitle = new JLabel("BACKUP & MIGRATION");
+        migrationTitle.setFont(migrationTitle.getFont().deriveFont(java.awt.Font.BOLD, 10f));
+        migrationTitle.setForeground(CARD_HDR_FG);
+        migrationCard.add(migrationTitle, mgbc);
+
+        mgbc.gridy++;
+        mgbc.insets = new Insets(2, 0, 10, 0);
+        JLabel migrationDesc = new JLabel("<html>Move Scarlet to another PC or operating system. <b>Export</b> bundles your"
+            + " credentials, bot config and data into one file; <b>Import</b> lets you choose data/config,"
+            + " secure credentials, or both, after making an automatic local backup, then quits so you can start it again cleanly."
+            + " Keep both files private — they contain your sign-ins.</html>");
+        migrationDesc.setForeground(LABEL_FG);
+        migrationCard.add(migrationDesc, mgbc);
+
+        JButton migrationExport = new JButton("Export bundle...");
+        JButton migrationImport = new JButton("Import bundle...");
+        migrationExport.addActionListener($ -> this.uiExportMigrationBundle());
+        migrationImport.addActionListener($ -> this.uiImportMigrationBundle());
+        JPanel migrationButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+        migrationButtons.setOpaque(false);
+        migrationButtons.add(migrationExport);
+        migrationButtons.add(migrationImport);
+        mgbc.gridy++;
+        mgbc.insets = new Insets(0, 0, 0, 0);
+        migrationCard.add(migrationButtons, mgbc);
+
+        gbc.insets = new Insets(10, 12, 0, 12);
+        this.jpanel_settings.add(migrationCard, gbc);
+        gbc.gridy++;
+        this.settingsCardPanels.add(migrationCard);
+        this.settingsCardSearchText.add("backup migration export import bundle transfer move pc os windows linux credentials sign-in usb");
 
         java.util.Set<String> placed = new java.util.HashSet<>();
 
@@ -2804,6 +3334,13 @@ public class ScarletUI implements IScarletUI
             // Inject the theme-preset combo (not backed by a FileValued setting)
             new ThemePresetSetting();
             this.readSettingUI();
+            // Apply persisted CLI-tab visibility now that the settings block is initialized.
+            if (this.scarlet.showCliTab != null && this.cliTabMenuItem != null)
+            {
+                boolean showCli = this.scarlet.showCliTab.get();
+                this.cliTabMenuItem.setSelected(showCli);
+                this.setCliTabVisible(showCli);
+            }
             if (this.scarlet.showUiDuringLoad.get())
             {
                 this.jframe.setVisible(true);

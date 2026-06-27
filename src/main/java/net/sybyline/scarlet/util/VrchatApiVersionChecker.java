@@ -1,10 +1,17 @@
 package net.sybyline.scarlet.util;
 
 import java.io.InputStream;
+import java.net.ConnectException;
+import java.net.NoRouteToHostException;
+import java.net.SocketException;
+import java.net.SocketTimeoutException;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.util.jar.Manifest;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import javax.net.ssl.SSLException;
 
 import net.sybyline.scarlet.Scarlet;
 
@@ -121,6 +128,34 @@ public final class VrchatApiVersionChecker
         if (latest != null)
             return latest;
         throw new IllegalStateException("No VRChat API versions were present in upstream metadata");
+    }
+
+    public static boolean isExpectedUnavailable(Throwable failure)
+    {
+        for (Throwable t = failure; t != null; t = t.getCause())
+        {
+            if (t instanceof SocketTimeoutException
+                || t instanceof UnknownHostException
+                || t instanceof ConnectException
+                || t instanceof NoRouteToHostException
+                || t instanceof SocketException
+                || t instanceof SSLException)
+                return true;
+        }
+        return false;
+    }
+
+    public static String summarizeFailure(Throwable failure)
+    {
+        if (failure == null)
+            return "unknown";
+        Throwable leaf = failure;
+        while (leaf.getCause() != null)
+            leaf = leaf.getCause();
+        String message = leaf.getMessage();
+        if (MiscUtils.blank(message))
+            return leaf.getClass().getSimpleName();
+        return leaf.getClass().getSimpleName() + ": " + message;
     }
 
     public enum Level

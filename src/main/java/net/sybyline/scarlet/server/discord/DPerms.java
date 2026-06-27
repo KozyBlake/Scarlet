@@ -65,7 +65,8 @@ public class DPerms
             "submit-evidence",
             "import-watched-groups",
             "discord-kick-confirm", "discord-kick-cancel",
-            "discord-ban-confirm", "discord-ban-cancel");
+            "discord-ban-confirm", "discord-ban-cancel",
+            "linkvrc-verify");
         allowDefaults(PermType.STRING_SELECT,
             "pagination-submission",
             "select-tags", "select-tags-1", "select-tags-2", "select-tags-3", "select-tags-4",
@@ -85,7 +86,7 @@ public class DPerms
             "schedule-set-roles", "schedule-set-platforms");
         allowDefaults(PermType.ENTITY_SELECT);
         allowDefaults(PermType.SLASH_COMMAND,
-            "link-vrchat-account");
+            "link-vrchat-account", "unlink-vrchat-account");
     }
     static void allowDefaults(PermType permType, String... ops)
     {

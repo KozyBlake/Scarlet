@@ -45,6 +45,7 @@ public class WinSapiTtsProvider implements TtsProvider
 {
 
     private static final Logger LOG = LoggerFactory.getLogger("Scarlet/TTS/WinSAPI");
+    private static final int SPERR_NOT_FOUND = 0x80045002;
 
     public static final String NaturalVoiceSAPIAdapter_URL = "https://github.com/gexgd0419/NaturalVoiceSAPIAdapter";
 
@@ -94,7 +95,10 @@ public class WinSapiTtsProvider implements TtsProvider
         }
         catch (Exception ex)
         {
-            LOG.debug("Unable to enumerate Windows TTS voices from category `{}`", category, ex);
+            if (isMissingVoiceCategory(ex))
+                LOG.trace("Windows TTS voice category `{}` is not present on this system", category);
+            else
+                LOG.debug("Unable to enumerate Windows TTS voices from category `{}`", category, ex);
         }
     }
     private void registerVoice(String category, Invoker token, PointerByReference ppv)
@@ -340,6 +344,17 @@ public class WinSapiTtsProvider implements TtsProvider
     private static boolean isChangedMode(HRESULT hr)
     {
         return hr != null && hr.intValue() == (int)0x80010106L;
+    }
+    private static boolean isMissingVoiceCategory(Throwable ex)
+    {
+        for (Throwable t = ex; t != null; t = t.getCause())
+            if (t instanceof com.sun.jna.platform.win32.COM.COMException)
+            {
+                HRESULT hr = ((com.sun.jna.platform.win32.COM.COMException)t).getHresult();
+                if (hr != null && hr.intValue() == (int)SPERR_NOT_FOUND)
+                    return true;
+            }
+        return false;
     }
 
     private static final CLSID
