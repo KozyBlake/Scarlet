@@ -276,6 +276,7 @@ public class ScarletVRChatLogs implements Closeable
             {
                 this.currentTargetIndex++;
                 LOG.info("Tailing " + this.currentTarget.getName());
+                this.listener.log_init(this.currentTarget);
                 this.currentTail = new VRChatLogTail(this.currentTarget);
                 try
                 {

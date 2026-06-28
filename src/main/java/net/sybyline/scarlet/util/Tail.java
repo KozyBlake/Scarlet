@@ -62,8 +62,7 @@ public class Tail implements Runnable
         RandomAccessFile reader = null;
         try
         {
-            long last = 0,
-                 position = 0,
+            long position = 0,
                  fileInitialLength = 0;
             while (this.isRunning() && reader == null)
             {
@@ -83,13 +82,11 @@ public class Tail implements Runnable
                 {   // current position
                     fileInitialLength = this.file.length();
                     position = this.end ? fileInitialLength : 0;
-                    last = MiscUtils.lastModified(this.file);
                     reader.seek(position);
                 }
             }
             while (this.isRunning())
             {
-                boolean newer = MiscUtils.isNewerThan(this.file, last);
                 long length = this.file.length();
                 if (length < position)
                 {   // rotated
@@ -120,16 +117,17 @@ public class Tail implements Runnable
                 if (length > position)
                 {   // read appended
                     position = this.readLines(fileInitialLength, reader);
-                    last = MiscUtils.lastModified(this.file);
                 }
-                else if (newer)
-                {   // read truncated or overwritten with the exact same length
-                    position = 0;
-                    fileInitialLength = 0;
-                    reader.seek(position);
-                    position = this.readLines(fileInitialLength, reader);
-                    last = MiscUtils.lastModified(this.file);
-                }
+                // NOTE: There used to be an "else if (newer)" branch here that re-read the whole
+                // file from byte 0 (resetting fileInitialLength to 0, so every re-read line was
+                // treated as a *live* event) whenever the file's modified time advanced without the
+                // length growing past what we'd already read. On Linux, VRChat running under Proton
+                // bumps the log's mtime without exposing new readable bytes, so this fired
+                // repeatedly and re-announced every join in the log over and over, for hours.
+                // Genuine rotation/truncation to a shorter file is already handled by the
+                // "length < position" case above, and VRChat session logs are append-only (a new
+                // launch writes a brand-new timestamped file), so a same-length in-place overwrite
+                // does not occur for them. The branch is removed.
                 if (this.reOpen && reader != null)
                 {
                     reader.close();

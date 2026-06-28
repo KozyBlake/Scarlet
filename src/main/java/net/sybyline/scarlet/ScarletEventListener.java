@@ -62,6 +62,7 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         this.clientLocationPrev_userIds = new HashSet<>();
         
         this.isTailerLive = false;
+        this.hasTailerCaughtUp = false;
         this.isInGroupInstance = false;
         this.isSameAsPreviousInstance = false;
 
@@ -110,6 +111,7 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
     }
     Set<String> clientLocationPrev_userIds;
     boolean isTailerLive,
+            hasTailerCaughtUp,
             isInGroupInstance,
             isSameAsPreviousInstance;
     final ScarletSettings.FileValued<String> ttsVoiceName;
@@ -216,16 +218,29 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
     @Override
     public void log_init(File file)
     {
+        this.isTailerLive = false;
     } 
 
     @Override
     public void log_catchUp(File file)
     {
-        if (this.isTailerLive)
-            return;
-        this.isTailerLive = true;
-        this.scarlet.ui.fireSort();
-        MiscUtils.close(this.scarlet.splash);
+        // Per-log transition: queued preamble rows can now be shown as live rows.
+        if (!this.isTailerLive)
+        {
+            this.isTailerLive = true;
+            this.scarlet.ui.fireSort();
+            if (!this.hasTailerCaughtUp)
+            {
+                this.hasTailerCaughtUp = true;
+                MiscUtils.close(this.scarlet.splash);
+            }
+        }
+        // Flush queued preamble UI updates on EVERY catch-up, not just the first. Each
+        // VRChat session writes a brand-new log file, so when VRChat is restarted while
+        // Scarlet keeps running, the new session's already-present players are read as
+        // preamble and queued here. Previously this method early-returned once isTailerLive
+        // was set, so those queued rows were dropped and players already in the instance
+        // never appeared in the table until they produced a fresh live event.
         this.clientLocation_pendingUpdates.forEach($ -> {
             try
             {
