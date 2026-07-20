@@ -274,6 +274,12 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
     @Override
     public void log_userQuit(boolean preamble, LocalDateTime timestamp, double lifetimeSeconds)
     {
+        // The VRChat session ended: drop all per-instance avatar state so nothing
+        // (catch-up sweeps, provider-list rescans) can look up avatars for people
+        // from a session that no longer exists.
+        this.clientLocation_userDisplayName2avatarDisplayName.clear();
+        this.clientLocation_avatarDisplayName2userDisplayName.clear();
+        this.clientLocation_userDisplayName2avatarBundleInfo.clear();
     }
 
     @Override
@@ -319,6 +325,12 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         this.clientLocation = null;
         this.isInGroupInstance = false;
         this.clientLocation_pendingUpdates.clear();
+        // Left the instance: avatar state belongs to people who are no longer
+        // around, so drop it rather than letting later rescans look them up.
+        // The next instance's Switching lines rebuild it fresh.
+        this.clientLocation_userDisplayName2avatarDisplayName.clear();
+        this.clientLocation_avatarDisplayName2userDisplayName.clear();
+        this.clientLocation_userDisplayName2avatarBundleInfo.clear();
         // Clear the instance table as soon as the local client leaves — stale players
         // from the previous session should not remain visible while between worlds.
         // When the client joins the next instance, log_userJoined will fire and
@@ -342,6 +354,16 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         
         this.pendingOrNow(preamble, () ->
         {
+            // Preamble rows are queued and flushed once catch-up finishes. If this
+            // player already left again within the same log, don't run the join
+            // checks for them — those hit the VRChat API (profile, groups) and are
+            // only justified for people actually in the instance. Their row is
+            // still added, just without the lookups.
+            if (!this.isPlayerPresent(userId))
+            {
+                this.scarlet.ui.playerJoin(!this.isTailerLive, userId, userDisplayName, timestamp, null, null, Integer.MIN_VALUE + 1, isRejoinFromPrev);
+                return;
+            }
             Color text_color = this.checkPlayer(advisories, priority, true, userDisplayName, userId);
             String advisory = formatAdvisories(advisories);
             this.scarlet.ui.playerJoin(!this.isTailerLive, userId, userDisplayName, timestamp, advisory, text_color, priority[0], isRejoinFromPrev);
@@ -379,6 +401,11 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
     {
         this.clientLocation_userId2userDisplayName.remove(userId);
         this.clientLocation_userIdsJoinOrder.remove(userId);
+        // Also drop the name->id mapping (only if it still points at this player),
+        // so late avatar-switch lines can never resolve a departed player back
+        // into the lookup pipeline. The UI row keeps showing them as designed;
+        // this only stops further avatar tracking/lookups.
+        this.clientLocation_userDisplayName2userId.remove(userDisplayName, userId);
         this._setPlayerAvatar(userDisplayName, null);
         this.scarlet.ui.playerLeave(!this.isTailerLive, userId, userDisplayName, timestamp);
         
@@ -429,6 +456,12 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
                 Color.ORANGE, Color.ORANGE);
         }
         String userId = this.clientLocation_userDisplayName2userId.get(userDisplayName);
+        // A player who has left is no longer tracked: ignore any further avatar
+        // switches attributed to them rather than updating or looking them up.
+        // (log_playerLeft drops their name->id mapping, so userId is normally
+        // already null here; this is the explicit belt-and-braces check.)
+        if (userId != null && !this.isPlayerPresent(userId))
+            return;
         if (userId != null)
         {
             this.pendingOrNow(preamble, () ->
@@ -491,6 +524,22 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
     static final long API_LOG_PATH_GRACE_MILLIS = 20_000L;
 
     /**
+     * True only while this player is actually present in the current instance.
+     *
+     * <p>Departed players deliberately stay visible in the player table, but they
+     * must not be tracked any further: no avatar lookups against the search
+     * databases or the VRChat API may run for someone who has left. Every entry
+     * point into avatar hydration checks this, and long-running lookups re-check
+     * it before applying results, so a player leaving mid-lookup ends it.
+     */
+    boolean isPlayerPresent(String userId)
+    {
+        return this.clientLocation != null
+            && userId != null
+            && this.clientLocation_userId2userDisplayName.containsKey(userId);
+    }
+
+    /**
      * Queues avatar-status hydration for everyone currently visible who still
      * lacks data. Players whose avatar info is already resolved are skipped, so
      * a rescan (startup catch-up, or after the provider list changes) costs no
@@ -499,12 +548,26 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
      */
     public void rescanAvatarInfo()
     {
+        // Privacy guard: never look up avatars unless a VRChat session is actually
+        // live right now. Catch-up over a closed/crashed session's log still
+        // populates the in-memory instance state, and people who are no longer
+        // around must not have their avatars queried against the databases or
+        // the VRChat API.
+        if (this.clientLocation == null)
+            return;
+        if (ScarletUI.findVRChatPids().isEmpty())
+        {
+            Scarlet.LOG.debug("Skipping avatar info rescan: VRChat is not running");
+            return;
+        }
         long[] staggerMillis = { 0L };
         this.clientLocation_userDisplayName2avatarDisplayName.forEach((userDisplayName, avatarDisplayName) ->
         {
             String userId = this.clientLocation_userDisplayName2userId.get(userDisplayName);
             if (userId == null)
                 return;
+            if (!this.isPlayerPresent(userId))
+                return; // already left: never look them up again
             if (this.clientLocation_userDisplayName2avatarBundleInfo.containsKey(userDisplayName))
                 return; // already resolved: skip
             long delay = staggerMillis[0];
@@ -516,6 +579,9 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
     void maybeHydrateAvatarInfo(String userDisplayName, String userId, String avatarDisplayName)
     {
         if (!Features.AVATAR_SEARCH_ENABLED || userId == null || avatarDisplayName == null)
+            return;
+        // Only players actually present in the current, live instance get looked up.
+        if (!this.isPlayerPresent(userId))
             return;
         if (this.clientLocation_userDisplayName2avatarBundleInfo.containsKey(userDisplayName))
             return;
@@ -529,6 +595,8 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
             this.scarlet.ui.playerUpdate(!this.isTailerLive, userId, $ -> { if ($.avatarInfo == null) $.avatarInfoNote = "Looking up avatar data for "+userDisplayName+"..."; });
         this.scarlet.exec.schedule(() ->
         {
+            if (!this.isPlayerPresent(userId))
+                return; // left during the grace period: stop tracking them
             if (this.clientLocation_userDisplayName2avatarBundleInfo.containsKey(userDisplayName))
                 return; // the log-based path got there first
             if (!avatarDisplayName.equals(this.clientLocation_userDisplayName2avatarDisplayName.get(userDisplayName)))
@@ -627,6 +695,8 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
                     String rating = record.performance.pcRating != null ? record.performance.pcRating : record.performance.androidRating;
                     FileAnalysis analysis = new FileAnalysis().performanceRating(rating);
                     AvatarBundleInfo bundleInfo = new AvatarBundleInfo(null, null, analysis);
+                    if (!this.isPlayerPresent(userId))
+                        return true; // left mid-lookup: discard rather than record
                     if (!avatarDisplayName.equals(this.clientLocation_userDisplayName2avatarDisplayName.get(userDisplayName)))
                         return true; // switched away in the meantime: nothing more to do
                     this.clientLocation_userDisplayName2avatarBundleInfo.put(userDisplayName, bundleInfo);
@@ -669,7 +739,9 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         FileAnalysis analysis0 = this.scarlet.vrc.getFileAnalysis(versionedFile, within1day);
         FileAnalysis analysis = analysis0 != null ? analysis0 : new FileAnalysis().performanceRating("Unknown");
         AvatarBundleInfo bundleInfo = new AvatarBundleInfo(versionedFile, file, analysis);
-        // Only apply if this player is still wearing that avatar.
+        // Only apply if this player is still present and still wearing that avatar.
+        if (!this.isPlayerPresent(userId))
+            return true; // left mid-lookup: discard rather than record
         if (!avatarDisplayName.equals(this.clientLocation_userDisplayName2avatarDisplayName.get(userDisplayName)))
             return true; // switched away in the meantime: nothing more to do
         this.clientLocation_userDisplayName2avatarBundleInfo.put(userDisplayName, bundleInfo);
@@ -1132,9 +1204,12 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
                                 .valuesGetOrEmpty(name)
                                 .forEach(userDisplayName ->
                                 {
+                                     String userId = this.clientLocation_userDisplayName2userId.get(userDisplayName);
+                                     // Never record avatar data for someone who has left.
+                                     if (userId != null && !this.isPlayerPresent(userId))
+                                         return;
                                      Scarlet.LOG.info(userDisplayName+"'s chosen avatar "+name+" is "+avatarPerf);
                                      this.clientLocation_userDisplayName2avatarBundleInfo.put(userDisplayName, bundleInfo);
-                                     String userId = this.clientLocation_userDisplayName2userId.get(userDisplayName);
                                      this.scarlet.ui.playerUpdate(!this.isTailerLive, userId, $ -> {
                                          Scarlet.LOG.info("Updating "+userDisplayName+"'s chosen avatar "+name+" performance: "+avatarPerf);
                                          $.avatarInfo = bundleInfo;

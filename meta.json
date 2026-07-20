@@ -2,10 +2,10 @@
   "latest_release": "0.4.18",
   "latest_build": "0.4.18-b1",
   "announcement": {
-    "id": "20260720-000000-b1",
+    "id": "20260720-000000-b1-hotfix",
     "severity": "info",
-    "title": "0.4.18-b1 is now available!",
-    "message": "Scarlet 0.4.18-b1 makes moderation actions post to Discord in seconds instead of minutes: burst polling kicks in for Scarlet-initiated actions and re-arms on any in-game moderation wave, while a 5-minute audit overlap window guarantees out-of-order entries are never lost. Avatar statuses now work without VRChat launch options through a tiered fallback (avatar databases, image verification that sees through same-named clones, and the VRChat API), with a readable compact stats dialog and a Show all details toggle. Avatar search gains a Manage Providers dialog, three new databases (avtr.zip, PAW, KitsuneDB), fixed NSVR/WorldBalancer endpoints, and tolerant response parsing. Exports get a live progress dialog with cancel, a clear-your-20GB-logs-first prompt, and a VRChat-running check with PID. Fixes include cache cleanup no longer fighting the live log, the remaining light-grey theme patches, and Windows display-scaling UI corruption.",
+    "title": "0.4.18-b1 updated — please redownload",
+    "message": "0.4.18-b1 has been updated in place with a privacy hotfix: avatar logging no longer runs for people who left the instance. Avatar lookups could previously continue for players who were no longer present — after they left while Scarlet and VRChat kept running, and for players from a previous instance or a closed VRChat session. Departed players still stay visible in the player table, but Scarlet no longer tracks them: every avatar path now checks presence before doing any work or recording any result, in-flight lookups are discarded when a player leaves, and join checks are skipped for anyone who left during log catch-up. This also removes a class of unnecessary avatar lookups and rate-limit pressure. If you downloaded 0.4.18-b1 before this update, please download it again — the version number is unchanged. 0.4.18-b1 also brings burst polling for near-instant moderation posts, avatar statuses without VRChat launch options, the avatar search provider manager, and the export progress/safety overhaul.",
     "expires": "2026-08-20T00:00:00Z"
   }
 }

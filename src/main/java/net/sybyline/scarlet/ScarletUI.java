@@ -1519,7 +1519,7 @@ public class ScarletUI implements IScarletUI
      * command line, since VRChat only runs there under Proton/Wine as VRChat.exe.
      * Detection failures are treated as "not running" so they can never block an export.
      */
-    private static List<String> findVRChatPids()
+    static List<String> findVRChatPids()
     {
         List<String> pids = new ArrayList<>();
         try
