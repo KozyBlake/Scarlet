@@ -14,6 +14,10 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonSyntaxException;
 import com.google.gson.TypeAdapter;
 import com.google.gson.annotations.SerializedName;
 import com.google.gson.stream.JsonReader;
@@ -36,17 +40,28 @@ public interface AvatarSearch
          ERROR_LOG_THROTTLE_MILLIS = TimeUnit.MINUTES.toMillis(1L);
     Map<String, Long> providerBlockedUntil = new ConcurrentHashMap<>(),
                       providerLastLog = new ConcurrentHashMap<>();
+    // Canonical VRCX-format search endpoints as published by the providers
+    // themselves (cross-checked against ShayBox/VRC-LOG's supported-provider
+    // list). Inclusion bar: the provider must honor avatar removal/blacklist
+    // requests from creators. All of these are queried politely: cached per
+    // search, identified by User-Agent, and backed off on 429/timeout/garbage.
     String
         URL_ROOT_AVTRDB = AvatarSearch_AvtrDB.API_ROOT+"/avatar/search/vrcx",
-        URL_ROOT_NEKOSUNEVR = AvatarSearch_VRCDS.API_ROOT+"/vrcx_search",
+        URL_ROOT_NEKOSUNEVR = AvatarSearch_VRCDS.SEARCH_ROOT+"/vrcx_search",
         URL_ROOT_VRCDB = "https://vrcx.vrcdb.com/avatars/Avatar/VRCX",
-        URL_ROOT_WORLDBALANCER = AvatarSearch_WorldBalancer.API_ROOT+"/scarlet_search",
+        URL_ROOT_WORLDBALANCER = "https://avatarwbvrcxsearch.worldbalancer.com/vrcx_search",
+        URL_ROOT_AVTR_ZIP = "https://vrcx.avtr.zip",
+        URL_ROOT_PAW = "https://paw-api.amelia.fun/vrcx_search",
+        URL_ROOT_KITSUNEDB = "https://avtr.fumikoecho.net/api/integrations/avatars/vrcx",
         URL_ROOTS[] =
         {
             URL_ROOT_AVTRDB,
             URL_ROOT_NEKOSUNEVR,
             URL_ROOT_VRCDB,
             URL_ROOT_WORLDBALANCER,
+            URL_ROOT_AVTR_ZIP,
+            URL_ROOT_PAW,
+            URL_ROOT_KITSUNEDB,
         };
 
     static String cacheKey(int n, String search)
@@ -76,6 +91,13 @@ public interface AvatarSearch
             LOG.debug("Avatar search provider unavailable: {} ({})", urlRoot, message, throwable);
     }
 
+    /** Forgets all provider backoffs, e.g. after the user deliberately changes the provider list. */
+    static void clearProviderBackoffs()
+    {
+        providerBlockedUntil.clear();
+        providerLastLog.clear();
+    }
+
     static void blockProvider(String urlRoot, long millis, String message, Throwable throwable)
     {
         providerBlockedUntil.put(urlRoot, Long.valueOf(System.currentTimeMillis() + millis));
@@ -91,6 +113,11 @@ public interface AvatarSearch
             blockProvider(urlRoot, RATE_LIMIT_BACKOFF_MILLIS, "rate limited while searching `"+search+"`", ex);
         else if (ex instanceof SocketTimeoutException || message.toLowerCase().contains("timed out"))
             blockProvider(urlRoot, TIMEOUT_BACKOFF_MILLIS, "timed out while searching `"+search+"`", ex);
+        else if (ex instanceof com.google.gson.JsonSyntaxException || message.contains("Expected BEGIN"))
+            // The provider is up but not speaking the expected format (endpoint moved,
+            // maintenance page, HTML error, ...). Retrying immediately can't succeed and
+            // just spams the log with parse stack traces, so back off like a rate limit.
+            blockProvider(urlRoot, RATE_LIMIT_BACKOFF_MILLIS, "returned a malformed response while searching `"+search+"`", ex);
         else
             logProviderFailure(urlRoot, "search failed for `"+search+"`: "+message, ex);
     }
@@ -490,13 +517,76 @@ public interface AvatarSearch
             return null;
         try (HttpURLInputStream in = HttpURLInputStream.get(urlRoot + "?n=" + Integer.toUnsignedString(n) + "&search=" + URLs.encode(search), ExtendedUserAgent.init_conn))
         {
-            return in.readAsJson(null, null, VrcxAvatar[].class);
+            VrcxAvatar[] results = parseVrcxResults(in.readAsJson(null, null, JsonElement.class));
+            LOG.debug("{} returned {} result(s) for `{}`", urlRoot, results.length, search);
+            return results;
         }
         catch (Exception ex)
         {
             handleSearchFailure(urlRoot, search, ex);
             return null;
         }
+    }
+
+    /**
+     * Providers have drifted from the original bare-array VRCX response format
+     * toward their own search engines' native shapes: wrapper objects around
+     * the result array, nested author records, renamed fields. Accept all of
+     * them — a bare array, or an object wrapping the array under a common key,
+     * with per-entry tolerance so one odd record can't sink the result set.
+     * Anything unrecognizable throws, which backs the provider off as malformed.
+     */
+    static VrcxAvatar[] parseVrcxResults(JsonElement json)
+    {
+        JsonArray array = null;
+        if (json != null && json.isJsonArray())
+        {
+            array = json.getAsJsonArray();
+        }
+        else if (json != null && json.isJsonObject())
+        {
+            JsonObject object = json.getAsJsonObject();
+            for (String key : new String[] { "avatars", "results", "data", "items", "records" })
+            {
+                JsonElement inner = object.get(key);
+                if (inner != null && inner.isJsonArray())
+                {
+                    array = inner.getAsJsonArray();
+                    break;
+                }
+            }
+        }
+        if (array == null)
+            throw new JsonSyntaxException("unrecognized avatar search response shape");
+        java.util.List<VrcxAvatar> out = new java.util.ArrayList<>(array.size());
+        for (JsonElement element : array)
+        {
+            if (!element.isJsonObject())
+                continue;
+            JsonObject entry = element.getAsJsonObject();
+            // Flatten nested author records (native avtrDB-style) onto the flat
+            // fields the VRCX schema uses.
+            JsonElement author = entry.get("author");
+            if (author != null && author.isJsonObject())
+            {
+                JsonObject authorObject = author.getAsJsonObject();
+                if (!entry.has("authorId") && authorObject.has("vrc_id"))
+                    entry.add("authorId", authorObject.get("vrc_id"));
+                if (!entry.has("authorName") && authorObject.has("name"))
+                    entry.add("authorName", authorObject.get("name"));
+                entry.remove("author");
+            }
+            try
+            {
+                VrcxAvatar avatar = net.sybyline.scarlet.Scarlet.GSON.fromJson(entry, VrcxAvatar.class);
+                if (avatar != null && avatar.id != null)
+                    out.add(avatar);
+            }
+            catch (RuntimeException ignored)
+            {
+            }
+        }
+        return out.toArray(new VrcxAvatar[0]);
     }
     static VrcxAvatar[] vrcxFindInCache(String urlRoot, String search)
     {
@@ -590,7 +680,7 @@ public interface AvatarSearch
                 return null;
             try (HttpURLInputStream in = HttpURLInputStream.get(urlRoot + "?n=" + Integer.toUnsignedString(n) + "&fileId=" + imageFileId, ExtendedUserAgent.init_conn))
             {
-                return in.readAsJson(null, null, VrcxAvatar[].class);
+                return parseVrcxResults(in.readAsJson(null, null, JsonElement.class));
             }
             catch (Exception ex)
             {

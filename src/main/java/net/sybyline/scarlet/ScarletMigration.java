@@ -99,6 +99,59 @@ public final class ScarletMigration
     static final int  MAX_PREFS_XML_BYTES = 64 * 1024 * 1024;    // 64 MiB
     static final int  MAX_BACKUPS_KEPT = 8;
 
+    /** Message of the {@link IOException} thrown when a {@link Progress} callback cancels an export. */
+    public static final String CANCELLED_MESSAGE = "Export cancelled by user";
+
+    /**
+     * Receives live export progress, Windows-Explorer style. Called from the export
+     * thread: on each phase change, before each file, and repeatedly while large files
+     * stream. {@code totalFiles}/{@code totalBytes} are 0 when unknown. Return
+     * {@code false} to cancel: the export stops, the partial bundle is deleted, and
+     * {@link #exportBundle} throws an {@link IOException} with {@link #CANCELLED_MESSAGE}.
+     */
+    public interface Progress
+    {
+        boolean progress(String phase, String detail, int filesDone, int totalFiles, long bytesDone, long totalBytes);
+    }
+
+    /** Mutable per-export progress accounting shared down the zip recursion. */
+    static final class ProgressState
+    {
+        ProgressState(Progress callback, int totalFiles, long totalBytes)
+        {
+            this.callback = callback;
+            this.totalFiles = totalFiles;
+            this.totalBytes = totalBytes;
+        }
+        final Progress callback;
+        final int totalFiles;
+        final long totalBytes;
+        int filesDone = 0;
+        long bytesDone = 0L;
+        String phase = "Preparing", detail = "";
+        void update(String phase, String detail) throws IOException
+        {
+            this.phase = phase;
+            this.detail = detail;
+            this.report();
+        }
+        void addBytes(int n) throws IOException
+        {
+            this.bytesDone += n;
+            this.report();
+        }
+        void fileDone() throws IOException
+        {
+            this.filesDone++;
+            this.report();
+        }
+        void report() throws IOException
+        {
+            if (this.callback != null && !this.callback.progress(this.phase, this.detail, this.filesDone, this.totalFiles, this.bytesDone, this.totalBytes))
+                throw new IOException(CANCELLED_MESSAGE);
+        }
+    }
+
     /**
      * Writes a portable migration bundle (data folder + encrypted credentials) to the
      * given file. Returns a short human-readable summary; throws on failure.
@@ -115,36 +168,55 @@ public final class ScarletMigration
      */
     public static String exportBundle(File out, char[] pin) throws IOException
     {
+        return exportBundle(out, pin, null);
+    }
+
+    /**
+     * As {@link #exportBundle(File, char[])}, additionally reporting live progress to
+     * {@code progress} (may be null). If the callback cancels, the partial bundle is
+     * deleted and an {@link IOException} with {@link #CANCELLED_MESSAGE} is thrown.
+     */
+    public static String exportBundle(File out, char[] pin, Progress progress) throws IOException
+    {
         File outAbs = out.getAbsoluteFile();
         File parent = outAbs.getParentFile();
         if (parent != null && !parent.isDirectory())
             Files.createDirectories(parent.toPath());
 
         boolean encrypt = pin != null && pin.length > 0;
-        if (!encrypt)
-        {
-            String summary = writeBundle(outAbs);
-            restrictToOwner(outAbs.toPath());
-            return summary;
-        }
-
-        File tempDir = parent != null ? parent : outAbs.getParentFile();
-        File temp = File.createTempFile("scarlet-bundle", ".tmp", tempDir);
-        restrictToOwner(temp.toPath());
         try
         {
-            String summary = writeBundle(temp);
-            encryptFile(temp, outAbs, pin);
-            restrictToOwner(outAbs.toPath());
-            return summary;
+            if (!encrypt)
+            {
+                String summary = writeBundle(outAbs, progress);
+                restrictToOwner(outAbs.toPath());
+                return summary;
+            }
+
+            File tempDir = parent != null ? parent : outAbs.getParentFile();
+            File temp = File.createTempFile("scarlet-bundle", ".tmp", tempDir);
+            restrictToOwner(temp.toPath());
+            try
+            {
+                String summary = writeBundle(temp, progress);
+                encryptFile(temp, outAbs, pin, progress);
+                restrictToOwner(outAbs.toPath());
+                return summary;
+            }
+            finally
+            {
+                try { Files.deleteIfExists(temp.toPath()); } catch (IOException ignored) { }
+            }
         }
-        finally
+        catch (IOException ex)
         {
-            try { Files.deleteIfExists(temp.toPath()); } catch (IOException ignored) { }
+            // Never leave a partial or cancelled bundle behind.
+            try { Files.deleteIfExists(outAbs.toPath()); } catch (IOException ignored) { }
+            throw ex;
         }
     }
 
-    private static String writeBundle(File outAbs) throws IOException
+    private static String writeBundle(File outAbs, Progress progress) throws IOException
     {
         File dataDir = Scarlet.dir;
         Preferences prefs = Preferences.userNodeForPackage(Scarlet.class);
@@ -159,6 +231,19 @@ public final class ScarletMigration
         {
             throw new IOException("Failed to export Java Preferences subtree " + prefs.absolutePath(), ex);
         }
+
+        // Pre-scan the data folder so progress is reported against real totals
+        // (file counts and bytes), Windows-Explorer style.
+        File dataRoot = null;
+        File skip = outAbs.getCanonicalFile();
+        long[] measured = { 0L, 0L }; // { file count, total bytes }
+        if (dataDir != null && dataDir.isDirectory())
+        {
+            dataRoot = dataDir.getCanonicalFile();
+            measureDir(dataRoot, dataRoot, skip, measured);
+        }
+        ProgressState state = new ProgressState(progress, (int) measured[0], measured[1]);
+        state.update("Preparing", "");
 
         int[] count = {0};
         try (ZipOutputStream zip = new ZipOutputStream(new BufferedOutputStream(new FileOutputStream(outAbs))))
@@ -176,10 +261,9 @@ public final class ScarletMigration
             zip.write(manifest.toString().getBytes(StandardCharsets.UTF_8));
             zip.closeEntry();
 
-            if (dataDir != null && dataDir.isDirectory())
+            if (dataRoot != null)
             {
-                File dataRoot = dataDir.getCanonicalFile();
-                zipDir(zip, dataRoot, dataRoot, DATA_PREFIX, outAbs.getCanonicalFile(), count);
+                zipDir(zip, dataRoot, dataRoot, DATA_PREFIX, skip, count, state);
             }
         }
         LOG.info("Exported migration bundle to {} ({} data files + credentials from {})", outAbs, count[0], prefs.absolutePath());
@@ -540,7 +624,7 @@ public final class ScarletMigration
         public final boolean importCredentials;
     }
 
-    private static void zipDir(ZipOutputStream zip, File root, File dir, String prefix, File skip, int[] count) throws IOException
+    private static void zipDir(ZipOutputStream zip, File root, File dir, String prefix, File skip, int[] count, ProgressState state) throws IOException
     {
         File[] files = dir.listFiles();
         if (files == null)
@@ -564,21 +648,71 @@ public final class ScarletMigration
             String entryName = prefix + f.getName();
             if (f.isDirectory())
             {
-                zipDir(zip, root, fCanon, entryName + "/", skip, count);
+                zipDir(zip, root, fCanon, entryName + "/", skip, count, state);
             }
             else if (f.isFile())
             {
+                state.update("Compressing", entryName);
                 zip.putNextEntry(new ZipEntry(entryName));
                 try (InputStream in = new BufferedInputStream(new FileInputStream(f)))
                 {
                     int n;
                     while ((n = in.read(buffer)) > 0)
+                    {
                         zip.write(buffer, 0, n);
+                        state.addBytes(n);
+                    }
                 }
                 zip.closeEntry();
                 count[0]++;
+                state.fileDone();
             }
         }
+    }
+
+    /** Counts regular files and bytes under dir with the same filters {@link #zipDir} applies. */
+    private static void measureDir(File root, File dir, File skip, long[] filesBytes) throws IOException
+    {
+        File[] files = dir.listFiles();
+        if (files == null)
+            return;
+        for (File f : files)
+        {
+            if (Files.isSymbolicLink(f.toPath()))
+                continue;
+            File fCanon = f.getCanonicalFile();
+            if (fCanon.equals(skip))
+                continue;
+            if (!isUnder(root, fCanon))
+                continue;
+            if (f.isDirectory())
+            {
+                measureDir(root, fCanon, skip, filesBytes);
+            }
+            else if (f.isFile())
+            {
+                filesBytes[0]++;
+                filesBytes[1] += f.length();
+            }
+        }
+    }
+
+    /** Total bytes of all regular files under dir (symlinks not followed); 0 if dir is missing. */
+    public static long directorySize(File dir)
+    {
+        if (dir == null || !dir.isDirectory())
+            return 0L;
+        long[] filesBytes = { 0L, 0L };
+        try
+        {
+            File canon = dir.getCanonicalFile();
+            measureDir(canon, canon, null, filesBytes);
+        }
+        catch (IOException ex)
+        {
+            LOG.warn("Could not measure directory size of {}", dir, ex);
+        }
+        return filesBytes[1];
     }
 
     private static boolean isUnder(File baseDir, File file) throws IOException
@@ -685,6 +819,11 @@ public final class ScarletMigration
 
     private static void encryptFile(File plain, File out, char[] pin) throws IOException
     {
+        encryptFile(plain, out, pin, null);
+    }
+
+    private static void encryptFile(File plain, File out, char[] pin, Progress progress) throws IOException
+    {
         byte[] salt = new byte[ENC_SALT_LEN];
         byte[] iv = new byte[ENC_IV_LEN];
         RAND.nextBytes(salt);
@@ -700,6 +839,7 @@ public final class ScarletMigration
                 os.write(ENC_VERSION);
                 os.write(salt);
                 os.write(iv);
+                long encTotal = plain.length(), encDone = 0L;
                 byte[] buffer = new byte[8192];
                 int n;
                 while ((n = is.read(buffer)) > 0)
@@ -707,6 +847,9 @@ public final class ScarletMigration
                     byte[] enc = cipher.update(buffer, 0, n);
                     if (enc != null)
                         os.write(enc);
+                    encDone += n;
+                    if (progress != null && !progress.progress("Encrypting", out.getName(), 0, 0, encDone, encTotal))
+                        throw new IOException(CANCELLED_MESSAGE);
                 }
                 byte[] fin = cipher.doFinal();
                 if (fin != null)

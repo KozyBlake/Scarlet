@@ -1,11 +1,11 @@
 {
   "latest_release": "0.4.18",
-  "latest_build": "0.4.18",
+  "latest_build": "0.4.18-b1",
   "announcement": {
-    "id": "20260619-000000-b4",
+    "id": "20260720-000000-b1",
     "severity": "info",
-    "title": "0.4.18 is now available!",
-    "message": "Scarlet 0.4.18 ships desktop notifications with per-category toggles (Windows native tray, Linux notify-send, macOS osascript) and one-file PIN-encrypted migration bundles for moving your entire identity between machines. The main window gains right-click column hiding and a View menu to hide the CLI tab. Linux users get live package-install progress with an embedded terminal, guided TTS voice/audio-player install, and TTS now plays through the system sound server so it follows your selected device. You can now self-service unlink your VRChat account, and suspicious-pronoun detection has a master toggle. Dozens of fixes landed: Linux installs actually run, auto-invite 403s are handled correctly, Linux TTS plays on the right output, popups match the dark theme, and the migration path is hardened against zip bombs and XXE attacks.",
-    "expires": "2026-07-04T00:00:00Z"
+    "title": "0.4.18-b1 is now available!",
+    "message": "Scarlet 0.4.18-b1 makes moderation actions post to Discord in seconds instead of minutes: burst polling kicks in for Scarlet-initiated actions and re-arms on any in-game moderation wave, while a 5-minute audit overlap window guarantees out-of-order entries are never lost. Avatar statuses now work without VRChat launch options through a tiered fallback (avatar databases, image verification that sees through same-named clones, and the VRChat API), with a readable compact stats dialog and a Show all details toggle. Avatar search gains a Manage Providers dialog, three new databases (avtr.zip, PAW, KitsuneDB), fixed NSVR/WorldBalancer endpoints, and tolerant response parsing. Exports get a live progress dialog with cancel, a clear-your-20GB-logs-first prompt, and a VRChat-running check with PID. Fixes include cache cleanup no longer fighting the live log, the remaining light-grey theme patches, and Windows display-scaling UI corruption.",
+    "expires": "2026-08-20T00:00:00Z"
   }
 }

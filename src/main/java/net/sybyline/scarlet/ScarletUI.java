@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -68,6 +69,7 @@ import javax.swing.JMenuBar;
 import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
+import javax.swing.JProgressBar;
 import javax.swing.JScrollPane;
 import javax.swing.JSlider;
 import javax.swing.JTabbedPane;
@@ -441,12 +443,14 @@ public class ScarletUI implements IScarletUI
         String id;
         String avatarName;
         AvatarBundleInfo avatarInfo;
+        /** Human-readable reason avatar info is missing (shown by "View" when {@link #avatarInfo} is null). */
+        String avatarInfoNote;
         Action avatarStats = new AbstractAction("View") {
             private static final long serialVersionUID = 1L;
             @Override
             public void actionPerformed(ActionEvent e)
             {
-                ScarletUI.this.infoStats(ConnectedPlayer.this.name, ConnectedPlayer.this.avatarName, ConnectedPlayer.this.avatarInfo);
+                ScarletUI.this.infoStats(ConnectedPlayer.this.name, ConnectedPlayer.this.avatarName, ConnectedPlayer.this.avatarInfo, ConnectedPlayer.this.avatarInfoNote);
             }
             @Override
             public String toString()
@@ -801,11 +805,11 @@ public class ScarletUI implements IScarletUI
         // Compact toolbar below the menu bar. The OS title bar already shows the
         // app name, so we don't repeat it — this is purely an action strip.
         {
-            final Color HDR_BG     = new Color(22,  22,  30);
+            final Color HDR_BG     = Swing.BG_INPUT;
             final Color HDR_ACCENT = Swing.ACCENT;
             final Color BTN_BG     = new Color(38,  38,  52);
             final Color BTN_HOVER  = new Color(60,  30,  38);
-            final Color BTN_FG     = new Color(220, 220, 232);
+            final Color BTN_FG     = Swing.FG_MAIN;
 
             JPanel header = new JPanel(new BorderLayout(0, 0))
             {
@@ -939,7 +943,7 @@ public class ScarletUI implements IScarletUI
         // Tabs
         {
             {
-                final Color TAB_BG   = new Color(22, 22, 30);
+                final Color TAB_BG   = Swing.BG_INPUT;
                 final Color EMPTY_FG = new Color(80, 80, 100);
 
                 // CardLayout cleanly flips between empty state and table —
@@ -977,23 +981,23 @@ public class ScarletUI implements IScarletUI
             }
             {
                 this.jpanel_settings.setLayout(new GridBagLayout());
-                this.jpanel_settings.setBackground(new Color(22, 22, 30));
+                this.jpanel_settings.setBackground(Swing.BG_INPUT);
                 this.jpanel_settings.setOpaque(true);
                 JScrollPane settingsScroll = new JScrollPane(jpanel_settings);
                 settingsScroll.setBorder(BorderFactory.createEmptyBorder());
-                stabilizeScrollPane(settingsScroll, new Color(22, 22, 30));
+                stabilizeScrollPane(settingsScroll, Swing.BG_INPUT);
                 settingsScroll.getVerticalScrollBar().setUnitIncrement(20);
                 settingsScroll.getHorizontalScrollBar().setUnitIncrement(20);
                 // ── Outer wrapper: search field at top, card list below ────────
                 JPanel settingsOuter = new JPanel(new BorderLayout());
-                settingsOuter.setBackground(new Color(22, 22, 30));
+                settingsOuter.setBackground(Swing.BG_INPUT);
                 settingsOuter.setOpaque(true);
                 this.jfield_settingsSearch = new JTextField();
                 this.jfield_settingsSearch.putClientProperty("JTextField.placeholderText", "Search settings\u2026");
                 this.jfield_settingsSearch.setBorder(BorderFactory.createCompoundBorder(
-                    BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(55, 55, 72)),
+                    BorderFactory.createMatteBorder(0, 0, 1, 0, Swing.BORDER),
                     BorderFactory.createEmptyBorder(6, 12, 6, 12)));
-                this.jfield_settingsSearch.setBackground(new Color(22, 22, 30));
+                this.jfield_settingsSearch.setBackground(Swing.BG_INPUT);
                 this.jfield_settingsSearch.getDocument().addDocumentListener(new DocumentListener() {
                     @Override public void insertUpdate(DocumentEvent e) { ScarletUI.this.filterSettings(); }
                     @Override public void removeUpdate(DocumentEvent e) { ScarletUI.this.filterSettings(); }
@@ -1007,8 +1011,8 @@ public class ScarletUI implements IScarletUI
             {
                 final Color CLI_BG   = new Color(14, 14, 20);
                 final Color CLI_FG   = new Color(200, 220, 200);
-                final Color CLI_INBG = new Color(22, 22, 30);
-                final Color CLI_BORD = new Color(55, 55, 72);
+                final Color CLI_INBG = Swing.BG_INPUT;
+                final Color CLI_BORD = Swing.BORDER;
 
                 JPanel cliPanel = new JPanel(new BorderLayout());
                 cliPanel.setBackground(CLI_BG);
@@ -1045,7 +1049,7 @@ public class ScarletUI implements IScarletUI
 
                 JTextField cliInput = new JTextField();
                 cliInput.setFont(new java.awt.Font("Monospaced", java.awt.Font.PLAIN, 12));
-                cliInput.setBackground(new Color(28, 28, 38));
+                cliInput.setBackground(Swing.BG_BASE);
                 cliInput.setForeground(CLI_FG);
                 cliInput.setCaretColor(CLI_FG);
                 cliInput.putClientProperty("JTextField.placeholderText", "Enter command (e.g. help)");
@@ -1083,7 +1087,7 @@ public class ScarletUI implements IScarletUI
         // ── Status bar ─────────────────────────────────────────────────────────
         {
             final Color SB_BG   = new Color(18, 18, 26);
-            final Color SB_DIV  = new Color(55, 55, 72);
+            final Color SB_DIV  = Swing.BORDER;
 
             JPanel statusBar = new JPanel(new BorderLayout())
             {
@@ -1276,6 +1280,54 @@ public class ScarletUI implements IScarletUI
 
     private void uiExportMigrationBundle()
     {
+        // Exporting while VRChat is running risks bundling files that are mid-write
+        // (and competes with the game for disk I/O), so ask the user to close it first.
+        while (true)
+        {
+            List<String> vrchatPids = findVRChatPids();
+            if (vrchatPids.isEmpty())
+                break;
+            String[] vrcOptions = { "Check again", "Export anyway", "Cancel" };
+            int vrcChoice = JOptionPane.showOptionDialog(this.jframe,
+                "<html>VRChat is currently running (PID" + (vrchatPids.size() > 1 ? "s" : "") + ": <b>"
+              + String.join(", ", vrchatPids) + "</b>).<br><br>"
+              + "Please close VRChat before exporting, then press <b>Check again</b>.</html>",
+                "Close VRChat first", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE, null, vrcOptions, vrcOptions[0]);
+            if (vrcChoice == 1)
+                break;
+            if (vrcChoice != 0)
+                return;
+        }
+        // People rarely clear their logs (log folders of 20 GB+ have been seen in the
+        // wild) and the bundle packs the whole data folder, so when logs+caches exceed
+        // 1 GiB we ask the user to clear them before exporting.
+        if (Scarlet.dir != null)
+        {
+            File logsDir = new File(Scarlet.dir, "logs"),
+                 cachesDir = new File(Scarlet.dir, "caches"),
+                 ttsDir = new File(Scarlet.dir, "tts");
+            long logsBytes = ScarletMigration.directorySize(logsDir),
+                 cachesBytes = ScarletMigration.directorySize(cachesDir) + ScarletMigration.directorySize(ttsDir);
+            if (logsBytes + cachesBytes > EXPORT_CLEANUP_PROMPT_BYTES)
+            {
+                String[] cleanupOptions = { "Clear them now", "Export anyway", "Cancel" };
+                int cleanupChoice = JOptionPane.showOptionDialog(this.jframe,
+                    "<html>Your logs and caches take up <b>" + humanBytes(logsBytes + cachesBytes) + "</b><br>"
+                  + "(logs: " + humanBytes(logsBytes) + ", caches: " + humanBytes(cachesBytes) + ").<br><br>"
+                  + "All of it would be packed into the bundle, making the export very large and slow.<br>"
+                  + "Clear them first? The current session's log file is kept.</html>",
+                    "Large logs and caches", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE, null, cleanupOptions, cleanupOptions[0]);
+                if (cleanupChoice != 0 && cleanupChoice != 1)
+                    return;
+                if (cleanupChoice == 0)
+                {
+                    long freed = this.uiClearLogsAndCaches(logsDir, cachesDir, ttsDir);
+                    JOptionPane.showMessageDialog(this.jframe,
+                        "Cleared " + humanBytes(freed) + " of logs and caches.",
+                        "Cleanup complete", JOptionPane.INFORMATION_MESSAGE);
+                }
+            }
+        }
         JFileChooser chooser = new JFileChooser();
         chooser.setDialogTitle("Export Scarlet migration bundle");
         chooser.setFileFilter(new FileNameExtensionFilter("Zip bundle", "zip"));
@@ -1338,11 +1390,82 @@ public class ScarletUI implements IScarletUI
         final char[] pin = entered;
         final boolean offerWipe = movingBox.isSelected();
 
+        // Explorer-style progress dialog: phase, current file, file counts, byte totals.
+        final JDialog progressDialog = new JDialog(this.jframe, "Exporting migration bundle", false);
+        final JLabel progressPhase = new JLabel("Preparing...");
+        final JLabel progressFile = new JLabel(" ");
+        final JLabel progressStats = new JLabel(" ");
+        final JProgressBar progressBar = new JProgressBar(0, 1000);
+        final JButton progressCancel = new JButton("Cancel");
+        final AtomicBoolean exportCancelled = new AtomicBoolean(false);
+        progressCancel.addActionListener($ ->
+        {
+            exportCancelled.set(true);
+            progressCancel.setEnabled(false);
+            progressCancel.setText("Cancelling...");
+        });
+        progressDialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
+        progressDialog.addWindowListener(new WindowAdapter()
+        {
+            @Override
+            public void windowClosing(WindowEvent event)
+            {
+                exportCancelled.set(true);
+            }
+        });
+        JPanel progressPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints prgbc = new GridBagConstraints();
+        prgbc.gridx = 0; prgbc.gridy = 0; prgbc.fill = GridBagConstraints.HORIZONTAL; prgbc.weightx = 1.0;
+        prgbc.anchor = GridBagConstraints.WEST; prgbc.insets = new Insets(12, 16, 4, 16);
+        progressPanel.add(progressPhase, prgbc);
+        prgbc.gridy++; prgbc.insets = new Insets(0, 16, 6, 16);
+        progressPanel.add(progressFile, prgbc);
+        prgbc.gridy++;
+        progressPanel.add(progressBar, prgbc);
+        prgbc.gridy++;
+        progressPanel.add(progressStats, prgbc);
+        prgbc.gridy++; prgbc.fill = GridBagConstraints.NONE; prgbc.anchor = GridBagConstraints.EAST;
+        prgbc.insets = new Insets(4, 16, 12, 16);
+        progressPanel.add(progressCancel, prgbc);
+        progressDialog.setContentPane(progressPanel);
+        progressDialog.setSize(480, 200);
+        progressDialog.setLocationRelativeTo(this.jframe);
+        progressDialog.setVisible(true);
+
+        final long[] lastProgressUi = { 0L };
+        final ScarletMigration.Progress exportProgress = (phase, detail, filesDone, totalFiles, bytesDone, totalBytes) ->
+        {
+            if (exportCancelled.get())
+                return false;
+            // Coalesce UI updates to ~10/s so streaming a 20 GB log folder doesn't flood the EDT.
+            long now = System.currentTimeMillis();
+            if (now - lastProgressUi[0] < 100L && bytesDone < totalBytes)
+                return true;
+            lastProgressUi[0] = now;
+            SwingUtilities.invokeLater(() ->
+            {
+                progressPhase.setText(totalFiles > 0 ? phase + "  (" + filesDone + " of " + totalFiles + " files)" : phase);
+                progressFile.setText(detail == null || detail.isEmpty() ? " " : detail);
+                if (totalBytes > 0L)
+                {
+                    progressBar.setIndeterminate(false);
+                    progressBar.setValue((int) Math.min(1000L, bytesDone * 1000L / Math.max(1L, totalBytes)));
+                    progressStats.setText(humanBytes(bytesDone) + " of " + humanBytes(totalBytes));
+                }
+                else
+                {
+                    progressBar.setIndeterminate(true);
+                    progressStats.setText(" ");
+                }
+            });
+            return true;
+        };
+
         this.scarlet.execModal.execute(() ->
         {
             try
             {
-                String summary = ScarletMigration.exportBundle(file, pin);
+                String summary = ScarletMigration.exportBundle(file, pin, exportProgress);
                 boolean exportedOk = file.isFile() && file.length() > 0L && ScarletMigration.isEncryptedBundle(file);
                 boolean bundleInData = this.isInsideDataFolder(file);
                 if (offerWipe && exportedOk && !bundleInData
@@ -1368,14 +1491,209 @@ public class ScarletUI implements IScarletUI
             }
             catch (Exception ex)
             {
-                LOG.error("Migration export to {} failed", file, ex);
-                this.messageModalAsyncInfo(null, "Export failed: " + ex.getMessage(), "Export failed");
+                if (exportCancelled.get() || ScarletMigration.CANCELLED_MESSAGE.equals(ex.getMessage()))
+                {
+                    LOG.info("Migration export to {} cancelled by user", file);
+                    this.messageModalAsyncInfo(null, "Export cancelled - no bundle was written.", "Export cancelled");
+                }
+                else
+                {
+                    LOG.error("Migration export to {} failed", file, ex);
+                    this.messageModalAsyncInfo(null, "Export failed: " + ex.getMessage(), "Export failed");
+                }
             }
             finally
             {
                 java.util.Arrays.fill(pin, '\0');
+                SwingUtilities.invokeLater(progressDialog::dispose);
             }
         });
+    }
+
+    /** Threshold above which the export flow asks the user to clear logs/caches first (1 GiB). */
+    private static final long EXPORT_CLEANUP_PROMPT_BYTES = 1L << 30;
+
+    /**
+     * PIDs of running VRChat client processes; empty if none were found or detection is
+     * unavailable. Windows asks tasklist for VRChat.exe; Linux uses pgrep against the
+     * command line, since VRChat only runs there under Proton/Wine as VRChat.exe.
+     * Detection failures are treated as "not running" so they can never block an export.
+     */
+    private static List<String> findVRChatPids()
+    {
+        List<String> pids = new ArrayList<>();
+        try
+        {
+            Process proc;
+            if (net.sybyline.scarlet.util.Platform.CURRENT == net.sybyline.scarlet.util.Platform.NT)
+                proc = new ProcessBuilder("tasklist", "/FI", "IMAGENAME eq VRChat.exe", "/FO", "CSV", "/NH").redirectErrorStream(true).start();
+            else if (net.sybyline.scarlet.util.Platform.CURRENT == net.sybyline.scarlet.util.Platform.$NIX)
+                proc = new ProcessBuilder("pgrep", "-f", "VRChat.exe").redirectErrorStream(true).start();
+            else
+                return pids;
+            try (java.io.BufferedReader reader = new java.io.BufferedReader(new InputStreamReader(proc.getInputStream(), StandardCharsets.UTF_8)))
+            {
+                String line;
+                while ((line = reader.readLine()) != null)
+                {
+                    line = line.trim();
+                    if (line.isEmpty())
+                        continue;
+                    if (net.sybyline.scarlet.util.Platform.CURRENT == net.sybyline.scarlet.util.Platform.NT)
+                    {
+                        // CSV row: "VRChat.exe","12345","Console","1","1,234,567 K"
+                        if (!line.startsWith("\"VRChat.exe\""))
+                            continue;
+                        String[] cols = line.split("\",\"");
+                        if (cols.length > 1)
+                        {
+                            String pid = cols[1].replace("\"", "").trim();
+                            if (pid.matches("\\d+"))
+                                pids.add(pid);
+                        }
+                    }
+                    else if (line.matches("\\d+"))
+                    {
+                        pids.add(line);
+                    }
+                }
+            }
+            proc.waitFor(5L, TimeUnit.SECONDS);
+        }
+        catch (Exception ex)
+        {
+            LOG.debug("Could not detect whether VRChat is running", ex);
+        }
+        return pids;
+    }
+
+    /**
+     * Deletes cache/TTS contents and all Scarlet log files except the newest (the active
+     * session's, which is locked on Windows anyway). Returns bytes freed; failures to
+     * delete individual files (e.g. in-use) are logged and skipped.
+     */
+    private long uiClearLogsAndCaches(File logsDir, File cachesDir, File ttsDir)
+    {
+        long freed = 0L;
+        freed += this.deleteTreeContents(cachesDir);
+        freed += this.deleteTreeContents(ttsDir);
+        File[] logs = logsDir.isDirectory() ? logsDir.listFiles(File::isFile) : null;
+        if (logs != null && logs.length > 1)
+        {
+            File activeLog = net.sybyline.scarlet.log.ScarletLogger.getActiveLogFile();
+            java.util.Arrays.sort(logs, Comparator.comparingLong(File::lastModified).reversed());
+            for (int i = 0; i < logs.length; i++)
+            {
+                // Keep the active session's log — matched by its unique timestamped
+                // name, since File.equals can fail on relative-vs-absolute paths —
+                // plus the newest file as a fallback if detection ever fails.
+                if (i == 0 || (activeLog != null && logs[i].getName().equals(activeLog.getName())))
+                    continue;
+                long len = logs[i].length();
+                try
+                {
+                    if (java.nio.file.Files.deleteIfExists(logs[i].toPath()))
+                        freed += len;
+                }
+                catch (java.io.IOException ex)
+                {
+                    LOG.warn("Could not delete log file {} during pre-export cleanup", logs[i], ex);
+                }
+            }
+        }
+        LOG.info("Pre-export cleanup freed {} byte(s) of logs and caches", freed);
+        return freed;
+    }
+
+    /** Deletes everything inside dir (keeping dir itself); symlinks are removed, never followed. */
+    private long deleteTreeContents(File dir)
+    {
+        if (dir == null || !dir.isDirectory() || java.nio.file.Files.isSymbolicLink(dir.toPath()))
+            return 0L;
+        long freed = 0L;
+        File[] children = dir.listFiles();
+        if (children != null)
+            for (File child : children)
+                freed += this.deleteTree(child);
+        return freed;
+    }
+
+    private long deleteTree(File f)
+    {
+        long freed = 0L;
+        java.nio.file.Path path = f.toPath();
+        if (!java.nio.file.Files.isSymbolicLink(path) && f.isDirectory())
+        {
+            File[] children = f.listFiles();
+            if (children != null)
+                for (File child : children)
+                    freed += this.deleteTree(child);
+        }
+        long len = f.isFile() ? f.length() : 0L;
+        try
+        {
+            if (java.nio.file.Files.deleteIfExists(path))
+                freed += len;
+        }
+        catch (java.io.IOException ex)
+        {
+            LOG.warn("Could not delete {} during pre-export cleanup", f, ex);
+        }
+        return freed;
+    }
+
+    /** Minimal HTML escaping for user-supplied names/notes rendered inside HTML JLabels. */
+    static String escapeHtml(String s)
+    {
+        return s == null ? "" : s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>");
+    }
+
+    /** {@link #humanBytes} for boxed API values of unknown numeric type; null-safe. */
+    static String humanBytesObj(Object value)
+    {
+        return value instanceof Number ? humanBytes(((Number) value).longValue()) : null;
+    }
+
+    /** Renders an API timestamp in the local timezone as {@code yyyy-MM-dd HH:mm}; null-safe. */
+    static String formatTimestamp(java.time.OffsetDateTime odt)
+    {
+        if (odt == null)
+            return null;
+        return odt.atZoneSameInstant(java.time.ZoneId.systemDefault())
+                  .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
+    }
+
+    /** Renders a numeric list like avatar bounds as {@code 2.00 × 1.65 × 2.20}; null-safe. */
+    static String formatNumberList(List<?> values)
+    {
+        if (values == null || values.isEmpty())
+            return null;
+        StringBuilder sb = new StringBuilder();
+        for (Object value : values)
+        {
+            if (sb.length() > 0)
+                sb.append(" × ");
+            if (value instanceof Number)
+                sb.append(String.format("%.2f", ((Number) value).doubleValue()));
+            else
+                sb.append(value);
+        }
+        return sb.toString();
+    }
+
+    static String humanBytes(long bytes)
+    {
+        if (bytes < 1024L)
+            return bytes + " B";
+        double value = bytes;
+        String[] units = { "KB", "MB", "GB", "TB" };
+        int unit = -1;
+        while (value >= 1024.0 && unit < units.length - 1)
+        {
+            value /= 1024.0;
+            unit++;
+        }
+        return String.format("%.1f %s", value, units[unit]);
     }
 
     private boolean isInsideDataFolder(File file)
@@ -1978,7 +2296,7 @@ public class ScarletUI implements IScarletUI
             if (report == null)
             {
                 this.jlabel_vrchatApiStatus.setText("<html><b>VRChat API status:</b> Not checked yet.</html>");
-                this.jlabel_vrchatApiStatus.setForeground(new Color(180, 180, 195));
+                this.jlabel_vrchatApiStatus.setForeground(Swing.FG_SOFT);
                 this.jlabel_vrchatApiStatus.setToolTipText("Scarlet has not checked the bundled VRChat API version yet.");
                 this.jbutton_vrchatApiOpen.setEnabled(false);
                 return;
@@ -2382,30 +2700,93 @@ public class ScarletUI implements IScarletUI
     private static void infoStatsAppend(JPanel panel, GridBagConstraints constraints, String name)
     {
         constraints.gridx = 0;
+        constraints.gridwidth = 2;
         constraints.anchor = GridBagConstraints.WEST;
-        panel.add(new JLabel(name, JLabel.LEFT), constraints);
+        constraints.insets = new Insets(12, 1, 4, 1);
+        JLabel header = new JLabel(name, JLabel.LEFT);
+        header.setFont(header.getFont().deriveFont(Font.BOLD));
+        panel.add(header, constraints);
+        constraints.gridwidth = 1;
+        constraints.insets = new Insets(1, 1, 1, 1);
         constraints.gridy++;
     }
     private static void infoStatsAppend(JPanel panel, GridBagConstraints constraints, String name, Supplier<Object> getter)
     {
-        Object value = getter.get();
+        Object value;
+        try
+        {
+            value = getter.get();
+        }
+        catch (RuntimeException ex)
+        {
+            return; // nested value absent
+        }
         if (value == null)
             return;
+        // Large integers read far better with grouping separators (145,231 not 145231).
+        String text = (value instanceof Integer || value instanceof Long || value instanceof java.math.BigInteger)
+            ? String.format("%,d", ((Number) value).longValue())
+            : value.toString();
         constraints.gridx = 0;
         constraints.anchor = GridBagConstraints.EAST;
         panel.add(new JLabel(name+":", JLabel.RIGHT), constraints);
         constraints.gridx = 1;
         constraints.anchor = GridBagConstraints.WEST;
-        panel.add(new JLabel(value.toString(), JLabel.LEFT), constraints);
+        constraints.insets = new Insets(1, 10, 1, 1);
+        panel.add(new JLabel(text, JLabel.LEFT), constraints);
+        constraints.insets = new Insets(1, 1, 1, 1);
         constraints.gridy++;
     }
-    private void infoStats(String name, String avatarDisplayName, AvatarBundleInfo bundleInfo)
+    private void infoStats(String name, String avatarDisplayName, AvatarBundleInfo bundleInfo, String avatarInfoNote)
     {
         if (bundleInfo == null)
         {
-            ScarletUI.this.messageModalAsyncInfo(null, "Avatar info is not yet available for " + name + ".", name + "'s selected avatar's stats");
+            String reason = avatarInfoNote != null && !avatarInfoNote.trim().isEmpty()
+                ? avatarInfoNote
+                : "Avatar info is not yet available for " + name + ".";
+            JPanel noInfoPanel = new JPanel(new GridBagLayout());
+            GridBagConstraints nic = new GridBagConstraints();
+            nic.gridx = 0; nic.gridy = 0; nic.fill = GridBagConstraints.HORIZONTAL; nic.weightx = 1.0;
+            nic.anchor = GridBagConstraints.WEST; nic.insets = new Insets(0, 0, 8, 0);
+            noInfoPanel.add(new JLabel("<html><body style='width: 380px'>" + escapeHtml(reason) + "</body></html>"), nic);
+            // Only pitch the launch options when they are actually the fix, i.e. this
+            // VRChat session is running without API logging.
+            if (!this.scarlet.eventListener.seenApiLogLines)
+            {
+                String launchOptions = ScarletEventListener.VRCHAT_API_LOGGING_FLAGS + " " + ScarletEventListener.VRCHAT_API_LOGGING_LEVELS;
+                nic.gridy++; nic.insets = new Insets(4, 0, 6, 0);
+                noInfoPanel.add(new JLabel("<html><body style='width: 380px'><b>Get exact avatar data</b><br>"
+                    + "Add these launch options to VRChat in Steam, or launch VRChat through "
+                    + "KozyBlake/Scarlet (which applies them automatically):</body></html>"), nic);
+                nic.gridy++; nic.insets = new Insets(0, 0, 6, 0);
+                JTextArea optionsArea = new JTextArea(launchOptions, 4, 40);
+                optionsArea.setEditable(false);
+                optionsArea.setLineWrap(true);
+                optionsArea.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 11));
+                noInfoPanel.add(new JScrollPane(optionsArea), nic);
+                nic.gridy++; nic.fill = GridBagConstraints.NONE; nic.anchor = GridBagConstraints.EAST;
+                nic.insets = new Insets(0, 0, 0, 0);
+                JButton copyOptions = new JButton("Copy launch options");
+                copyOptions.addActionListener($ ->
+                {
+                    Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(launchOptions), null);
+                    copyOptions.setText("Copied!");
+                });
+                noInfoPanel.add(copyOptions, nic);
+            }
+            ScarletUI.this.messageModalAsyncInfo(null, noInfoPanel, name + "'s selected avatar's stats");
             return;
         }
+        // Always-visible basics; the long tail of stats lives in `panel` behind a toggle.
+        JPanel basicsPanel = new JPanel(new GridBagLayout());
+        GridBagConstraints basicsConstraints = new GridBagConstraints();
+        basicsConstraints.gridheight = 1;
+        basicsConstraints.gridwidth = 1;
+        basicsConstraints.gridx = 0;
+        basicsConstraints.gridy = 0;
+        basicsConstraints.insets = new Insets(1, 1, 1, 1);
+        basicsConstraints.weightx = 0.0D;
+        basicsConstraints.weighty = 0.0D;
         JPanel panel = new JPanel(new GridBagLayout());
         {
             GridBagConstraints constraints = new GridBagConstraints();
@@ -2420,7 +2801,15 @@ public class ScarletUI implements IScarletUI
             VersionedFile versionedFile = bundleInfo.id;
             ModelFile file = bundleInfo.file;
             FileAnalysisAvatarStats stats = analysis != null ? analysis.getAvatarStats() : null;
-            infoStatsAppend(panel, constraints, "Avatar name", ()->avatarDisplayName);
+            infoStatsAppend(basicsPanel, basicsConstraints, "Avatar name", ()->avatarDisplayName);
+            if (avatarInfoNote != null && !avatarInfoNote.trim().isEmpty())
+                infoStatsAppend(basicsPanel, basicsConstraints, "Note", ()->avatarInfoNote);
+            if (analysis != null)
+            {
+                infoStatsAppend(basicsPanel, basicsConstraints, "Performance rating", analysis::getPerformanceRating);
+                infoStatsAppend(basicsPanel, basicsConstraints, "File size", ()->humanBytesObj(analysis.getFileSize()));
+                infoStatsAppend(basicsPanel, basicsConstraints, "Uncompressed size", ()->humanBytesObj(analysis.getUncompressedSize()));
+            }
             infoStatsAppend(panel, constraints, "File statistics");
             if (file != null)
             {
@@ -2429,10 +2818,7 @@ public class ScarletUI implements IScarletUI
             }
             if (analysis != null)
             {
-                infoStatsAppend(panel, constraints, "Created at", analysis::getCreatedAt);
-                infoStatsAppend(panel, constraints, "Performance rating", analysis::getPerformanceRating);
-                infoStatsAppend(panel, constraints, "Uncompressed size", analysis::getUncompressedSize);
-                infoStatsAppend(panel, constraints, "File size", analysis::getFileSize);
+                infoStatsAppend(panel, constraints, "Created at", ()->formatTimestamp(analysis.getCreatedAt()));
             }
             if (versionedFile != null)
             {
@@ -2450,7 +2836,7 @@ public class ScarletUI implements IScarletUI
                 infoStatsAppend(panel, constraints, "Audio source count", stats::getAudioSourceCount);
                 infoStatsAppend(panel, constraints, "Blend shape count", stats::getBlendShapeCount);
                 infoStatsAppend(panel, constraints, "Bone count", stats::getBoneCount);
-                infoStatsAppend(panel, constraints, "Bounds", stats::getBounds);
+                infoStatsAppend(panel, constraints, "Bounds", ()->formatNumberList(stats.getBounds()));
                 infoStatsAppend(panel, constraints, "Camera count", stats::getCameraCount);
                 infoStatsAppend(panel, constraints, "Cloth count", stats::getClothCount);
                 infoStatsAppend(panel, constraints, "Constraint count", stats::getConstraintCount);
@@ -2486,17 +2872,52 @@ public class ScarletUI implements IScarletUI
                 infoStatsAppend(panel, constraints, "Total indices", stats::getTotalIndices);
                 infoStatsAppend(panel, constraints, "Total max particles", stats::getTotalMaxParticles);
                 infoStatsAppend(panel, constraints, "Total polygons", stats::getTotalPolygons);
-                infoStatsAppend(panel, constraints, "Total texture usage", stats::getTotalTextureUsage);
+                infoStatsAppend(panel, constraints, "Total texture usage", ()->humanBytesObj(stats.getTotalTextureUsage()));
                 infoStatsAppend(panel, constraints, "Total vertices", stats::getTotalVertices);
                 infoStatsAppend(panel, constraints, "Trail renderer count", stats::getTrailRendererCount);
                 infoStatsAppend(panel, constraints, "Write defaults used", stats::getWriteDefaultsUsed);
             }
             
         }
-        JScrollPane scroll = new JScrollPane(panel);
-        scroll.setSize(new Dimension(500, 300));
-        scroll.setPreferredSize(new Dimension(500, 300));
-        scroll.setMaximumSize(new Dimension(500, 300));
+        // The long tail of stats starts hidden; most people only need the basics.
+        panel.setVisible(false);
+        JButton detailsToggle = new JButton("Show all details");
+        basicsConstraints.gridx = 0;
+        basicsConstraints.gridwidth = 2;
+        basicsConstraints.anchor = GridBagConstraints.WEST;
+        basicsConstraints.insets = new Insets(10, 1, 4, 1);
+        basicsPanel.add(detailsToggle, basicsConstraints);
+
+        JPanel root = new JPanel(new BorderLayout());
+        root.add(basicsPanel, BorderLayout.NORTH);
+        root.add(panel, BorderLayout.CENTER);
+        JScrollPane scroll = new JScrollPane(root);
+        // Borderless, so this dialog frames its content the same way the plain
+        // message dialogs do instead of drawing a visible inset box.
+        scroll.setBorder(BorderFactory.createEmptyBorder());
+        // Collapsed, the dialog hugs the basics (BorderLayout ignores the hidden
+        // details panel when computing preferred size); expanded, it caps at 300px
+        // tall and scrolls. The enclosing dialog is re-packed on toggle to follow.
+        Runnable sizeScroll = () ->
+        {
+            if (panel.isVisible())
+                scroll.setPreferredSize(new Dimension(500, 300));
+            else
+                scroll.setPreferredSize(new Dimension(500, root.getPreferredSize().height + 8));
+        };
+        sizeScroll.run();
+        detailsToggle.addActionListener($ ->
+        {
+            boolean show = !panel.isVisible();
+            panel.setVisible(show);
+            detailsToggle.setText(show ? "Hide details" : "Show all details");
+            sizeScroll.run();
+            root.revalidate();
+            root.repaint();
+            java.awt.Window window = SwingUtilities.getWindowAncestor(scroll);
+            if (window != null)
+                window.pack();
+        });
         ScarletUI.this.messageModalAsyncInfo(null, scroll, name+"'s selected avatar's stats");
     }
     private static void infoCreditsAppend(JPanel panel, GridBagConstraints constraints, Credits credits)
@@ -2884,13 +3305,13 @@ public class ScarletUI implements IScarletUI
 
     private void readSettingUI()
     {
-        final Color CARD_BG     = new Color(30, 30, 42);
-        final Color CARD_BORDER = new Color(55, 55, 72);
+        final Color CARD_BG     = Swing.BG_PANEL;
+        final Color CARD_BORDER = Swing.BORDER;
         final Color CARD_HDR_FG = Swing.ACCENT;
-        final Color LABEL_FG    = new Color(180, 180, 195);
+        final Color LABEL_FG    = Swing.FG_SOFT;
 
         this.jpanel_settings.removeAll();
-        this.jpanel_settings.setBackground(new Color(22, 22, 30));
+        this.jpanel_settings.setBackground(Swing.BG_INPUT);
         this.settingsCardPanels.clear();
         this.settingsCardSearchText.clear();
 

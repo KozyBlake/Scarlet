@@ -95,6 +95,19 @@ public class Swing
     public static volatile Color ACCENT_GLOW;
     public static volatile Color SEL_BG;
 
+    /**
+     * The fixed dark palette shared by the FlatLaf theme keys and every place
+     * that styles components by hand. Hand-styled UI must reference these
+     * instead of inlining color literals, so the shades can never drift apart.
+     */
+    public static final Color BG_BASE  = new Color( 28,  28,  36),
+                              BG_PANEL = new Color( 34,  34,  44),
+                              BG_INPUT = new Color( 22,  22,  30),
+                              FG_MAIN  = new Color(220, 220, 232),
+                              FG_SOFT  = new Color(180, 180, 195),
+                              FG_DIM   = new Color(140, 140, 155),
+                              BORDER   = new Color( 55,  55,  72);
+
     // ── Accent-change listeners ───────────────────────────────────────────────
     // Fired by pickAccentColor() after the user confirms a new colour via the
     // JColorChooser dialog. Components that mirror the accent (e.g. the theme
@@ -238,15 +251,7 @@ public class Swing
         ACCENT_GLOW = accentGlow;
         SEL_BG      = selBg;
 
-        // ── Fixed dark palette ─────────────────────────────────────────────────
-        final Color BG_BASE  = new Color( 28,  28,  36);
-        final Color BG_PANEL = new Color( 34,  34,  44);
-        final Color BG_INPUT = new Color( 22,  22,  30);
-        final Color FG_MAIN  = new Color(220, 220, 232);
-        final Color FG_DIM   = new Color(140, 140, 155);
-        final Color BORDER   = new Color( 55,  55,  72);
-
-        // ── Apply to UIManager ─────────────────────────────────────────────────
+        // ── Apply to UIManager (palette constants are the class-level statics) ─
         UIManager.put("@accentColor",                  accent);
         UIManager.put("Panel.background",              BG_PANEL);
         UIManager.put("RootPane.background",           BG_BASE);
@@ -376,6 +381,55 @@ public class Swing
         UIManager.put("List.foreground",               FG_MAIN);
         UIManager.put("List.selectionBackground",      selBg);
         UIManager.put("List.selectionForeground",      Color.WHITE);
+
+        // ── Remaining FlatLaf fallbacks ────────────────────────────────────────
+        // Components without explicit keys fall back to FlatLaf's stock grey,
+        // which clashes with the darker custom palette and shows up as mismatched
+        // patches ("miscoloration") wherever those components appear. Cover them.
+        UIManager.put("ScrollPane.background",         BG_BASE);
+        UIManager.put("Viewport.background",           BG_BASE);
+
+        UIManager.put("CheckBox.background",           BG_PANEL);
+        UIManager.put("CheckBox.foreground",           FG_MAIN);
+        UIManager.put("RadioButton.background",        BG_PANEL);
+        UIManager.put("RadioButton.foreground",        FG_MAIN);
+        UIManager.put("RadioButton.icon.selectedBackground",  accent);
+        UIManager.put("RadioButton.icon.selectedBorderColor", accentDark);
+        UIManager.put("ToggleButton.background",       BG_PANEL);
+        UIManager.put("ToggleButton.foreground",       FG_MAIN);
+        UIManager.put("ToggleButton.selectedBackground", accentDark);
+
+        UIManager.put("PasswordField.background",      BG_INPUT);
+        UIManager.put("PasswordField.foreground",      FG_MAIN);
+        UIManager.put("PasswordField.caretForeground", accent);
+        UIManager.put("PasswordField.selectionBackground", selBg);
+        UIManager.put("TextField.disabledBackground",  BG_PANEL);
+        UIManager.put("TextArea.disabledBackground",   BG_PANEL);
+
+        UIManager.put("Spinner.background",            BG_INPUT);
+        UIManager.put("Spinner.foreground",            FG_MAIN);
+        UIManager.put("Spinner.buttonBackground",      BG_INPUT);
+
+        UIManager.put("Slider.thumbColor",             accent);
+        UIManager.put("Slider.trackColor",             BORDER);
+        UIManager.put("Slider.trackValueColor",        accent);
+        UIManager.put("Slider.focusedColor",           accentGlow);
+
+        UIManager.put("ProgressBar.background",        BG_INPUT);
+        UIManager.put("ProgressBar.foreground",        accent);
+        UIManager.put("ProgressBar.selectionBackground", FG_MAIN);
+        UIManager.put("ProgressBar.selectionForeground", Color.WHITE);
+        UIManager.put("ProgressBar.arc",               999);
+
+        UIManager.put("Tree.background",               BG_INPUT);
+        UIManager.put("Tree.foreground",               FG_MAIN);
+        UIManager.put("Tree.selectionBackground",      selBg);
+        UIManager.put("Tree.selectionForeground",      Color.WHITE);
+
+        UIManager.put("TitledBorder.titleColor",       FG_DIM);
+        UIManager.put("SplitPane.background",          BG_BASE);
+        UIManager.put("SplitPaneDivider.draggingColor", accent);
+        UIManager.put("ToolBar.background",            BG_PANEL);
     }
 
     /**

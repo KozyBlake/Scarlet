@@ -17,14 +17,16 @@ public class ScarletPendingModActions
 
     static final Logger LOG = LoggerFactory.getLogger("Scarlet/PendingModActions");
 
-    public ScarletPendingModActions(File pendingModActionsFile)
+    public ScarletPendingModActions(Scarlet scarlet, File pendingModActionsFile)
     {
+        this.scarlet = scarlet;
         this.pendingModActionsFile = pendingModActionsFile;
         this.pendingModActions = new ConcurrentHashMap<>();
         this.pendingBanInfo = new ConcurrentHashMap<>();
         this.load();
     }
 
+    final Scarlet scarlet;
     final File pendingModActionsFile;
     final Map<String, String> pendingModActions;
     final Map<String, BanInfo> pendingBanInfo;
@@ -55,6 +57,11 @@ public class ScarletPendingModActions
         if (prevActorUserId == null)
         {
             this.save();
+            // A moderation action was just initiated through Scarlet:
+            // burst-poll the audit log so its Discord thread posts promptly
+            // instead of waiting out the full audit polling interval.
+            if (this.scarlet != null)
+                this.scarlet.pollAuditSoon();
         }
         return prevActorUserId;
     }
@@ -70,6 +77,10 @@ public class ScarletPendingModActions
         if (prevActorUserId != null)
         {
             this.save();
+            // All Scarlet-initiated actions have been observed in the audit
+            // log; no need to keep burst polling.
+            if (this.scarlet != null && this.pendingModActions.isEmpty())
+                this.scarlet.endAuditFastPoll();
         }
         return prevActorUserId;
     }

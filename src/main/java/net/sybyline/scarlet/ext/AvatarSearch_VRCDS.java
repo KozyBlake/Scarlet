@@ -11,6 +11,9 @@ public interface AvatarSearch_VRCDS
 {
 
     public static final String API_ROOT = "https://avtr.nekosunevr.co.uk";
+    /** The search endpoint moved hosts: the old {@code avtr.} subdomain no longer serves
+     *  {@code /vrcx_search} directly (it responds with a redirect/notice that broke parsing). */
+    public static final String SEARCH_ROOT = "https://vrcavatarsearch.nekosunevr.co.uk";
 
     public static class PutAvatarExternalRequest
     {

@@ -21,6 +21,7 @@ import java.util.regex.Matcher;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import io.github.vrchatapi.model.Avatar;
 import io.github.vrchatapi.model.FileAnalysis;
 import io.github.vrchatapi.model.InventoryItem;
 import io.github.vrchatapi.model.InventoryItemType;
@@ -28,6 +29,7 @@ import io.github.vrchatapi.model.LimitedUserGroups;
 import io.github.vrchatapi.model.ModelFile;
 import io.github.vrchatapi.model.Print;
 import io.github.vrchatapi.model.Prop;
+import io.github.vrchatapi.model.UnityPackage;
 import io.github.vrchatapi.model.User;
 
 import net.sybyline.scarlet.ext.AvatarBundleInfo;
@@ -219,7 +221,11 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
     public void log_init(File file)
     {
         this.isTailerLive = false;
-    } 
+        // New VRChat log file = new VRChat session: re-evaluate whether this
+        // session was launched with API debug logging (see log_playerSwitchAvatar).
+        this.seenApiLogLines = false;
+        this.liveAvatarSwitchesWithoutApiLog = 0;
+    }
 
     @Override
     public void log_catchUp(File file)
@@ -229,6 +235,10 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         {
             this.isTailerLive = true;
             this.scarlet.ui.fireSort();
+            // Scarlet often starts mid-session: players already present had their
+            // avatars recorded during preamble catch-up, where the live switch
+            // trigger never fires. Hydrate their statuses now.
+            this.rescanAvatarInfo();
             if (!this.hasTailerCaughtUp)
             {
                 this.hasTailerCaughtUp = true;
@@ -341,6 +351,8 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         // without inheriting stale advisory text from the UI pass above.
         if (!preamble)
             this.checkPlayer(new ArrayList<>(), priority, false, userDisplayName, userId);
+        if (!preamble && avatarDisplayName != null)
+            this.maybeHydrateAvatarInfo(userDisplayName, userId, avatarDisplayName);
         if (Objects.equals(this.clientUserId, userId))
             this.clientLocationPrev_userIds.clear();
 
@@ -384,18 +396,59 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         }
     }
 
+    /** Steam launch options that make VRChat write the {@code [API]} debug log lines Scarlet needs for exact avatar statuses. */
+    static final String VRCHAT_API_LOGGING_FLAGS = "--enable-sdk-log-levels --enable-udon-debug-logging --enable-verbose-logging",
+                        VRCHAT_API_LOGGING_LEVELS = "--log-debug-levels=API;All;Always;AssetBundleDownloadManager;ContentCreator;Errors;NetworkData;NetworkProcessing;NetworkTransport;Warnings";
+
+    /** True once any {@code [API]} line has been seen in the current VRChat session's log. */
+    volatile boolean seenApiLogLines = false;
+    /** Live avatar switches observed this session while no {@code [API]} lines have appeared. */
+    int liveAvatarSwitchesWithoutApiLog = 0;
+    /** One-shot per Scarlet run so the missing-API-logging hint doesn't nag. */
+    boolean warnedMissingApiLogging = false;
+
     @Override
     public void log_playerSwitchAvatar(boolean preamble, LocalDateTime timestamp, String userDisplayName, String avatarDisplayName)
     {
+        // Avatar statuses (bundle/perf info) are built from "[API] ... analysis/file_..."
+        // log lines, which VRChat only writes when launched with the debug logging
+        // launch options (Scarlet's own launcher passes them). If avatars keep switching
+        // but no [API] lines ever appear, the game was launched without them: statuses
+        // will silently stay empty, so tell the user once instead of failing silently.
+        if (!preamble && !this.seenApiLogLines && !this.warnedMissingApiLogging
+            && ++this.liveAvatarSwitchesWithoutApiLog >= 3)
+        {
+            this.warnedMissingApiLogging = true;
+            Scarlet.LOG.warn("VRChat is not logging API requests this session; avatar statuses are using the API fallback "
+                + "(avatar-database name lookup), which can miss private or ambiguous avatars. For exact statuses, launch "
+                + "VRChat through KozyBlake/Scarlet or add these Steam launch options: "
+                + VRCHAT_API_LOGGING_FLAGS + " " + VRCHAT_API_LOGGING_LEVELS);
+            this.scarlet.splash.queueFeedbackPopup(null, 10_000L,
+                "Avatar statuses: fallback mode",
+                "VRChat was launched without API logging; statuses use avatar-database lookups and may miss private avatars. See log for the launch options that enable full data.",
+                Color.ORANGE, Color.ORANGE);
+        }
         String userId = this.clientLocation_userDisplayName2userId.get(userDisplayName);
         if (userId != null)
         {
             this.pendingOrNow(preamble, () ->
             {
-                this.scarlet.ui.playerUpdate(!this.isTailerLive, userId, $ -> $.avatarName = avatarDisplayName);
+                this.scarlet.ui.playerUpdate(!this.isTailerLive, userId, $ ->
+                {
+                    if (!avatarDisplayName.equals($.avatarName))
+                    {
+                        // New avatar: drop the previous avatar's info and note until
+                        // the log-based or API-based hydration fills them back in.
+                        $.avatarInfo = null;
+                        $.avatarInfoNote = null;
+                    }
+                    $.avatarName = avatarDisplayName;
+                });
             });
         }
         this._setPlayerAvatar(userDisplayName, avatarDisplayName);
+        if (!preamble && userId != null)
+            this.maybeHydrateAvatarInfo(userDisplayName, userId, avatarDisplayName);
         if (!preamble && this.isInGroupInstance && userId != null)
         {
             OffsetDateTime odt = MiscUtils.odt2utc(timestamp);
@@ -410,6 +463,7 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
             String oldAvatarDisplayName = this.clientLocation_userDisplayName2avatarDisplayName.remove(userDisplayName);
             if (oldAvatarDisplayName != null)
                 this.clientLocation_avatarDisplayName2userDisplayName.valuesRemove(oldAvatarDisplayName, userDisplayName);
+            this.clientLocation_userDisplayName2avatarBundleInfo.remove(userDisplayName);
             return;
         }
         String oldAvatarDisplayName = this.clientLocation_userDisplayName2avatarDisplayName.put(userDisplayName, avatarDisplayName);
@@ -418,6 +472,210 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         if (oldAvatarDisplayName != null)
             this.clientLocation_avatarDisplayName2userDisplayName.valuesRemove(oldAvatarDisplayName, userDisplayName);
         this.clientLocation_avatarDisplayName2userDisplayName.valuesAdd(avatarDisplayName, userDisplayName);
+        // The avatar changed: drop the previous avatar's bundle info so the UI can't
+        // show the old avatar's stats against the new avatar while the log-based or
+        // API-based hydration catches up.
+        this.clientLocation_userDisplayName2avatarBundleInfo.remove(userDisplayName);
+    }
+
+    /**
+     * Queues the no-API-logging avatar-status hydration for one player if needed.
+     * Safe to call repeatedly: skips when API logging is on this session (the exact
+     * log-based path handles it), when info is already known, or when the search
+     * feature is disabled. All network work (search providers + VRChat API) runs on
+     * the executor, never the log-tailer thread. Unlike the watched-avatar pipeline,
+     * this deliberately ignores group-instance and advisory/Discord gating: the
+     * player table shows avatars in any instance, so statuses should resolve there too.
+     */
+    /** How long the log-based path gets to produce avatar info before the API fallback steps in anyway. */
+    static final long API_LOG_PATH_GRACE_MILLIS = 20_000L;
+
+    /**
+     * Queues avatar-status hydration for everyone currently visible who still
+     * lacks data. Players whose avatar info is already resolved are skipped, so
+     * a rescan (startup catch-up, or after the provider list changes) costs no
+     * unnecessary network traffic or provider rate limit. Requests are staggered
+     * so a full instance doesn't burst dozens of searches at the providers.
+     */
+    public void rescanAvatarInfo()
+    {
+        long[] staggerMillis = { 0L };
+        this.clientLocation_userDisplayName2avatarDisplayName.forEach((userDisplayName, avatarDisplayName) ->
+        {
+            String userId = this.clientLocation_userDisplayName2userId.get(userDisplayName);
+            if (userId == null)
+                return;
+            if (this.clientLocation_userDisplayName2avatarBundleInfo.containsKey(userDisplayName))
+                return; // already resolved: skip
+            long delay = staggerMillis[0];
+            staggerMillis[0] += 750L;
+            this.scarlet.exec.schedule(() -> this.maybeHydrateAvatarInfo(userDisplayName, userId, avatarDisplayName), delay, TimeUnit.MILLISECONDS);
+        });
+    }
+
+    void maybeHydrateAvatarInfo(String userDisplayName, String userId, String avatarDisplayName)
+    {
+        if (!Features.AVATAR_SEARCH_ENABLED || userId == null || avatarDisplayName == null)
+            return;
+        if (this.clientLocation_userDisplayName2avatarBundleInfo.containsKey(userDisplayName))
+            return;
+        // With API logging enabled the log-based path normally fills this in within
+        // seconds and is exact — but it can silently fail (e.g. the file/analysis
+        // API refusing a private avatar's metadata), so instead of standing down
+        // entirely, the fallback waits out a grace period and then backstops
+        // whatever is still missing. Without API logging it runs immediately.
+        long delayMillis = this.seenApiLogLines ? API_LOG_PATH_GRACE_MILLIS : 0L;
+        if (delayMillis == 0L)
+            this.scarlet.ui.playerUpdate(!this.isTailerLive, userId, $ -> { if ($.avatarInfo == null) $.avatarInfoNote = "Looking up avatar data for "+userDisplayName+"..."; });
+        this.scarlet.exec.schedule(() ->
+        {
+            if (this.clientLocation_userDisplayName2avatarBundleInfo.containsKey(userDisplayName))
+                return; // the log-based path got there first
+            if (!avatarDisplayName.equals(this.clientLocation_userDisplayName2avatarDisplayName.get(userDisplayName)))
+                return; // the player switched avatars in the meantime
+            // The user's current avatar image file uniquely identifies the avatar
+            // actually worn, even among same-named clones — resolve it up front
+            // (unless a profile picture override or the default image hides it).
+            String imageFileId = null;
+            User user = this.scarlet.vrc.getUser(userId);
+            if (user != null
+                && (user.getProfilePicOverride() == null || user.getProfilePicOverride().isEmpty())
+                && user.getCurrentAvatarImageUrl() != null
+                && !user.getCurrentAvatarImageUrl().contains("file_0e8c4e32-7444-44ea-ade4-313c010d4bae"))
+            {
+                Matcher imageMatcher = VrcIds.id_file.matcher(user.getCurrentAvatarImageUrl());
+                if (imageMatcher.find())
+                    imageFileId = imageMatcher.group();
+            }
+            // Candidates: image-based lookups first (most precise), then name matches.
+            LinkedHashSet<String> candidates = new LinkedHashSet<>();
+            if (imageFileId != null)
+                AvatarSearch.ByImage.vrcxSearchAllCachedByImage(imageFileId)
+                    .filter(Objects::nonNull)
+                    .map(AvatarSearch.VrcxAvatar::id)
+                    .filter(Objects::nonNull)
+                    .forEach(candidates::add);
+            String[] nameCandidates = this.searchAvatar(avatarDisplayName);
+            Collections.addAll(candidates, nameCandidates);
+            if (!candidates.isEmpty()
+                && this.hydrateAvatarInfoFromApi(userDisplayName, userId, avatarDisplayName, candidates.toArray(new String[0]), nameCandidates.length, imageFileId))
+                return;
+            final String note;
+            if (nameCandidates.length > 5)
+                note = "Avatar data is unavailable for "+userDisplayName+": too many avatars share the name \""+avatarDisplayName+"\" to identify which one is worn, and none could be matched by image.";
+            else if (nameCandidates.length == 0 && candidates.isEmpty())
+                note = "Avatar data is unavailable for "+userDisplayName+": \""+avatarDisplayName+"\" is not indexed by any avatar database (likely a private or new avatar).";
+            else
+                note = "Avatar data could not be pulled for "+userDisplayName+": \""+avatarDisplayName+"\" appears to be a private avatar and no avatar database has its stats.";
+            this.scarlet.ui.playerUpdate(!this.isTailerLive, userId, $ -> { if ($.avatarInfo == null) $.avatarInfoNote = note; });
+        }, delayMillis, TimeUnit.MILLISECONDS);
+    }
+
+    /**
+     * Reconstructs avatar bundle/status info via the VRChat API when the client log
+     * lacks {@code [API]} analysis lines (VRChat launched without debug logging).
+     * Resolution order: exact identification by the user's current avatar image
+     * file (works even among same-named clones), then name-equality best effort
+     * when the name is unambiguous enough, then a database record's stored rating.
+     * Returns true when anything was applied.
+     */
+    boolean hydrateAvatarInfoFromApi(String userDisplayName, String userId, String avatarDisplayName, String[] candidateIds, int nameCandidateCount, String imageFileId)
+    {
+        try
+        {
+            long within1day = System.currentTimeMillis() - 86_400_000L;
+            // Pass 1: the worn avatar's image file is unique per avatar, so a
+            // candidate whose image matches IS the true avatar, clones or not.
+            if (imageFileId != null)
+            {
+                int scanned = 0;
+                for (String avatarId : candidateIds)
+                {
+                    if (scanned++ >= 40)
+                        break; // bound API calls for absurdly popular names; calls are cached and 404s negative-cached
+                    Avatar avatar = this.scarlet.vrc.getAvatar(avatarId, within1day);
+                    if (avatar == null || avatar.getImageUrl() == null || !avatar.getImageUrl().contains(imageFileId))
+                        continue;
+                    if (this.applyAvatarInfo(userDisplayName, userId, avatarDisplayName, avatar, avatarId, within1day, true))
+                        return true;
+                }
+            }
+            // Pass 2: name equality, only when few enough avatars share the name
+            // that this is identification rather than a guess.
+            if (nameCandidateCount >= 1 && nameCandidateCount <= 5)
+            {
+                for (String avatarId : candidateIds)
+                {
+                    Avatar avatar = this.scarlet.vrc.getAvatar(avatarId, within1day);
+                    if (avatar == null || !avatarDisplayName.equals(avatar.getName()))
+                        continue;
+                    if (this.applyAvatarInfo(userDisplayName, userId, avatarDisplayName, avatar, avatarId, within1day, false))
+                        return true;
+                }
+                // Pass 3: the API resolved nothing — typically a private avatar. The
+                // community databases are fed by other tools submitting avatars they
+                // saw worn (including private ones) and often carry performance
+                // ratings, so surface at least the rating, like the nameplate shows.
+                AvatarSearch.VrcxAvatar record = AvatarSearch
+                    .vrcxSearchAllCached(((ScarletDiscordJDA)this.scarlet.discord).getAvatarSearchProviders(), avatarDisplayName)
+                    .filter(Objects::nonNull)
+                    .filter($ -> avatarDisplayName.equals($.name))
+                    .filter($ -> $.performance != null && ($.performance.pcRating != null || $.performance.androidRating != null))
+                    .findFirst().orElse(null);
+                if (record != null)
+                {
+                    String rating = record.performance.pcRating != null ? record.performance.pcRating : record.performance.androidRating;
+                    FileAnalysis analysis = new FileAnalysis().performanceRating(rating);
+                    AvatarBundleInfo bundleInfo = new AvatarBundleInfo(null, null, analysis);
+                    if (!avatarDisplayName.equals(this.clientLocation_userDisplayName2avatarDisplayName.get(userDisplayName)))
+                        return true; // switched away in the meantime: nothing more to do
+                    this.clientLocation_userDisplayName2avatarBundleInfo.put(userDisplayName, bundleInfo);
+                    Scarlet.LOG.info(userDisplayName+"'s chosen avatar "+avatarDisplayName+" performance rating from avatar database: "+rating);
+                    this.scarlet.ui.playerUpdate(!this.isTailerLive, userId, $ -> { $.avatarInfo = bundleInfo; $.avatarInfoNote = "Rating from an avatar database record (avatar appears private)"; });
+                    return true;
+                }
+            }
+            Scarlet.LOG.debug("API fallback could not resolve avatar info for "+userDisplayName+" ("+avatarDisplayName+") from "+candidateIds.length+" candidate(s), imageFileId="+imageFileId);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            Scarlet.LOG.warn("Failed hydrating avatar info for "+userDisplayName+" ("+avatarDisplayName+"): "+ex);
+            return false;
+        }
+    }
+
+    /** Pulls the bundle file + analysis for a confirmed avatar and applies it to the player row. */
+    private boolean applyAvatarInfo(String userDisplayName, String userId, String avatarDisplayName, Avatar avatar, String avatarId, long within1day, boolean imageVerified)
+    {
+        VersionedFile versionedFile = null;
+        if (avatar.getUnityPackages() != null)
+        {
+            for (UnityPackage unityPackage : avatar.getUnityPackages())
+            {
+                VersionedFile parsed = VersionedFile.parse(unityPackage.getAssetUrl());
+                if (parsed == null)
+                    continue;
+                versionedFile = parsed;
+                if ("standalonewindows".equalsIgnoreCase(String.valueOf(unityPackage.getPlatform())))
+                    break; // prefer the PC bundle, otherwise keep the last parseable one
+            }
+        }
+        if (versionedFile == null)
+            return false;
+        ModelFile file = this.scarlet.vrc.getModelFile(versionedFile.id, within1day);
+        if (file == null)
+            return false;
+        FileAnalysis analysis0 = this.scarlet.vrc.getFileAnalysis(versionedFile, within1day);
+        FileAnalysis analysis = analysis0 != null ? analysis0 : new FileAnalysis().performanceRating("Unknown");
+        AvatarBundleInfo bundleInfo = new AvatarBundleInfo(versionedFile, file, analysis);
+        // Only apply if this player is still wearing that avatar.
+        if (!avatarDisplayName.equals(this.clientLocation_userDisplayName2avatarDisplayName.get(userDisplayName)))
+            return true; // switched away in the meantime: nothing more to do
+        this.clientLocation_userDisplayName2avatarBundleInfo.put(userDisplayName, bundleInfo);
+        Scarlet.LOG.info(userDisplayName+"'s chosen avatar "+avatarDisplayName+" resolved via API fallback ("+avatarId+(imageVerified ? ", image-verified" : ", name-matched")+"): "+analysis.getPerformanceRating());
+        this.scarlet.ui.playerUpdate(!this.isTailerLive, userId, $ -> { $.avatarInfo = bundleInfo; $.avatarInfoNote = null; });
+        return true;
     }
 
     String[] searchAvatar(String avatarDisplayName)
@@ -782,6 +1040,8 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
     @Override
     public void log_apiRequest(boolean preamble, LocalDateTime timestamp, int index, String method, String url)
     {
+        // Any [API] line proves this VRChat session has API debug logging enabled.
+        this.seenApiLogLines = true;
         int pathIdx = url.indexOf("/api/1/");
         pathIdx = pathIdx < 0 ? 0 : (pathIdx + 7);
         if (!preamble)

@@ -99,6 +99,31 @@ public class Scarlet implements Closeable
 
     static
     {
+        // ── Windows HiDPI fix ─────────────────────────────────────────────────
+        // On Java 9+ Windows JREs, Java2D applies the OS display scale (125%,
+        // 150%, ...) on top of the scaling FlatLaf / Swing.scaleAll already do.
+        // That double scaling causes overlapping components, duplicated window
+        // artifacts, and miscolored popups. Disable Java2D's scaling and let
+        // FlatLaf own the scale instead — equivalent to launching with
+        // -Dsun.java2d.uiScale=1 -Dsun.java2d.uiScale.enabled=false.
+        // Must run before ANY AWT/Java2D class initializes, hence this static
+        // block in the main class. Users who pass either property explicitly on
+        // the command line keep their value.
+        if (Platform.CURRENT.isNT()
+         && System.getProperty("sun.java2d.uiScale") == null
+         && System.getProperty("sun.java2d.uiScale.enabled") == null)
+        {
+            System.setProperty("sun.java2d.uiScale", "1");
+            System.setProperty("sun.java2d.uiScale.enabled", "false");
+            // With Java2D scaling off, let FlatLaf compute its scale from the
+            // system font instead (same path it uses on Java 8), so HiDPI
+            // displays still get a readable UI. String literal used instead of
+            // FlatSystemProperties.UI_SCALE_ENABLED to avoid loading any UI
+            // classes this early.
+            if (System.getProperty("flatlaf.uiScale.enabled") == null)
+                System.setProperty("flatlaf.uiScale.enabled", "true");
+        }
+
         String dataModel = System.getProperty("sun.arch.data.model");
         if (dataModel == null)
             System.err.println("System property 'sun.arch.data.model' is missing?!?!?!");
@@ -793,7 +818,7 @@ public class Scarlet implements Closeable
     }
     final IScarletUI ui = IScarletUI.create(this);
     final ScarletEventListener eventListener = new ScarletEventListener(this);
-    final ScarletPendingModActions pendingModActions = new ScarletPendingModActions(new File(dir, "pending_moderation_actions.json"));
+    final ScarletPendingModActions pendingModActions = new ScarletPendingModActions(this, new File(dir, "pending_moderation_actions.json"));
     final ScarletModerationTags moderationTags = new ScarletModerationTags(new File(dir, "moderation_tags.json"));
     final ScarletWatchedGroups watchedGroups = new ScarletWatchedGroups(new File(dir, "watched_groups.json"));
     /** Shared pronoun allow/deny lists — read by PronounValidator on every check. Public so the validator can access it statically. */
@@ -1202,7 +1227,16 @@ public class Scarlet implements Closeable
                 // spin
                 long currentPollInterval = Math.min(Math.max(this.auditPollingInterval.get().longValue(), 10L), 300L) * 1_000L;
                 while ((now = System.currentTimeMillis()) - lastIter < currentPollInterval && this.running)
+                {
+                    // Burst polling: a moderation action was just initiated through
+                    // Scarlet (Discord command or UI), so poll the audit log every
+                    // AUDIT_FAST_POLL_PERIOD_MILLIS instead of waiting out the full
+                    // interval. This gets the moderation thread posted to Discord as
+                    // soon as VRChat's audit endpoint exposes the entry.
+                    if (now < this.auditFastPollUntilMillis && now - lastIter >= AUDIT_FAST_POLL_PERIOD_MILLIS)
+                        break;
                     this.spin();
+                }
                 // maybe refresh
                 try
                 {
@@ -2496,6 +2530,29 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
     {
         this.wantsVrcRefresh = true;
     }
+    /** How much already-covered time each audit query re-fetches, so out-of-order-ingested entries are never missed. */
+    static final long AUDIT_QUERY_OVERLAP_MINUTES = 5L;
+    /** Minimum spacing between audit polls while burst polling is active. */
+    static final long AUDIT_FAST_POLL_PERIOD_MILLIS = 10_000L;
+    /** How long burst polling stays active after a Scarlet-initiated moderation action. */
+    static final long AUDIT_FAST_POLL_WINDOW_MILLIS = 120_000L;
+    volatile long auditFastPollUntilMillis = 0L;
+    /**
+     * Temporarily polls the group audit log at a faster rate (every 10 seconds
+     * for up to 2 minutes) so that moderation actions initiated through Scarlet
+     * show up in the moderation Discord channel without waiting out the full
+     * audit polling interval. The window is generous because VRChat's audit
+     * endpoint has its own server-side ingest lag before entries appear.
+     */
+    public void pollAuditSoon()
+    {
+        this.auditFastPollUntilMillis = System.currentTimeMillis() + AUDIT_FAST_POLL_WINDOW_MILLIS;
+    }
+    /** Ends the burst polling window early, e.g. once all pending moderation actions have been observed. */
+    public void endAuditFastPoll()
+    {
+        this.auditFastPollUntilMillis = 0L;
+    }
     public boolean checkVrcRefresh(Exception ex)
     {
         if (!ex.getMessage().contains("HTTP response code: 401"))
@@ -2510,9 +2567,19 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
         {
             offsetMillis += (30_000L - currentPollInterval) / 10L;
         }
-        OffsetDateTime from = this.settings.lastAuditQuery.getOrSupply(),
+        OffsetDateTime cursor = this.settings.lastAuditQuery.getOrSupply(),
+                       // Re-query a little already-covered time on every poll: VRChat can
+                       // ingest audit entries out of order, so an entry created just before
+                       // the cursor may only become visible in the API after newer entries
+                       // have already been seen. Without the overlap such entries would fall
+                       // behind the query window and never show. Re-seen entries are
+                       // deduplicated by entry ID in ScarletDiscord.process, so this cannot
+                       // double-post.
+                       from = cursor.minusMinutes(AUDIT_QUERY_OVERLAP_MINUTES),
                        to = OffsetDateTime.now(ZoneOffset.UTC).minusNanos(offsetMillis * 1_000_000L),
-                       lastAuditQuery = from,
+                       // The cursor itself must not be rewound by the overlap, otherwise
+                       // repeated empty polls would walk it backwards indefinitely.
+                       lastAuditQuery = cursor,
                        latest = from.plusHours(24);
         boolean catchupSkip = false;
         if (catchupSkip)
@@ -2548,12 +2615,29 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
         
         if (entries == null)
         {
+            // The query failed (possibly a 429 rate limit): stop burst polling
+            // so we fall back to the normal audit polling interval instead of
+            // hammering the API. Nothing is skipped: lastAuditQuery was not
+            // advanced, so the next successful poll resumes from the same point.
+            this.endAuditFastPoll();
             LOG.warn("Failed to get entries from "+from+" to "+(to!=null?to:"now"));
             return;
         }
         
         for (GroupAuditLogEntry entry : entries) try
         {
+            if (lastAuditQuery.isBefore(entry.getCreatedAt()))
+            {
+                lastAuditQuery = entry.getCreatedAt();
+            }
+            if (this.data.auditEntryMetadataExists(entry.getId()))
+            {
+                // Already seen (re-fetched via the query overlap window):
+                // ScarletDiscord.process would dedupe this by ID anyway, but
+                // skipping here also avoids re-triggering the updateGroupInfo
+                // API call below for re-seen group/role update entries.
+                continue;
+            }
             switch (entry.getEventType())
             {
             case "group.update": // GroupAuditType.UPDATE
@@ -2565,9 +2649,20 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             default:
                 this.discord.process(this, entry);
             }
-            if (lastAuditQuery.isBefore(entry.getCreatedAt()))
+            switch (entry.getEventType())
             {
-                lastAuditQuery = entry.getCreatedAt();
+            case "group.instance.warn": // GroupAuditType.INSTANCE_WARN
+            case "group.instance.kick": // GroupAuditType.INSTANCE_KICK
+            case "group.member.remove": // GroupAuditType.MEMBER_REMOVE
+            case "group.user.ban": // GroupAuditType.USER_BAN
+            case "group.user.unban": // GroupAuditType.USER_UNBAN
+                // Flurry burst: in-game moderation tends to come in waves, so
+                // after observing one moderation event, temporarily poll faster
+                // to pick up follow-up warns/kicks/bans within seconds instead
+                // of waiting out the full audit polling interval. (Placed after
+                // process() so it re-arms the window that pollPending may have
+                // just ended.)
+                this.pollAuditSoon();
             }
         }
         catch (Exception ex)

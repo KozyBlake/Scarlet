@@ -1,5 +1,6 @@
 package net.sybyline.scarlet;
 
+import java.awt.BorderLayout;
 import java.awt.GraphicsEnvironment;
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -49,7 +50,16 @@ import java.util.stream.Stream;
 
 import javax.sound.sampled.AudioInputStream;
 import javax.sound.sampled.AudioSystem;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JButton;
+import javax.swing.JCheckBox;
 import javax.swing.JFileChooser;
+import javax.swing.JLabel;
+import javax.swing.JOptionPane;
+import javax.swing.JPanel;
+import javax.swing.JTextField;
+import javax.swing.SwingUtilities;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLHandshakeException;
 
@@ -211,7 +221,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
         this.evidenceFilePathFormat = scarlet.settings.new FileValuedStringPattern("evidence_file_path_format", "Evidence file path format", "", ".+", false);
         this.avatarSearchProvidersEnabled = scarlet.settings.new FileValuedBoolean("custom_avatar_search_providers_enabled", "Use custom avatar search providers", false);
         this.avatarSearchProviders = scarlet.settings.new FileValuedStringArrayPattern("custom_avatar_search_providers", "VRCX-compatible avatar search providers", AvatarSearch.URL_ROOTS.clone(), "https?://.+", false);
-        this.resetAvatarSearchProviders = scarlet.settings.new FileValuedVoid("Reset avatar search providers to default", "Reset", this::resetAvatarSearchProviders);
+        this.resetAvatarSearchProviders = scarlet.settings.new FileValuedVoid("Avatar search providers", "Manage...", this::manageAvatarSearchProviders);
         this.load();
         if (Features.DAVE_ENABLED)
             LDaveSessionFactory.configureLoggingIfAvailable();
@@ -702,6 +712,113 @@ public class ScarletDiscordJDA implements ScarletDiscord
     void resetAvatarSearchProviders()
     {
         this.avatarSearchProviders.set(null, "discord");
+    }
+
+    /**
+     * Settings dialog listing every known avatar search provider (built-in defaults
+     * plus stored customs) as checkboxes, with add-custom and restore-defaults.
+     * Runs on the modal executor thread like other Settings button actions.
+     * On save, provider backoffs are cleared and only players whose avatars still
+     * lack data get rescanned, keeping network usage and rate limits down.
+     */
+    void manageAvatarSearchProviders()
+    {
+        String[] effective = this.getAvatarSearchProviders();
+        java.util.Set<String> effectiveSet = new java.util.LinkedHashSet<>(java.util.Arrays.asList(effective));
+        java.util.LinkedHashSet<String> known = new java.util.LinkedHashSet<>(java.util.Arrays.asList(AvatarSearch.URL_ROOTS));
+        String[] stored = this.avatarSearchProviders.get();
+        if (stored != null)
+            for (String url : stored)
+                if (url != null && !url.trim().isEmpty())
+                    known.add(url);
+
+        JPanel panel = new JPanel();
+        panel.setLayout(new BoxLayout(panel, BoxLayout.Y_AXIS));
+        JLabel headerLabel = new JLabel("<html><body style='width: 440px'>Choose which avatar databases are used for avatar lookups. "
+            + "After saving, avatars still missing data are rescanned automatically; avatars that already show data are left "
+            + "alone to save network usage and rate limits.</body></html>");
+        headerLabel.setAlignmentX(0.0F);
+        panel.add(headerLabel);
+        panel.add(Box.createVerticalStrut(10));
+        JPanel checksPanel = new JPanel();
+        checksPanel.setLayout(new BoxLayout(checksPanel, BoxLayout.Y_AXIS));
+        checksPanel.setAlignmentX(0.0F);
+        java.util.Map<String, JCheckBox> checks = new java.util.LinkedHashMap<>();
+        for (String url : known)
+        {
+            JCheckBox check = new JCheckBox(url, effectiveSet.contains(url));
+            check.setAlignmentX(0.0F);
+            checks.put(url, check);
+            checksPanel.add(check);
+        }
+        panel.add(checksPanel);
+        panel.add(Box.createVerticalStrut(10));
+        JPanel addRow = new JPanel(new BorderLayout(8, 0));
+        addRow.setAlignmentX(0.0F);
+        JTextField addField = new JTextField();
+        JButton addButton = new JButton("Add");
+        addRow.add(new JLabel("Custom provider URL "), BorderLayout.WEST);
+        addRow.add(addField, BorderLayout.CENTER);
+        addRow.add(addButton, BorderLayout.EAST);
+        panel.add(addRow);
+        panel.add(Box.createVerticalStrut(6));
+        JButton restoreDefaults = new JButton("Restore defaults");
+        restoreDefaults.setAlignmentX(0.0F);
+        panel.add(restoreDefaults);
+        addButton.addActionListener($ ->
+        {
+            String url = addField.getText().trim();
+            if (!url.matches("https?://.+"))
+            {
+                JOptionPane.showMessageDialog(panel, "Enter a full http(s) URL.", "Avatar search providers", JOptionPane.WARNING_MESSAGE);
+                return;
+            }
+            if (!checks.containsKey(url))
+            {
+                JCheckBox check = new JCheckBox(url, true);
+                check.setAlignmentX(0.0F);
+                checks.put(url, check);
+                checksPanel.add(check);
+                checksPanel.revalidate();
+                java.awt.Window window = SwingUtilities.getWindowAncestor(panel);
+                if (window != null)
+                    window.pack();
+            }
+            addField.setText("");
+        });
+        restoreDefaults.addActionListener($ ->
+        {
+            java.util.Set<String> defaults = new java.util.HashSet<>(java.util.Arrays.asList(AvatarSearch.URL_ROOTS));
+            checks.forEach((url, check) -> check.setSelected(defaults.contains(url)));
+        });
+
+        if (JOptionPane.showConfirmDialog(null, panel, "Avatar search providers",
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION)
+            return;
+
+        java.util.List<String> selected = new java.util.ArrayList<>();
+        checks.forEach((url, check) ->
+        {
+            if (check.isSelected())
+                selected.add(url);
+        });
+        java.util.Set<String> defaults = new java.util.LinkedHashSet<>(java.util.Arrays.asList(AvatarSearch.URL_ROOTS));
+        boolean isDefaultSelection = selected.size() == defaults.size() && defaults.containsAll(selected);
+        if (isDefaultSelection)
+        {
+            this.avatarSearchProvidersEnabled.set(Boolean.FALSE, "manage-providers");
+            this.avatarSearchProviders.set(null, "manage-providers");
+        }
+        else
+        {
+            this.avatarSearchProviders.set(selected.toArray(new String[0]), "manage-providers");
+            this.avatarSearchProvidersEnabled.set(Boolean.TRUE, "manage-providers");
+        }
+        // A deliberate settings change: forget prior provider backoffs, then rescan
+        // only the players whose avatars still lack data (per-provider caching means
+        // unchanged providers answer from cache, so this costs almost nothing).
+        AvatarSearch.clearProviderBackoffs();
+        this.scarlet.eventListener.rescanAvatarInfo();
     }
 
     String[] getAvatarSearchProviders()

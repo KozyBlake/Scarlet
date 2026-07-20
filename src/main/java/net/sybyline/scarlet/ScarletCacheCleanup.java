@@ -274,7 +274,7 @@ public class ScarletCacheCleanup
             {
                 for (File f : logFiles)
                 {
-                    if (f.equals(activeLog))
+                    if (isSameFile(f, activeLog))
                         continue;  // never touch the live log
                     if (f.lastModified() < cutoffMs)
                         result.add(f);
@@ -294,6 +294,32 @@ public class ScarletCacheCleanup
         }
 
         return result;
+    }
+
+    /**
+     * Robust "same file" check for the live-log guard. Plain {@code File.equals}
+     * compares abstract path strings and fails when one side was built relative
+     * (the logger can capture {@code Scarlet.dir} before it is assigned during
+     * class initialization) and the other absolute — which made cleanup try to
+     * delete the active session's log and fail with a file-in-use error. The
+     * timestamped log file name is unique per session, so a name match within
+     * the logs folder is decisive; canonical paths are tried first.
+     */
+    private static boolean isSameFile(File file, File activeLog)
+    {
+        if (file == null || activeLog == null)
+            return false;
+        if (file.equals(activeLog))
+            return true;
+        try
+        {
+            if (file.getCanonicalFile().equals(activeLog.getCanonicalFile()))
+                return true;
+        }
+        catch (java.io.IOException ignored)
+        {
+        }
+        return file.getName().equals(activeLog.getName());
     }
 
     /**
