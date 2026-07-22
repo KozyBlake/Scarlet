@@ -1092,7 +1092,7 @@ public class ScarletSettings
     {
         if (!GraphicsEnvironment.isHeadless())
         {
-            return JOptionPane.showConfirmDialog(null, message, title, JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE) == JOptionPane.YES_OPTION;
+            return JOptionPane.showConfirmDialog(null, net.sybyline.scarlet.ui.Swing.dialogMessage(message), title, JOptionPane.YES_NO_OPTION, JOptionPane.WARNING_MESSAGE) == JOptionPane.YES_OPTION;
         }
         Console console = System.console();
         if (console != null)

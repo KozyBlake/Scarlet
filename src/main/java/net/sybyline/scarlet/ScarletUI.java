@@ -70,7 +70,10 @@ import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JPopupMenu;
 import javax.swing.JProgressBar;
+import javax.swing.DefaultListModel;
+import javax.swing.JList;
 import javax.swing.JScrollPane;
+import javax.swing.ListSelectionModel;
 import javax.swing.JSlider;
 import javax.swing.JTabbedPane;
 import javax.swing.JTextArea;
@@ -727,7 +730,7 @@ public class ScarletUI implements IScarletUI
                 JMenu jmenu_file = new JMenu("File");
                 {
                     jmenu_file.add("Browse data folder").addActionListener($ -> MiscUtils.AWTDesktop.browseDirectory(Scarlet.dir));
-                    jmenu_file.add("Create VRChat group instance...").addActionListener($ -> this.uiCreateGroupInstance());
+                    jmenu_file.add("Create VRChat instance...").addActionListener($ -> this.uiCreateGroupInstance());
                     jmenu_file.addSeparator();
                     jmenu_file.add("Quit").addActionListener($ -> this.uiModalExit());
                 }
@@ -1907,23 +1910,26 @@ public class ScarletUI implements IScarletUI
             if (selection == null)
                 return;
 
+            boolean groupKind = selection.kind == null || selection.kind.group;
             String groupId = this.scarlet.vrc.groupId;
-            if (MiscUtils.blank(groupId))
+            if (groupKind)
             {
-                this.showInstanceWizardError("Scarlet does not have a configured VRChat group id yet.", "Create instance");
-                return;
-            }
-
-            GroupPermissions requiredPermission = this.requiredCreateInstancePermission(selection.accessType);
-            if (!this.scarlet.vrc.checkSelfUserHasVRChatPermission(requiredPermission))
-            {
-                this.showInstanceWizardError(this.scarlet.vrc.messageNeedPerms(requiredPermission), "Create instance");
-                return;
-            }
-            if (selection.ageGate && !this.scarlet.vrc.checkSelfUserHasVRChatPermission(GroupPermissions.group_instance_age_gated_create))
-            {
-                this.showInstanceWizardError(this.scarlet.vrc.messageNeedPerms(GroupPermissions.group_instance_age_gated_create), "Create age-gated instance");
-                return;
+                if (MiscUtils.blank(groupId))
+                {
+                    this.showInstanceWizardError("Scarlet does not have a configured VRChat group id yet.", "Create instance");
+                    return;
+                }
+                GroupPermissions requiredPermission = this.requiredCreateInstancePermission(selection.accessType);
+                if (!this.scarlet.vrc.checkSelfUserHasVRChatPermission(requiredPermission))
+                {
+                    this.showInstanceWizardError(this.scarlet.vrc.messageNeedPerms(requiredPermission), "Create instance");
+                    return;
+                }
+                if (selection.ageGate && !this.scarlet.vrc.checkSelfUserHasVRChatPermission(GroupPermissions.group_instance_age_gated_create))
+                {
+                    this.showInstanceWizardError(this.scarlet.vrc.messageNeedPerms(GroupPermissions.group_instance_age_gated_create), "Create age-gated instance");
+                    return;
+                }
             }
 
             World world = this.scarlet.vrc.getWorld(selection.worldId);
@@ -1936,7 +1942,7 @@ public class ScarletUI implements IScarletUI
             Instance instance;
             try
             {
-                instance = this.scarlet.vrc.createInstanceEx(this.createGroupInstanceRequest(selection, groupId));
+                instance = this.scarlet.vrc.createInstanceEx(this.createInstanceRequest(selection, groupId));
             }
             catch (ApiException apiex)
             {
@@ -1955,11 +1961,16 @@ public class ScarletUI implements IScarletUI
                 this.scarlet.pendingModActions.addPending(GroupAuditType.INSTANCE_CREATE, MiscUtils.blank(instance.getId()) ? location : instance.getId(), this.scarlet.vrc.currentUserId);
 
             String launchError = null;
-            if (selection.openInVrchat && !MiscUtils.blank(location))
+            // "Open in VRChat after creating" only launches a NOT-running client.
+            // If VRChat is already open, don't do anything automatically here — the
+            // created-instance dialog offers an explicit "Invite myself in VRChat"
+            // button, so the user chooses when to send the invite instead of it
+            // firing on creation.
+            if (selection.openInVrchat && !MiscUtils.blank(location) && findVRChatPids().isEmpty())
             {
                 try
                 {
-                    VrcLaunch.launch(this.scarlet.vrc.currentUserId, location, selection.launchMode);
+                    VrcLaunch.launch(this.scarlet.vrc.currentUserId, location, shortNameOf(instance), selection.launchMode);
                 }
                 catch (Exception ex)
                 {
@@ -1979,10 +1990,9 @@ public class ScarletUI implements IScarletUI
         JTextField displayNameField = new JTextField(24);
         displayNameField.setToolTipText("Optional instance name shown in VRChat");
 
-        JComboBox<ComboChoice<GroupAccessType>> accessType = new JComboBox<>();
-        accessType.addItem(new ComboChoice<>("Group Public - anyone can join", GroupAccessType.PUBLIC));
-        accessType.addItem(new ComboChoice<>("Group+ - friends of people there can join", GroupAccessType.PLUS));
-        accessType.addItem(new ComboChoice<>("Group Members - members only", GroupAccessType.MEMBERS));
+        JComboBox<ComboChoice<InstanceKind>> accessType = new JComboBox<>();
+        for (InstanceKind kind : InstanceKind.values())
+            accessType.addItem(new ComboChoice<>(kind.label, kind));
 
         JComboBox<ComboChoice<InstanceRegion>> region = new JComboBox<>();
         region.addItem(new ComboChoice<>("US West", InstanceRegion.US));
@@ -2018,7 +2028,7 @@ public class ScarletUI implements IScarletUI
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.weightx = 1.0;
 
-        JTextArea intro = new JTextArea("Scarlet will create a group instance using the logged-in VRChat account, then optionally send the launch link to the VRChat client.");
+        JTextArea intro = new JTextArea("Scarlet will create the instance using the logged-in VRChat account, then optionally open it. Group types require a configured group and the matching permission; the personal types (Public, Friends+, Friends, Invite+, Invite) are owned by the logged-in account.");
         intro.setEditable(false);
         intro.setLineWrap(true);
         intro.setWrapStyleWord(true);
@@ -2062,10 +2072,21 @@ public class ScarletUI implements IScarletUI
         }
         this.addWizardRow(panel, gbc, 7, "Allow content", content);
 
+        // Wrap in a scroll pane capped below typical screen height so the dialog's
+        // OK/Cancel buttons stay on-screen no matter how many rows the form has.
+        JScrollPane wizardScroll = new JScrollPane(panel,
+            JScrollPane.VERTICAL_SCROLLBAR_AS_NEEDED, JScrollPane.HORIZONTAL_SCROLLBAR_NEVER);
+        wizardScroll.setBorder(BorderFactory.createEmptyBorder());
+        wizardScroll.getVerticalScrollBar().setUnitIncrement(16);
+        int prefW = Math.min(panel.getPreferredSize().width + 24, 640);
+        int screenH = Toolkit.getDefaultToolkit().getScreenSize().height;
+        int prefH = Math.min(panel.getPreferredSize().height + 4, Math.max(360, screenH - 220));
+        wizardScroll.setPreferredSize(new Dimension(prefW, prefH));
+
         String worldId;
         while (true)
         {
-            int result = JOptionPane.showConfirmDialog(this.jframe, panel, "Create VRChat group instance", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            int result = JOptionPane.showConfirmDialog(this.jframe, wizardScroll, "Create VRChat instance", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
             if (result != JOptionPane.OK_OPTION)
                 return null;
 
@@ -2088,7 +2109,8 @@ public class ScarletUI implements IScarletUI
 
         InstanceWizardSelection selection = new InstanceWizardSelection();
         selection.worldId = worldId;
-        selection.accessType = selectedValue(accessType);
+        selection.kind = selectedValue(accessType);
+        selection.accessType = selection.kind != null ? selection.kind.groupAccessType : null;
         selection.region = selectedValue(region);
         selection.minimumAvatarPerformance = selectedValue(avatarGate);
         selection.displayName = MiscUtils.blank(displayNameField.getText()) ? null : displayNameField.getText().trim();
@@ -2124,14 +2146,26 @@ public class ScarletUI implements IScarletUI
         panel.add(component, gbc);
     }
 
-    private JsonObject createGroupInstanceRequest(InstanceWizardSelection selection, String groupId)
+    private JsonObject createInstanceRequest(InstanceWizardSelection selection, String groupId)
     {
+        InstanceKind kind = selection.kind != null ? selection.kind : InstanceKind.GROUP_PUBLIC;
         CreateInstanceRequest request = new CreateInstanceRequest();
         request.setWorldId(selection.worldId);
-        request.setOwnerId(groupId);
-        request.setType(InstanceType.GROUP);
+        if (kind.group)
+        {
+            request.setOwnerId(groupId);
+            request.setType(InstanceType.GROUP);
+            request.setGroupAccessType(kind.groupAccessType);
+        }
+        else
+        {
+            // Personal instances are owned by the logged-in account.
+            request.setOwnerId(this.scarlet.vrc.currentUserId);
+            request.setType(kind.instanceType);
+            if (kind.canRequestInvite)
+                request.setCanRequestInvite(Boolean.TRUE);
+        }
         request.setRegion(selection.region);
-        request.setGroupAccessType(selection.accessType);
         request.setQueueEnabled(Boolean.valueOf(selection.queueEnabled));
         request.setHardClose(Boolean.FALSE);
         request.setAgeGate(Boolean.valueOf(selection.ageGate));
@@ -2159,6 +2193,18 @@ public class ScarletUI implements IScarletUI
         if (accessType == GroupAccessType.MEMBERS)
             return GroupPermissions.group_instance_open_create;
         return GroupPermissions.group_instance_public_create;
+    }
+
+    /** The instance's short/secure name, needed to deep-link into non-public instances; null if none. */
+    private static String shortNameOf(Instance instance)
+    {
+        if (instance == null)
+            return null;
+        if (!MiscUtils.blank(instance.getShortName()))
+            return instance.getShortName();
+        if (!MiscUtils.blank(instance.getSecureName()))
+            return instance.getSecureName();
+        return null;
     }
 
     private String locationOf(Instance instance, String fallbackWorldId)
@@ -2194,20 +2240,62 @@ public class ScarletUI implements IScarletUI
                 panel.add(link, BorderLayout.CENTER);
             }
 
-            Object[] options = MiscUtils.blank(location)
-                ? new Object[] { "Close" }
-                : new Object[] { "Open in VRChat (VR)", "Open in VRChat (Desktop)", "Open Web Page", "Copy Link", "Close" };
-            int choice = JOptionPane.showOptionDialog(this.jframe, panel, "Instance created", JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
             if (MiscUtils.blank(location))
-                return;
-            if (choice == 0 || choice == 1)
             {
-                VrcLaunch.LaunchMode mode = choice == 1 ? VrcLaunch.LaunchMode.DESKTOP : VrcLaunch.LaunchMode.VR;
+                JOptionPane.showOptionDialog(this.jframe, panel, "Instance created", JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, new Object[] { "Close" }, "Close");
+                return;
+            }
+
+            // If VRChat is already running, relaunching it is disruptive — offer to
+            // send yourself an in-client invite to the new instance instead.
+            boolean vrchatRunning = !findVRChatPids().isEmpty();
+            List<String> optionList = new ArrayList<>();
+            final String INVITE = "Invite myself in VRChat";
+            final String INVITE_USER = "Invite a user...";
+            final String OPEN_VR = "Open in VRChat (VR)";
+            final String OPEN_DESKTOP = "Open in VRChat (Desktop)";
+            final String OPEN_WEB = "Open Web Page";
+            final String COPY = "Copy Link";
+            final String CLOSE = "Close";
+            if (vrchatRunning)
+                optionList.add(INVITE);
+            optionList.add(INVITE_USER);
+            optionList.add(OPEN_VR);
+            optionList.add(OPEN_DESKTOP);
+            optionList.add(OPEN_WEB);
+            optionList.add(COPY);
+            optionList.add(CLOSE);
+            if (vrchatRunning)
+                panel.add(new JLabel("<html><body style='width: 360px'><i>VRChat is already running — \"Invite myself in VRChat\" "
+                    + "sends an invite to your VRChat account so you can join without relaunching the game.</i></body></html>"), BorderLayout.SOUTH);
+            Object[] options = optionList.toArray();
+            int choice = JOptionPane.showOptionDialog(this.jframe, panel, "Instance created", JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
+            if (choice < 0)
+                return;
+            String selected = optionList.get(choice);
+            if (INVITE.equals(selected))
+            {
+                this.scarlet.execModal.execute(() ->
+                {
+                    boolean ok = this.scarlet.vrc.selfInvite(location);
+                    if (ok)
+                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Invite sent", "Check your invites in VRChat.", Swing.ACCENT, Swing.ACCENT);
+                    else
+                        this.showInstanceWizardError("Scarlet could not send a self-invite.\nThe VRChat account may not be able to see this instance.", "Invite myself");
+                });
+            }
+            else if (INVITE_USER.equals(selected))
+            {
+                this.uiInviteFriendToInstance(location);
+            }
+            else if (OPEN_VR.equals(selected) || OPEN_DESKTOP.equals(selected))
+            {
+                VrcLaunch.LaunchMode mode = OPEN_DESKTOP.equals(selected) ? VrcLaunch.LaunchMode.DESKTOP : VrcLaunch.LaunchMode.VR;
                 this.scarlet.execModal.execute(() ->
                 {
                     try
                     {
-                        VrcLaunch.launch(this.scarlet.vrc.currentUserId, location, mode);
+                        VrcLaunch.launch(this.scarlet.vrc.currentUserId, location, shortNameOf(instance), mode);
                     }
                     catch (Exception ex)
                     {
@@ -2216,20 +2304,146 @@ public class ScarletUI implements IScarletUI
                     }
                 });
             }
-            else if (choice == 2)
+            else if (OPEN_WEB.equals(selected))
             {
                 MiscUtils.AWTDesktop.browse(URI.create(webLink));
             }
-            else if (choice == 3)
+            else if (COPY.equals(selected))
             {
                 Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(webLink), null);
             }
         });
     }
 
+    /** DocumentListener whose three callbacks all funnel to one {@link #changed()}. */
+    @FunctionalInterface
+    private interface SimpleDocumentListener extends DocumentListener
+    {
+        void changed();
+        @Override default void insertUpdate(DocumentEvent e) { this.changed(); }
+        @Override default void removeUpdate(DocumentEvent e) { this.changed(); }
+        @Override default void changedUpdate(DocumentEvent e) { this.changed(); }
+    }
+
+    /** One friend row in the invite picker; toString drives both display and search. */
+    private static final class FriendEntry
+    {
+        FriendEntry(String id, String displayName)
+        {
+            this.id = id;
+            this.displayName = displayName == null ? id : displayName;
+        }
+        final String id, displayName;
+        @Override
+        public String toString()
+        {
+            return this.displayName + "  (" + this.id + ")";
+        }
+    }
+
+    /**
+     * Friend-picker for inviting someone to {@code location} from the Scarlet
+     * account: fetches the account's friends, shows them in a searchable list
+     * (filter by display name or user ID), and invites the selected friend.
+     */
+    private void uiInviteFriendToInstance(String location)
+    {
+        this.scarlet.execModal.execute(() ->
+        {
+            List<io.github.vrchatapi.model.LimitedUserFriend> friends = this.scarlet.vrc.getAllFriends();
+            List<FriendEntry> entries = new ArrayList<>();
+            for (io.github.vrchatapi.model.LimitedUserFriend f : friends)
+                if (f != null && f.getId() != null)
+                    entries.add(new FriendEntry(f.getId(), f.getDisplayName()));
+            entries.sort(Comparator.comparing(e -> e.displayName.toLowerCase(java.util.Locale.ROOT)));
+            if (entries.isEmpty())
+            {
+                this.showInstanceWizardError("The Scarlet account has no friends to invite (or the friend list could not be loaded).", "Invite a user");
+                return;
+            }
+            Swing.invokeWait(() ->
+            {
+                JTextField search = new JTextField();
+                DefaultListModel<FriendEntry> model = new DefaultListModel<>();
+                entries.forEach(model::addElement);
+                JList<FriendEntry> list = new JList<>(model);
+                list.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+                list.setVisibleRowCount(12);
+                // Apply the same Unicode font fallback the main player table uses,
+                // so display names with custom/fancy glyphs render instead of showing
+                // missing-glyph squares.
+                javax.swing.ListCellRenderer<Object> baseRenderer = new javax.swing.DefaultListCellRenderer();
+                list.setCellRenderer((jlist, value, index, isSelected, cellHasFocus) ->
+                {
+                    Component c = baseRenderer.getListCellRendererComponent(jlist, value, index, isSelected, cellHasFocus);
+                    String text = value == null ? "" : value.toString();
+                    if (c instanceof JLabel && c.getFont() != null && value instanceof FriendEntry)
+                    {
+                        JLabel lbl = (JLabel) c;
+                        FriendEntry entry = (FriendEntry) value;
+                        // Apply the fallback only to the display name: pick a base font
+                        // that covers it and render it as HTML so Swing's composite
+                        // per-glyph fallback fills in mixed-script characters. The user
+                        // ID is forced back to the normal UI font (and muted) so the
+                        // fancy fallback doesn't bleed onto it. Characters no installed
+                        // font has will still box — a system font-availability limit.
+                        String defFamily = lbl.getFont().getFamily();
+                        lbl.setFont(Swing.fontForText(entry.displayName, lbl.getFont()));
+                        lbl.setText("<html>" + escapeHtml(entry.displayName)
+                            + " <font face='" + escapeHtml(defFamily) + "' color='#888888'>("
+                            + escapeHtml(entry.id) + ")</font></html>");
+                    }
+                    return c;
+                });
+                search.getDocument().addDocumentListener((SimpleDocumentListener) () ->
+                {
+                    String q = search.getText().trim().toLowerCase(java.util.Locale.ROOT);
+                    model.clear();
+                    for (FriendEntry e : entries)
+                        if (q.isEmpty() || e.displayName.toLowerCase(java.util.Locale.ROOT).contains(q) || e.id.toLowerCase(java.util.Locale.ROOT).contains(q))
+                            model.addElement(e);
+                    if (!model.isEmpty())
+                        list.setSelectedIndex(0);
+                });
+                JPanel panel = new JPanel(new BorderLayout(0, 8));
+                panel.add(new JLabel("Search by display name or user ID:"), BorderLayout.NORTH);
+                JPanel inner = new JPanel(new BorderLayout(0, 6));
+                inner.add(search, BorderLayout.NORTH);
+                inner.add(new JScrollPane(list), BorderLayout.CENTER);
+                panel.add(inner, BorderLayout.CENTER);
+                panel.setPreferredSize(new Dimension(420, 320));
+                if (JOptionPane.showConfirmDialog(this.jframe, panel, "Invite a friend ("+entries.size()+")",
+                        JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION)
+                    return;
+                FriendEntry picked = list.getSelectedValue();
+                if (picked == null)
+                    return;
+                this.scarlet.execModal.execute(() ->
+                {
+                    ScarletVRChat.InviteResult result = this.scarlet.vrc.inviteUser(picked.id, location);
+                    switch (result)
+                    {
+                    case SENT:
+                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Invite sent", "Invited "+picked.displayName+" to the instance.", Swing.ACCENT, Swing.ACCENT);
+                        break;
+                    case NOT_FRIENDS:
+                        this.showInstanceWizardError("The Scarlet account is no longer friends with "+picked.displayName+".", "Invite a user");
+                        break;
+                    default:
+                        this.showInstanceWizardError("Scarlet could not invite "+picked.displayName+".\nThe account may not be able to see this instance.", "Invite a user");
+                        break;
+                    }
+                });
+            });
+        });
+    }
+
     private void showInstanceWizardError(Object message, String title)
     {
-        Swing.invokeWait(() -> JOptionPane.showMessageDialog(this.jframe, message, title, JOptionPane.ERROR_MESSAGE));
+        // Apply Unicode font fallback when the message is a plain string that may
+        // carry a display name (e.g. "could not invite <name>").
+        Object shown = message instanceof String ? Swing.dialogMessage((String) message) : message;
+        Swing.invokeWait(() -> JOptionPane.showMessageDialog(this.jframe, shown, title, JOptionPane.ERROR_MESSAGE));
     }
 
     private String apiExceptionMessage(ApiException apiex)
@@ -2268,9 +2482,43 @@ public class ScarletUI implements IScarletUI
         }
     }
 
+    /**
+     * The kinds of instance the create-instance wizard can make: group instances
+     * (owned by the configured VRChat group) and personal instances (owned by the
+     * logged-in account). Personal types map to a VRChat {@link InstanceType} plus
+     * the invite+ {@code canRequestInvite} flag; group types map to a
+     * {@link GroupAccessType}.
+     */
+    enum InstanceKind
+    {
+        GROUP_PUBLIC ("Group Public - anyone can join",                 true,  GroupAccessType.PUBLIC,  null,                false),
+        GROUP_PLUS   ("Group+ - friends of people there can join",      true,  GroupAccessType.PLUS,    null,                false),
+        GROUP_MEMBERS("Group Members - members only",                   true,  GroupAccessType.MEMBERS, null,                false),
+        PUBLIC       ("Public - anyone can join",                       false, null,                    InstanceType.PUBLIC,  false),
+        FRIENDS_PLUS ("Friends+ - friends of guests can join",          false, null,                    InstanceType.HIDDEN,  false),
+        FRIENDS      ("Friends - your friends can join",                false, null,                    InstanceType.FRIENDS, false),
+        INVITE_PLUS  ("Invite+ - invite only, guests can invite too",   false, null,                    InstanceType.PRIVATE, true),
+        INVITE       ("Invite - invite only",                           false, null,                    InstanceType.PRIVATE, false),
+        ;
+        InstanceKind(String label, boolean group, GroupAccessType groupAccessType, InstanceType instanceType, boolean canRequestInvite)
+        {
+            this.label = label;
+            this.group = group;
+            this.groupAccessType = groupAccessType;
+            this.instanceType = instanceType;
+            this.canRequestInvite = canRequestInvite;
+        }
+        final String label;
+        final boolean group;
+        final GroupAccessType groupAccessType;
+        final InstanceType instanceType;
+        final boolean canRequestInvite;
+    }
+
     static final class InstanceWizardSelection
     {
         String worldId;
+        InstanceKind kind;
         GroupAccessType accessType;
         InstanceRegion region;
         PerformanceRatings minimumAvatarPerformance;
@@ -2733,7 +2981,12 @@ public class ScarletUI implements IScarletUI
         constraints.gridx = 1;
         constraints.anchor = GridBagConstraints.WEST;
         constraints.insets = new Insets(1, 10, 1, 1);
-        panel.add(new JLabel(text, JLabel.LEFT), constraints);
+        // Values can be user-controlled text (avatar name, owner name, notes), so
+        // apply Unicode font fallback to avoid missing-glyph squares.
+        JLabel valueLabel = new JLabel(text, JLabel.LEFT);
+        if (valueLabel.getFont() != null)
+            valueLabel.setFont(Swing.fontForText(text, valueLabel.getFont()));
+        panel.add(valueLabel, constraints);
         constraints.insets = new Insets(1, 1, 1, 1);
         constraints.gridy++;
     }

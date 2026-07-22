@@ -179,7 +179,9 @@ public class ScarletLogger extends LegacyAbstractLogger
             
             try
             {
-                logFileStream = new PrintStream(logFile);
+                // UTF-8 so Unicode display names (fancy/stylized usernames) are
+                // preserved in the log file instead of being written as "?".
+                logFileStream = new PrintStream(logFile, "UTF-8");
             }
             catch (Exception ex)
             {

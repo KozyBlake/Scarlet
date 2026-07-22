@@ -59,10 +59,35 @@ public interface VrcLaunch
     }
     static void launch(String userId, String location, LaunchMode mode) throws Exception
     {
+        launch(userId, location, null, mode);
+    }
+    /**
+     * Launches VRChat into a specific instance.
+     *
+     * <p>{@code shortName} is the instance's short/secure name from the VRChat API.
+     * It is <b>required</b> to deep-link into any non-public instance (group,
+     * group+, friends, invite, private): without it VRChat cannot resolve or
+     * authorize the join and drops the client into the error/loading world even
+     * though the instance exists. Public instances resolve from the location
+     * alone, so a null shortName is fine for those.
+     */
+    static void launch(String userId, String location, String shortName, LaunchMode mode) throws Exception
+    {
         if (Platform.CURRENT.isNT())
-            launch_win(userId, location, mode);
+            launch_win(userId, location, shortName, mode);
         else
-            launch_linux(userId, location, mode);
+            launch_linux(userId, location, shortName, mode);
+    }
+
+    /** Appends the VRChat deep-link query for a location, including {@code &shortName=} when present. */
+    static String buildLaunchUri(String location, String shortName)
+    {
+        if (location == null)
+            return null;
+        StringBuilder uri = new StringBuilder("vrchat://launch?ref=KozyBlakeScarlet&id=").append(URLs.encode(location));
+        if (shortName != null && !shortName.trim().isEmpty())
+            uri.append("&shortName=").append(URLs.encode(shortName.trim()));
+        return uri.toString();
     }
 
     /**
@@ -73,11 +98,11 @@ public interface VrcLaunch
      *   2. steam steam://rungameid/438100    — works when steam binary is present but arg passing is unreliable
      *   3. xdg-open vrchat://...            — original behaviour, relies on URI handler registration
      */
-    static void launch_linux(String userId, String location, LaunchMode mode) throws Exception
+    static void launch_linux(String userId, String location, String shortName, LaunchMode mode) throws Exception
     {
         if (mode == null)
             mode = LaunchMode.DESKTOP;
-        String vrchatUri = location == null ? null : "vrchat://launch?ref=KozyBlakeScarlet&id=" + URLs.encode(location);
+        String vrchatUri = buildLaunchUri(location, shortName);
 
         // Build the VRChat launch arguments (mirrors what launch_win passes on Windows)
         java.util.List<String> vrcArgs = new java.util.ArrayList<>();
@@ -108,11 +133,24 @@ public interface VrcLaunch
                 LOG.warn("steam -applaunch failed, trying steam:// URI: {}", ex.getMessage());
             }
 
-            // Strategy 2: steam steam://rungameid/438100
+            // Strategy 2: steam steam://rungameid/438100//<args>
+            // Steam accepts launch arguments appended after a "//" separator; without
+            // them this would open VRChat with no instance and land on the home world.
             try
             {
-                LOG.info("Launching VRChat via steam://rungameid/{}", VrcAppData.VRCHAT_APP_ID);
-                new ProcessBuilder("steam", "steam://rungameid/" + VrcAppData.VRCHAT_APP_ID)
+                StringBuilder runGameId = new StringBuilder("steam://rungameid/").append(VrcAppData.VRCHAT_APP_ID);
+                if (!vrcArgs.isEmpty())
+                {
+                    runGameId.append("//");
+                    for (int i = 0; i < vrcArgs.size(); i++)
+                    {
+                        if (i > 0)
+                            runGameId.append(' ');
+                        runGameId.append(vrcArgs.get(i));
+                    }
+                }
+                LOG.info("Launching VRChat via {}", runGameId);
+                new ProcessBuilder("steam", runGameId.toString())
                     .inheritIO().start();
                 return;
             }
@@ -133,7 +171,7 @@ public interface VrcLaunch
             MiscUtils.AWTDesktop.browse(URI.create(vrchatUri));
         }
     }
-    static void launch_win(String userId, String location, LaunchMode mode) throws Exception
+    static void launch_win(String userId, String location, String shortName, LaunchMode mode) throws Exception
     {
         if (mode == null)
             mode = LaunchMode.DESKTOP;
@@ -155,9 +193,10 @@ public interface VrcLaunch
         java.util.List<String> cmd = new java.util.ArrayList<>();
         cmd.add(new File(path, "launch.exe").getAbsolutePath());
 
-        if (location != null)
+        String vrchatUri = buildLaunchUri(location, shortName);
+        if (vrchatUri != null)
         {
-            cmd.add("vrchat://launch?ref=KozyBlakeScarlet&id=" + URLs.encode(location));
+            cmd.add(vrchatUri);
         }
 
         if (userId != null)

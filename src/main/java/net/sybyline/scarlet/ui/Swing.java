@@ -11,6 +11,7 @@ import java.util.function.Supplier;
 
 import javax.swing.BorderFactory;
 import javax.swing.JComponent;
+import javax.swing.JLabel;
 import javax.swing.JScrollPane;
 import javax.swing.ScrollPaneConstants;
 import javax.swing.SwingUtilities;
@@ -825,6 +826,44 @@ public class Swing
      * @param baseFont the font currently in use for this cell
      * @return {@code baseFont} if adequate, otherwise the best fallback
      */
+    /**
+     * Wraps a plain-text dialog message so it renders with Unicode font fallback,
+     * but only when needed. If the dialog font already covers every character the
+     * original {@code message} String is returned unchanged (so ordinary ASCII
+     * dialogs are untouched); otherwise a {@link JLabel} is returned with the text
+     * HTML-escaped (newlines become {@code <br>}) and a glyph-covering font applied,
+     * so display names with fancy glyphs don't show as missing-glyph squares.
+     */
+    public static Object dialogMessage(String message)
+    {
+        if (message == null || message.isEmpty())
+            return message;
+        Font base = UIManager.getFont("OptionPane.messageFont");
+        if (base == null)
+            base = UIManager.getFont("Label.font");
+        if (base == null)
+            return message;
+        boolean allCovered = true;
+        for (int i = 0; i < message.length(); )
+        {
+            int cp = message.codePointAt(i);
+            i += Character.charCount(cp);
+            if (cp != '\n' && cp != '\r' && cp != '\t' && !base.canDisplay(cp))
+            {
+                allCovered = false;
+                break;
+            }
+        }
+        if (allCovered)
+            return message;
+        String html = "<html>" + message
+            .replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            .replace("\r\n", "<br>").replace("\n", "<br>") + "</html>";
+        JLabel label = new JLabel(html);
+        label.setFont(fontForText(message, base));
+        return label;
+    }
+
     public static Font fontForText(String text, Font baseFont)
     {
         if (text == null || text.isEmpty())

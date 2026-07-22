@@ -1,5 +1,6 @@
 package net.sybyline.scarlet;
 
+import net.sybyline.scarlet.util.ConsoleUtf8;
 import net.sybyline.scarlet.util.MavenDepsLoader;
 import net.sybyline.scarlet.util.Platform;
 
@@ -14,6 +15,9 @@ public abstract class Main
             System.err.println("Android/Termux runtime detected; forcing headless UI mode");
         }
         MavenDepsLoader.init();
+        // After dependencies (incl. JNA) are loaded, switch console + stdout/stderr
+        // to UTF-8 so Unicode display names don't print as "?".
+        ConsoleUtf8.install();
     }
 
     public static void main(String[] args) throws Throwable

@@ -118,6 +118,7 @@ import io.github.vrchatapi.model.World;
 
 import net.sybyline.scarlet.ext.ExtendedUserAgent;
 import net.sybyline.scarlet.util.EnumHelper;
+import net.sybyline.scarlet.util.Location;
 import net.sybyline.scarlet.util.MiscUtils;
 import net.sybyline.scarlet.util.VersionedFile;
 import net.sybyline.scarlet.util.VrcAllGroupPermissions;
@@ -1648,19 +1649,148 @@ CurrentUser getCurrentUser(AuthenticationApi auth) throws ApiException
             return null;
         }
     }
-    public Instance getInstance(String worldId, String instanceId)
+    /**
+     * Sends the logged-in (Scarlet) VRChat account an invite to the given instance,
+     * which pops up in the running VRChat client as a clickable invite. Returns true
+     * on success. Useful when VRChat is already running and relaunching it would be
+     * disruptive. Requires the account to be able to see/join the instance.
+     */
+    public boolean selfInvite(String worldId, String instanceId)
     {
-        InstancesApi instances = new InstancesApi(this.client);
+        return this.selfInvite(worldId + ":" + instanceId);
+    }
+    public boolean selfInvite(String location)
+    {
+        // The instance ID carries tags like ~group(...)~region(us). The generated
+        // inviteMyselfTo() percent-encodes them (( -> %28), which VRChat's Cloudflare
+        // WAF rejects as a "malformed url" (waf_code 26497). Build the path by hand
+        // like getInventoryItemEx does, so okhttp leaves the parens literal — which
+        // is the form VRChat accepts.
+        if (location == null || location.indexOf(':') < 0)
+            return false;
         try
         {
-            return instances.getInstance(worldId, instanceId);
+            Map<String, String> headers = new HashMap<>();
+            headers.put("Accept", "application/json");
+            okhttp3.Call call = this.client.buildCall(null, "/invite/myself/to/" + location, "POST",
+                new ArrayList<>(), new ArrayList<>(), null, headers, new HashMap<>(), new HashMap<>(), new String[]{"authCookie"}, null);
+            this.client.execute(call);
+            return true;
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            LOG.error("Error during self-invite to "+location+": "+apiex.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * All friends of the logged-in (Scarlet) account, online and offline, paginated
+     * transparently. Returns an empty list on error. Used by the friend-picker so
+     * invites can be sent by choosing a friend instead of pasting a user ID.
+     */
+    public List<io.github.vrchatapi.model.LimitedUserFriend> getAllFriends()
+    {
+        io.github.vrchatapi.api.FriendsApi friends = new io.github.vrchatapi.api.FriendsApi(this.client);
+        List<io.github.vrchatapi.model.LimitedUserFriend> all = new ArrayList<>();
+        int batchSize = 100;
+        for (boolean offline : new boolean[] { false, true })
+        {
+            for (int offset = 0; ; offset += batchSize)
+            {
+                List<io.github.vrchatapi.model.LimitedUserFriend> page;
+                try
+                {
+                    page = friends.getFriends(offset, batchSize, offline);
+                }
+                catch (ApiException apiex)
+                {
+                    this.scarlet.checkVrcRefresh(apiex);
+                    LOG.error("Error listing friends (offset "+offset+", offline "+offline+"): "+apiex.getMessage());
+                    break;
+                }
+                if (page == null || page.isEmpty())
+                    break;
+                all.addAll(page);
+                if (page.size() < batchSize)
+                    break;
+                MiscUtils.sleep(250L);
+            }
+        }
+        return all;
+    }
+
+    /**
+     * Whether the logged-in (Scarlet) account is friends with the given user.
+     * VRChat only lets you invite users you are friends with, so this gates
+     * {@link #inviteUser}. Returns false on any API error.
+     */
+    public boolean isFriendWith(String userId)
+    {
+        io.github.vrchatapi.api.FriendsApi friends = new io.github.vrchatapi.api.FriendsApi(this.client);
+        try
+        {
+            io.github.vrchatapi.model.FriendStatus status = friends.getFriendStatus(userId);
+            return status != null && Boolean.TRUE.equals(status.getIsFriend());
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            LOG.error("Error checking friend status for "+userId+": "+apiex.getMessage());
+            return false;
+        }
+    }
+
+    /** Result of an {@link ScarletVRChat#inviteUser} attempt, so callers can explain failures. */
+    public enum InviteResult { SENT, NOT_FRIENDS, FAILED }
+
+    /**
+     * Sends {@code userId} an invite to {@code location} from the logged-in
+     * (Scarlet) account. VRChat requires the two accounts to be friends, so this
+     * checks friendship first and returns {@link InviteResult#NOT_FRIENDS} when
+     * they aren't, {@link InviteResult#SENT} on success, or {@link InviteResult#FAILED}.
+     */
+    public InviteResult inviteUser(String userId, String location)
+    {
+        if (userId == null || location == null)
+            return InviteResult.FAILED;
+        if (!this.isFriendWith(userId))
+            return InviteResult.NOT_FRIENDS;
+        io.github.vrchatapi.api.InviteApi invite = new io.github.vrchatapi.api.InviteApi(this.client);
+        try
+        {
+            invite.inviteUser(userId, new io.github.vrchatapi.model.InviteRequest().instanceId(location));
+            return InviteResult.SENT;
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            LOG.error("Error inviting "+userId+" to "+location+": "+apiex.getMessage());
+            return InviteResult.FAILED;
+        }
+    }
+    public Instance getInstance(String worldId, String instanceId)
+    {
+        try
+        {
+            // Build the path by hand so instance-ID tags like ~group(...)~region(...)
+            // keep their literal parentheses. The generated getInstance() percent-
+            // encodes them (( -> %28), which VRChat's Cloudflare WAF rejects as a
+            // "malformed url" — the same problem that broke self-invite.
+            Map<String, String> headers = new HashMap<>();
+            headers.put("Accept", "application/json");
+            okhttp3.Call call = this.client.buildCall(null, "/instances/" + worldId + ":" + instanceId, "GET",
+                new ArrayList<>(), new ArrayList<>(), null, headers, new HashMap<>(), new HashMap<>(), new String[]{"authCookie"}, null);
+            ApiResponse<Instance> resp = this.client.execute(call, Instance.class);
+            return resp.getData();
         }
         catch (ApiException apiex)
         {
             this.scarlet.checkVrcRefresh(apiex);
             LOG.error("Error during get instance: "+apiex.getMessage());
         }
-        
+
         WorldsApi worlds = new WorldsApi(this.client);
         try
         {

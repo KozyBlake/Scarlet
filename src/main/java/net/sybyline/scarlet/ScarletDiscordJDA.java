@@ -2624,7 +2624,30 @@ public class ScarletDiscordJDA implements ScarletDiscord
         {
             try
             {
-                VrcLaunch.launch(this.scarlet.vrc.currentUserId, location);
+                // Resolve the instance's short/secure name so non-public (group,
+                // friends, private) instances deep-link correctly — without it
+                // VRChat opens to the error world instead of the new instance.
+                String shortName = null;
+                try
+                {
+                    Location locModel = Location.of(location);
+                    if (locModel != null && locModel.world != null && locModel.instance != null)
+                    {
+                        io.github.vrchatapi.model.Instance inst = this.scarlet.vrc.getInstance(locModel.world, locModel.instance);
+                        if (inst != null)
+                        {
+                            if (inst.getShortName() != null && !inst.getShortName().trim().isEmpty())
+                                shortName = inst.getShortName();
+                            else if (inst.getSecureName() != null && !inst.getSecureName().trim().isEmpty())
+                                shortName = inst.getSecureName();
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    LOG.warn("Could not resolve instance short name for auto-launch of {}: {}", location, ex.getMessage());
+                }
+                VrcLaunch.launch(this.scarlet.vrc.currentUserId, location, shortName, VrcLaunch.LaunchMode.DESKTOP);
             }
             catch (Exception ex)
             {

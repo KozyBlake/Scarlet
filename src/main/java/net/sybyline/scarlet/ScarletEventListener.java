@@ -539,6 +539,42 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
             && this.clientLocation_userId2userDisplayName.containsKey(userId);
     }
 
+    static final String DEFAULT_AVATAR_IMAGE_FILE = "file_0e8c4e32-7444-44ea-ade4-313c010d4bae";
+
+    /**
+     * True when the user has a VRC+ profile customization (profile picture,
+     * its thumbnail, or a user icon) that overrides {@code currentAvatarImageUrl}.
+     * For such users the "current avatar image" is the profile picture, not the
+     * worn avatar, so it cannot be used to identify the avatar and must not be
+     * matched against the avatar databases (it isn't their avatar at all).
+     */
+    static boolean hasProfileImageOverride(User user)
+    {
+        return notBlank(user.getProfilePicOverride())
+            || notBlank(user.getProfilePicOverrideThumbnail())
+            || notBlank(user.getUserIcon());
+    }
+    private static boolean notBlank(String s)
+    {
+        return s != null && !s.trim().isEmpty();
+    }
+
+    /**
+     * The image file ID of the user's actually-worn avatar, or null when it can't
+     * be trusted — a VRC+ profile picture/icon override (which replaces the field),
+     * the default fallback avatar image, or no parseable file ID.
+     */
+    String wornAvatarImageFileId(User user)
+    {
+        if (user == null || hasProfileImageOverride(user))
+            return null;
+        String url = user.getCurrentAvatarImageUrl();
+        if (url == null || url.contains(DEFAULT_AVATAR_IMAGE_FILE))
+            return null;
+        Matcher m = VrcIds.id_file.matcher(url);
+        return m.find() ? m.group() : null;
+    }
+
     /**
      * Queues avatar-status hydration for everyone currently visible who still
      * lacks data. Players whose avatar info is already resolved are skipped, so
@@ -602,19 +638,13 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
             if (!avatarDisplayName.equals(this.clientLocation_userDisplayName2avatarDisplayName.get(userDisplayName)))
                 return; // the player switched avatars in the meantime
             // The user's current avatar image file uniquely identifies the avatar
-            // actually worn, even among same-named clones — resolve it up front
-            // (unless a profile picture override or the default image hides it).
-            String imageFileId = null;
+            // actually worn, even among same-named clones — resolve it up front.
+            // Returns null for VRC+ users whose profile picture/icon override
+            // replaces the avatar image (their "current avatar image" is the
+            // profile picture, not the worn avatar) and for the default image.
             User user = this.scarlet.vrc.getUser(userId);
-            if (user != null
-                && (user.getProfilePicOverride() == null || user.getProfilePicOverride().isEmpty())
-                && user.getCurrentAvatarImageUrl() != null
-                && !user.getCurrentAvatarImageUrl().contains("file_0e8c4e32-7444-44ea-ade4-313c010d4bae"))
-            {
-                Matcher imageMatcher = VrcIds.id_file.matcher(user.getCurrentAvatarImageUrl());
-                if (imageMatcher.find())
-                    imageFileId = imageMatcher.group();
-            }
+            boolean profileOverride = user != null && hasProfileImageOverride(user);
+            String imageFileId = this.wornAvatarImageFileId(user);
             // Candidates: image-based lookups first (most precise), then name matches.
             LinkedHashSet<String> candidates = new LinkedHashSet<>();
             if (imageFileId != null)
@@ -628,13 +658,24 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
             if (!candidates.isEmpty()
                 && this.hydrateAvatarInfoFromApi(userDisplayName, userId, avatarDisplayName, candidates.toArray(new String[0]), nameCandidates.length, imageFileId))
                 return;
-            final String note;
+            // Explain the real reason honestly. Scarlet never circumvents a
+            // privacy control: a private avatar or a VRC+ profile-picture/icon
+            // override simply isn't retrievable, and we say so rather than
+            // implying we saw something we didn't.
+            String reason;
             if (nameCandidates.length > 5)
-                note = "Avatar data is unavailable for "+userDisplayName+": too many avatars share the name \""+avatarDisplayName+"\" to identify which one is worn, and none could be matched by image.";
+                reason = "too many avatars share the name \""+avatarDisplayName+"\" to identify which one is worn";
             else if (nameCandidates.length == 0 && candidates.isEmpty())
-                note = "Avatar data is unavailable for "+userDisplayName+": \""+avatarDisplayName+"\" is not indexed by any avatar database (likely a private or new avatar).";
+                reason = "\""+avatarDisplayName+"\" is not indexed by any avatar database (likely a private or new avatar)";
             else
-                note = "Avatar data could not be pulled for "+userDisplayName+": \""+avatarDisplayName+"\" appears to be a private avatar and no avatar database has its stats.";
+                reason = "\""+avatarDisplayName+"\" appears to be a private avatar and no avatar database has its stats";
+            // Whenever a VRC+ override is present, image matching was unavailable —
+            // mention it in every branch where it contributed, since it's the
+            // reason the usually-decisive image check couldn't disambiguate.
+            String imageClause = profileOverride
+                ? " Their avatar couldn't be matched by image because they have a VRC+ profile picture or icon set, so VRChat reports that instead of their worn avatar."
+                : (imageFileId == null ? "" : " It also couldn't be matched by their current avatar image.");
+            final String note = "Avatar data is unavailable for "+userDisplayName+": "+reason+"."+imageClause;
             this.scarlet.ui.playerUpdate(!this.isTailerLive, userId, $ -> { if ($.avatarInfo == null) $.avatarInfoNote = note; });
         }, delayMillis, TimeUnit.MILLISECONDS);
     }
@@ -787,15 +828,12 @@ public class ScarletEventListener implements ScarletVRChatLogs.Listener
         if (Features.AVATAR_SEARCH_ENABLED && this.attemptAvatarImageMatch.get())
         {
             User user = this.scarlet.vrc.getUser(userId);
-            if (user != null && user.getProfilePicOverride().isEmpty() && !user.getCurrentAvatarImageUrl().contains("file_0e8c4e32-7444-44ea-ade4-313c010d4bae"))
-            {
-                Matcher m = VrcIds.id_file.matcher(user.getCurrentAvatarImageUrl());
-                if (m.find())
-                {
-                    String uafid = m.group();
-                    potentialIds = AvatarSearch.ByImage.vrcxSearchAllByImage(uafid).map(AvatarSearch.VrcxAvatar::id).toArray(String[]::new);
-                }
-            }
+            // Skip image matching for VRC+ users with a profile picture/icon
+            // override: their current-avatar-image is the profile picture, not the
+            // worn avatar, so matching it would find the wrong avatar or nothing.
+            String uafid = this.wornAvatarImageFileId(user);
+            if (uafid != null)
+                potentialIds = AvatarSearch.ByImage.vrcxSearchAllByImage(uafid).map(AvatarSearch.VrcxAvatar::id).toArray(String[]::new);
         }
         
         if (potentialIds == null || potentialIds.length == 0)

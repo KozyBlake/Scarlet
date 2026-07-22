@@ -125,7 +125,9 @@ public class ScarletUISplash implements IScarletUISplash
         textPanel.setOpaque(false);
 
         JLabel lbl_text = new JLabel(icon + text);
-        lbl_text.setFont(new Font("Dialog", Font.BOLD, 13));
+        // Popup text can carry user display names — apply Unicode font fallback
+        // so fancy-glyph names don't render as missing-glyph squares.
+        lbl_text.setFont(net.sybyline.scarlet.ui.Swing.fontForText(icon + text, new Font("Dialog", Font.BOLD, 13)));
         lbl_text.setForeground(tc);
         lbl_text.setAlignmentX(Component.LEFT_ALIGNMENT);
         textPanel.add(lbl_text);
@@ -134,7 +136,7 @@ public class ScarletUISplash implements IScarletUISplash
         {
             textPanel.add(Box.createVerticalStrut(3));
             JLabel lbl_sub = new JLabel("   " + subtext);
-            lbl_sub.setFont(new Font("Dialog", Font.PLAIN, 11));
+            lbl_sub.setFont(net.sybyline.scarlet.ui.Swing.fontForText(subtext, new Font("Dialog", Font.PLAIN, 11)));
             lbl_sub.setForeground(subtextcolor);
             lbl_sub.setAlignmentX(Component.LEFT_ALIGNMENT);
             textPanel.add(lbl_sub);
