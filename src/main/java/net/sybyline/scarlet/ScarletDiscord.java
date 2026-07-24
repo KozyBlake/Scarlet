@@ -106,6 +106,9 @@ public interface ScarletDiscord extends Closeable
             case POST_CREATE: {
                 this.processPostCreate(scarlet, entryMeta);
             } break;
+            case ANNOUNCEMENT: {
+                this.processAnnouncement(scarlet, entryMeta);
+            } break;
             case MEMBER_ROLE_ASSIGN: {
                 this.processMemberRoleAssign(scarlet, entryMeta);
             } break;
@@ -335,6 +338,22 @@ public interface ScarletDiscord extends Closeable
     {
         GroupAuditType.PostCreateComponent post = entryMeta.getData(GroupAuditType.PostCreateComponent.class);
         this.emitPostCreate(scarlet, entryMeta, post);
+    }
+
+    public void emitAnnouncement(
+        Scarlet scarlet,
+        ScarletData.AuditEntryMetadata entryMeta,
+        GroupAuditType.AnnouncementComponent announcement
+    );
+
+    public default void processAnnouncement(
+        Scarlet scarlet,
+        ScarletData.AuditEntryMetadata entryMeta
+    ) {
+        GroupAuditType.AnnouncementComponent announcement = entryMeta.getData(
+            GroupAuditType.AnnouncementComponent.class
+        );
+        this.emitAnnouncement(scarlet, entryMeta, announcement);
     }
 
     public void emitMemberRoleAssign(Scarlet scarlet, ScarletData.AuditEntryMetadata entryMeta, User target, GroupAuditType.RoleRefComponent role);
