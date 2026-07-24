@@ -98,6 +98,22 @@ public interface AvatarSearch
         providerLastLog.clear();
     }
 
+    /**
+     * Provider URL to remaining backoff in milliseconds (0 == available), for the
+     * diagnostics view. Includes every built-in provider plus any currently-blocked
+     * custom one.
+     */
+    static java.util.Map<String, Long> providerBackoffRemainingMs()
+    {
+        java.util.Map<String, Long> out = new java.util.LinkedHashMap<>();
+        for (String url : URL_ROOTS)
+            out.put(url, 0L);
+        long now = System.currentTimeMillis();
+        for (java.util.Map.Entry<String, Long> entry : providerBlockedUntil.entrySet())
+            out.put(entry.getKey(), Math.max(0L, entry.getValue().longValue() - now));
+        return out;
+    }
+
     static void blockProvider(String urlRoot, long millis, String message, Throwable throwable)
     {
         providerBlockedUntil.put(urlRoot, Long.valueOf(System.currentTimeMillis() + millis));

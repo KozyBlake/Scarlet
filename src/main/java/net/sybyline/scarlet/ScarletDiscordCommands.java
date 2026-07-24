@@ -1924,6 +1924,11 @@ public class ScarletDiscordCommands
     public void vrchatUserBan(SlashCommandInteractionEvent event, InteractionHook hook, @SlashOpt("vrchat-user") io.github.vrchatapi.model.User vrchatUser, @SlashOpt("tag-immediately") boolean tagImmediately) throws Exception
     {
         String vrcTargetId = VrcIds.getAsString_user(event.getOption("vrchat-user"));
+        if (ScarletSimulation.isTrainingId(vrcTargetId))
+        {
+            hook.sendMessage("Banned the training user. *(Training simulation — no real ban occurred.)*").setEphemeral(false).queue();
+            return;
+        }
         if (vrchatUser == null)
         {
             hook.sendMessageFormat("No VRChat user found with id %s", vrcTargetId).setEphemeral(true).queue();
@@ -2052,6 +2057,11 @@ public class ScarletDiscordCommands
     public void vrchatUserUnban(SlashCommandInteractionEvent event, InteractionHook hook, @SlashOpt("vrchat-user") io.github.vrchatapi.model.User vrchatUser) throws Exception
     {
         String vrcTargetId = VrcIds.getAsString_user(event.getOption("vrchat-user"));
+        if (ScarletSimulation.isTrainingId(vrcTargetId))
+        {
+            hook.sendMessage("Unbanned the training user. *(Training simulation — no real action occurred.)*").setEphemeral(false).queue();
+            return;
+        }
         if (vrchatUser == null)
         {
             hook.sendMessageFormat("No VRChat user found with id %s", vrcTargetId).setEphemeral(true).queue();
@@ -4647,6 +4657,46 @@ public class ScarletDiscordCommands
         }
     }
 
+    // set-training-channel
+
+    @SlashCmd("set-training-channel")
+    @Desc("Set the Discord channel that receives simulated [TRAINING] events (keeps drills out of the real log)")
+    @DefaultPerms(Permission.MANAGE_SERVER)
+    @Ephemeral
+    public void setTrainingChannel(SlashCommandInteractionEvent event, InteractionHook hook,
+                                   @SlashOpt("discord-text-channel") Channel channel)
+    {
+        ((ScarletDiscordJDA)this.discord).setTrainingChannel(channel);
+        if (channel == null)
+        {
+            hook.sendMessage("Training channel removed. Simulated events will no longer be posted to Discord.").queue();
+        }
+        else
+        {
+            hook.sendMessageFormat("Simulated [TRAINING] events will be sent to <#%s>.", channel.getId()).queue();
+        }
+    }
+
+    // set-ops-alert-channel
+
+    @SlashCmd("set-ops-alert-channel")
+    @Desc("Set the Discord channel that receives Scarlet health alerts (auth, log tailer, rate limits, updates)")
+    @DefaultPerms(Permission.MANAGE_SERVER)
+    @Ephemeral
+    public void setOpsAlertChannel(SlashCommandInteractionEvent event, InteractionHook hook,
+                                   @SlashOpt("discord-text-channel") Channel channel)
+    {
+        ((ScarletDiscordJDA)this.discord).setOpsAlertChannel(channel);
+        if (channel == null)
+        {
+            hook.sendMessage("Ops alert channel removed.").queue();
+        }
+        else
+        {
+            hook.sendMessageFormat("Scarlet health alerts will be sent to <#%s>.", channel.getId()).queue();
+        }
+    }
+
     // set-discord-action-log-channel
 
     @SlashCmd("set-discord-action-log-channel")
@@ -4984,16 +5034,18 @@ public class ScarletDiscordCommands
     @Ephemeral
     public void unlinkVrchatAccount(SlashCommandInteractionEvent event, InteractionHook hook)
     {
+        // Reply in the invoking user's own Discord language.
+        java.util.Locale userLocale = net.sybyline.scarlet.util.I18n.ofDiscordTag(event.getUserLocale().getLocale());
         Member self = event.getMember();
         if (self == null)
         {
-            hook.sendMessage("Could not resolve your Discord membership.").queue();
+            hook.sendMessage(net.sybyline.scarlet.util.I18n.tr(userLocale, "discord.noMembership")).queue();
             return;
         }
         String linkedVrcId = ScarletDiscordCommands.this.discord.scarlet.data.globalMetadata_getSnowflakeId(self.getId());
         if (linkedVrcId == null || linkedVrcId.isEmpty())
         {
-            hook.sendMessage("Your Discord account isn't linked to a VRChat account, so there's nothing to unlink.").queue();
+            hook.sendMessage(net.sybyline.scarlet.util.I18n.tr(userLocale, "discord.unlink.notLinked")).queue();
             return;
         }
         // Drop any in-flight verification, then clear both sides of the link.

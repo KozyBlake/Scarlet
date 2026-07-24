@@ -117,6 +117,7 @@ import io.github.vrchatapi.model.User;
 import io.github.vrchatapi.model.World;
 
 import net.sybyline.scarlet.ext.ExtendedUserAgent;
+import net.sybyline.scarlet.util.I18n;
 import net.sybyline.scarlet.util.EnumHelper;
 import net.sybyline.scarlet.util.Location;
 import net.sybyline.scarlet.util.MiscUtils;
@@ -260,6 +261,22 @@ public class ScarletVRChat implements Closeable
                     }
                     return chain.proceed(req);
                 })
+                // ── Central VRChat API rate limiter ───────────────────────────────────
+                // Every VRChat call passes through here: wait for a token (burst
+                // smoothing) plus any active global backoff, then on a 429 response
+                // back the whole client off, honoring Retry-After when present.
+                .addInterceptor(chain ->
+                {
+                    ScarletVRChat.this.rateLimiter.acquire();
+                    Response response = chain.proceed(chain.request());
+                    if (response.code() == 429)
+                    {
+                        long backoffMs = parseRetryAfterMillis(response, 30_000L);
+                        ScarletVRChat.this.rateLimiter.penalize(backoffMs);
+                        ScarletVRChat.this.maybeAlertHardRateLimit(backoffMs);
+                    }
+                    return response;
+                })
                 .addNetworkInterceptor(this::intercept)
                 .cookieJar(this.cookies)
                 .build())
@@ -293,6 +310,14 @@ public class ScarletVRChat implements Closeable
     }
 
     final Scarlet scarlet;
+    /**
+     * Global gate for all VRChat API traffic — smooths aggregate request bursts and,
+     * on a 429, backs the whole client off (see {@link VrcRateLimiter}). Sits in the
+     * okhttp interceptor chain below. Sustained rate/burst are deliberately generous
+     * so it only bites under heavy combined load; the real protection is the 429
+     * backoff.
+     */
+    final net.sybyline.scarlet.util.VrcRateLimiter rateLimiter = new net.sybyline.scarlet.util.VrcRateLimiter(10.0, 20.0);
     final ScarletSettings.RegistryStringEncrypted username, password, totpsecret;
     final ScarletVRChatCookieJar cookies;
     final ApiClient client;
@@ -369,6 +394,134 @@ public class ScarletVRChat implements Closeable
             return "HTTP " + code;
         body = body.replace('\r', ' ').replace('\n', ' ').trim();
         return "HTTP " + code + " " + MiscUtils.maybeEllipsis(512, body);
+    }
+
+    /**
+     * Backoff duration for a 429, from the {@code Retry-After} header when present
+     * (seconds, or an HTTP-date), otherwise {@code defaultMs}. Clamped to a sane
+     * ceiling so a hostile/oversized value can't stall the client for minutes.
+     */
+    /** Whether Scarlet currently holds a valid VRChat session (logged in). */
+    public boolean isSessionValid()
+    {
+        return this.currentUserId != null;
+    }
+
+    /**
+     * Actively probes whether the VRChat session still works by fetching the current
+     * user. {@link #isSessionValid()} only reflects cached login state — it cannot
+     * notice a cookie that expired mid-run, which would otherwise silently stop audit
+     * polling and moderation until someone looked.
+     *
+     * @return {@code TRUE} if the session works, {@code FALSE} if VRChat rejected it
+     *         as unauthorized, or {@code null} if the probe was inconclusive (network
+     *         trouble is not an auth verdict).
+     */
+    public Boolean probeSession()
+    {
+        try
+        {
+            AuthenticationApi auth = new AuthenticationApi(this.client);
+            CurrentUser user = this.getCurrentUser(auth);
+            if (user == null)
+                return null;
+            this.currentUserId = (this.currentUser = user).getId();
+            return Boolean.TRUE;
+        }
+        catch (ApiException apiex)
+        {
+            return apiex.getCode() == 401 ? Boolean.FALSE : null;
+        }
+        catch (Exception ex)
+        {
+            return null;
+        }
+    }
+
+    /**
+     * Attempts an unattended re-login using the stored credentials and TOTP secret
+     * (the same path startup uses). Returns true only when the recovered session
+     * demonstrably works.
+     */
+    public synchronized boolean tryRecoverSession()
+    {
+        try
+        {
+            this.login();
+            return Boolean.TRUE.equals(this.probeSession());
+        }
+        catch (Throwable t)
+        {
+            LOG.warn("Unattended session recovery failed: {}", t.toString());
+            return false;
+        }
+    }
+
+    private volatile long lastRateLimitAlertMillis = 0L;
+    /** Only 429 backoffs at least this long are alert-worthy; short ones are routine. */
+    static final long RATE_LIMIT_ALERT_MIN_BACKOFF_MILLIS = 60_000L;
+    /** Minimum spacing between rate-limit alerts so a burst of 429s pings staff once. */
+    static final long RATE_LIMIT_ALERT_THROTTLE_MILLIS = 600_000L;
+
+    void maybeAlertHardRateLimit(long backoffMs)
+    {
+        if (backoffMs < RATE_LIMIT_ALERT_MIN_BACKOFF_MILLIS)
+            return;
+        long now = System.currentTimeMillis();
+        if (now - this.lastRateLimitAlertMillis < RATE_LIMIT_ALERT_THROTTLE_MILLIS)
+            return;
+        this.lastRateLimitAlertMillis = now;
+        LOG.warn("VRChat is rate limiting hard: backing off for {} seconds", backoffMs / 1000L);
+        try
+        {
+            this.scarlet.splash.queueFeedbackPopup(null, 8_000L,
+                I18n.tr("health.rateLimited"),
+                I18n.tr("health.rateLimitedDetail", backoffMs / 1000L),
+                java.awt.Color.ORANGE, java.awt.Color.ORANGE);
+            if (this.scarlet.discord != null)
+                this.scarlet.discord.emitOpsAlert("VRChat rate limiting",
+                    "VRChat returned 429 with a long backoff: pausing API calls for "
+                    + (backoffMs / 1000L) + " seconds. Moderation actions and audit polling will be delayed.",
+                    0xE67E22);
+        }
+        catch (Exception ex)
+        {
+            LOG.debug("Rate-limit alert emission failed", ex);
+        }
+    }
+
+    /** Display name of the logged-in VRChat account, or null if not logged in. */
+    public String currentUserDisplayName()
+    {
+        return this.currentUser == null ? null : this.currentUser.getDisplayName();
+    }
+
+    static long parseRetryAfterMillis(Response response, long defaultMs)
+    {
+        String header = response.header("Retry-After");
+        long ms = defaultMs;
+        if (header != null && !header.trim().isEmpty())
+        {
+            header = header.trim();
+            try
+            {
+                ms = Long.parseLong(header) * 1_000L;
+            }
+            catch (NumberFormatException nfe)
+            {
+                try
+                {
+                    long epoch = java.time.ZonedDateTime.parse(header, java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME)
+                        .toInstant().toEpochMilli();
+                    ms = epoch - System.currentTimeMillis();
+                }
+                catch (Exception ignored)
+                {
+                    ms = defaultMs;
+                }
+            }
+        }
+        return Math.max(1_000L, Math.min(ms, 300_000L));
     }
 
     private Response intercept(Interceptor.Chain chain) throws IOException
@@ -1937,6 +2090,32 @@ CurrentUser getCurrentUser(AuthenticationApi auth) throws ApiException
     public List<LimitedUserGroups> getUserGroups(String userId)
     {
         return this.getUserGroups(userId, Long.MAX_VALUE);
+    }
+    /**
+     * Fetches the user's public group memberships straight from VRChat, bypassing the
+     * cache, and refreshes the cache with the result. Used to confirm a watched-group
+     * match against live membership so a user who has since left the group isn't
+     * repeatedly flagged (their cached membership would otherwise never expire).
+     * Returns null on error, leaving the existing cache untouched.
+     */
+    public List<LimitedUserGroups> getUserGroupsFresh(String userId)
+    {
+        UsersApi users = new UsersApi(this.client);
+        try
+        {
+            List<LimitedUserGroups> userGroups = users.getUserGroups(userId);
+            this.cachedUserGroups.put(userId, userGroups);
+            return userGroups;
+        }
+        catch (ApiException apiex)
+        {
+            this.scarlet.checkVrcRefresh(apiex);
+            if (apiex.getMessage().contains("HTTP response code: 404"))
+                this.cachedUserGroups.add404(userId);
+            else
+                LOG.error("Error during fresh get user groups: "+apiex.getMessage());
+            return null;
+        }
     }
     public List<LimitedUserGroups> getUserGroups(String userId, long minEpoch)
     {

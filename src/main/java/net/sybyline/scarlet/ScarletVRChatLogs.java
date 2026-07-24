@@ -68,8 +68,18 @@ public class ScarletVRChatLogs implements Closeable
 
     private final Listener listener;
 
+    /** Wall-clock time the tailer last delivered a parsed log entry; 0 before the first. */
+    private volatile long lastEntryMillis = 0L;
+
+    /** @see #lastEntryMillis */
+    public long lastEntryMillis()
+    {
+        return this.lastEntryMillis;
+    }
+
     private void handleEntry(File file, boolean preamble, LocalDateTime timestamp, String level, String text, List<String> lines)
     {
+        this.lastEntryMillis = System.currentTimeMillis();
         int cidx;
         if (text.startsWith("[Behaviour] "))
         {

@@ -1,0 +1,952 @@
+# Scarlet — Translation Strings (by location)
+
+Every user-facing string to translate, grouped by the file it lives in with line
+numbers, so each chunk is a specific place a translator can own with context.
+
+**Total listed: 914 strings across 7 locations.** (Extraction is a close
+approximation — a few internal strings may slip in and a few multi-line messages may be
+split; treat it as the working checklist, refined as each area is keyed.)
+---
+
+## Desktop UI — menus, labels, buttons, dialogs
+`ScarletUI.java` — 111 strings
+
+- L154: Ready
+- L155: Checking bundled VRChat API status...
+- L156: Check now
+- L157: Open API page
+- L199: Set UI scale %
+- L394: No instance loaded
+- L615: Name
+- L617: Pronouns
+- L618: Avatar
+- L619: Performance
+- L620: Avatar Stats
+- L621: AcctAge
+- L622: Joined
+- L623: Left
+- L624: Advisory
+- L625: AgeVer
+- L626: Profile
+- L627: Copy ID
+- L628: Ban
+- L629: Unban
+- L630: Invite
+- L732: menu.file
+- L742: menu.edit
+- L745: Columns
+- L749: Import watched groups
+- L757: Advanced
+- L766: menu.view
+- L771: a
+- L784: menu.help
+- L887: Open KozyBlake/Scarlet's data directory
+- L892: Create a VRChat group instance and open it in the VRChat client
+- L897: Import watched groups from a URL
+- L902: Import watched groups from a local file
+- L907: Push the current slash command list to Discord
+- L912: Clear the current instance player list
+- L920: Pause or resume text-to-speech announcements
+- L930: TTS: Paused
+- L937: Skip the currently playing TTS announcement
+- L1036: KozyBlake/Scarlet CLI  —  type a command below or run 'help' to list all commands. /
+- L1066: Run
+- L1351: I'm moving to another computer (offer to remove this copy after export)
+- L1357: <html>Set a PIN to encrypt this bundle (required, at least 4 characters).<br>
+- L1361: PIN
+- L1366: Confirm
+- L1372: Encrypt bundle
+- L1381: A PIN of at least 4 characters is required to encrypt the bundle.
+- L1387: The PINs did not match.
+- L1401: Preparing...
+- L1405: Cancel
+- L1411: Cancelling...
+- L1728: <html><div style='width:390px'>
+- L1736: Keep on this computer
+- L1737: Remove all settings… 10
+- L1755: Remove all settings…
+- L1759: Remove all settings
+- L1804: This bundle is PIN-protected. Enter its PIN to import.
+- L1807: Enter bundle PIN
+- L1813: A PIN is required to import this bundle.
+- L1822: Could not read that bundle:
+- L1862: Data/config files
+- L1863: Secure credentials and sign-ins
+- L1874: <html>Select what to import from the bundle.</html>
+- L1882: <html>Settings, watched lists, Discord config, metadata, cache/data files.
+- L1891: <html>Discord bot token, VRChat username/password, 2FA secret, session cookies,
+- L1992: Paste a VRChat world URL or wrld_ id
+- L1994: Optional instance name shown in VRChat
+- L2016: Enable queue when the instance is full
+- L2017: Require Age Verified 18+ users
+- L2018: Open in VRChat after creating
+- L2020: Drones
+- L2021: Emoji
+- L2022: Items
+- L2023: Pedestals
+- L2024: Prints
+- L2025: Stickers
+- L2060: Mode
+- L2092: Create VRChat instance
+- L2099: Paste a valid VRChat world URL or wrld_ id.
+- L2106: Instance names can be blank, or up to 32 characters without '.', '/', or '\\'.
+- L2188: minimumAvatarPerformance
+- L2238: <html>
+- L2248: Instance created
+- L2272: <html><body style='width: 360px'><i>VRChat is already running — \"Invite myself in VRChat\"
+- L2275: Instance created
+- L2395: <html>
+- L2412: Search by display name or user ID:
+- L2418: Invite a friend (
+- L2514: Copy
+- L2518: Copied!
+- L2525: Scarlet Diagnostics
+- L2635: <html><b>VRChat API status:</b> Not checked yet.</html>
+- L2637: Scarlet has not checked the bundled VRChat API version yet.
+- L2658: <html><b>VRChat API status:</b> Update available. Bundled
+- L2665: <html><b>VRChat API status:</b>
+- L2672: <html><b>VRChat API status:</b> Bundled
+- L2679: <html><b>VRChat API status:</b> Up to date (
+- L2928: VRChat API Status
+- L3093: <html><body style='width: 380px'>
+- L3100: <html><body style='width: 380px'><b>Get exact avatar data</b><br>
+- L3111: Copy launch options
+- L3115: Copied!
+- L3226: Show all details
+- L3255: Hide details
+- L3267: <html><a href=\"#\">%s</a></html>
+- L3722: VRCHAT API
+- L3804: BACKUP & MIGRATION
+- L3811: <html>Move Scarlet to another PC or operating system. <b>Export</b> bundles your
+- L3818: Export bundle...
+- L3819: Import bundle...
+- L4007: OTHER
+- L4055: Save Settings
+
+## Splash / loading / toast text
+`ScarletUISplash.java` — 3 strings
+
+- L69: Loading...
+- L246: Dialog
+- L254: Dialog
+
+## Settings labels
+`Scarlet.java` — 30 strings
+
+- L895: Confirmation dialog for group invites
+- L896: Notify for updates
+- L897: Notify for preview updates
+- L898: Notify for KozyBlake announcements
+- L899: Show UI during load
+- L900: Show CLI tab
+- L901: Enable built-in Discord moderation commands
+- L902: Discord moderation prompt shown
+- L903: Auto-invite to VRChat group when the verified role is added
+- L905: Desktop UI language: system, en, de, es, id (restart to apply)
+- L906: Discord role snowflake that triggers VRChat group auto-invite
+- L907: Discord role snowflake that members must have before being prompted to link their VRChat account
+- L908: Message shown when a member can't be auto-verified and needs manual verification (blank to disable)
+- L909: VRChat group ID to auto-invite verified members to
+- L910: Instances: enforce 18+
+- L911: Instances: enforce worlds
+- L912: Instances: enforce world list
+- L913: Audit polling interval seconds (10-300 inclusive)
+- L914: Add
+- L915: Remove
+- L916: List
+- L917: Reset
+- L918: Set
+- L919: Pick
+- L925: Run now
+- L932: Edit
+- L936: Edit
+- L940: Reload
+- L947: Install...
+- L953: Run
+
+## Settings labels + Discord messages (JDA)
+`ScarletDiscordJDA.java` — 127 strings
+
+- L204: VRChat Help Desk report email
+- L205: Append footer to template
+- L206: Discord: Bundle Instance Kicks with causing User Ban
+- L207: Moderation summary: only list staff with activity
+- L208: Discord: Ping on Instance Warn
+- L209: Discord: Ping on Instance Kick
+- L210: Discord: Ping on Member Remove
+- L211: Discord: Ping on User Ban
+- L212: Discord: Ping on User Unban
+- L213: Discord: Ping on outstanding Instance Warn
+- L214: Discord: Ping on outstanding Instance Kick
+- L215: Discord: Ping on outstanding Member Remove
+- L216: Discord: Ping on outstanding User Ban
+- L217: Discord: Ping on outstanding User Unban
+- L218: VRChat Client: Launch on Instance Create
+- L219: Evidence submission
+- L220: Select
+- L221: Evidence file path format
+- L222: Use custom avatar search providers
+- L223: VRCX-compatible avatar search providers
+- L224: Manage...
+- L709: (staff mode)
+- L1168: Reset
+- L1180: Reset
+- L1724: Status
+- L1725: Moderator
+- L1726: Target
+- L1727: Reason
+- L1729: Details
+- L1748: Discord Member Joined
+- L1751: Member
+- L1752: Account Created
+- L1753: Account Age
+- L1754: IP Address
+- L1757: Account Age Alert
+- L1769: Invite
+- L1770: Invite Channel
+- L1771: Inviter
+- L1772: Invite Uses
+- L1776: Invite
+- L1779: Details
+- L2285: Target id
+- L2304: +key+
+- L2415: Account age
+- L2416: Age verification
+- L2417: Pronouns
+- L2418: Status description
+- L2421: History
+- L2423: Most recent
+- L2433: Watched group membership
+- L2437: Action taken through automation/assistance
+- L2606: +MarkdownSanitizer.escape(locationModel.name)+
+- L2617: ### Instance log
+- L2688: Instance Close
+- L2697: Instance Close
+- L2845: +key+
+- L2857: Instance Inactive
+- L2858: Location
+- L2875: joined a group instance
+- L2876: Location
+- L2893: left a group instance
+- L2894: Location
+- L2916: User ID
+- L2917: joined a group instance
+- L2918: Location
+- L2942: User ID
+- L2943: left a group instance
+- L2944: Location
+- L2968: switched avatars
+- L2969: User ID
+- L2970: Location
+- L2971: Avatar Name
+- L2984: Bundle ID
+- L3018: loaded video
+- L3019: User ID
+- L3020: Location
+- L3021: Video URL
+- L3022: Video Title
+- L3039: Target User ID
+- L3040: was targeted by a vote-to-kick
+- L3041: Location
+- L3048: Initiating User ID
+- L3075: aeiou
+- L3076: User ID
+- L3077: Location
+- L3079: Report
+- L3110: spawned a sticker
+- L3111: User ID
+- L3112: Location
+- L3113: Sticker ID
+- L3114: File ID
+- L3115: Report sticker
+- L3138: spawned a print
+- L3139: User ID
+- L3140: Location
+- L3141: Print ID
+- L3142: File ID
+- L3143: Report print
+- L3165: spawned an emoji
+- L3166: User ID
+- L3167: Location
+- L3168: Emoji ID
+- L3169: File ID
+- L3170: Report emoji
+- L3190: spawned a prop
+- L3191: User ID
+- L3192: Location
+- L3193: Prop Author
+- L3194: Prop ID
+- L3195: Report prop
+- L3235: ` / `
+- L3275: +MarkdownSanitizer.escape(locationModel.name)+
+- L3312: Instance Enforcement
+- L3313: Location
+- L3314: World
+- L3315: Reason
+- L3342: Moderation Summary
+- L3474: Moderation Summary
+- L3514: Outstanding Moderation
+- L3606: User ID
+- L3629: User ID
+- L3630: Type
+- L3631: Tags
+- L3632: Message
+- L3633: Critical
+- L3634: Priority
+- L3635: Silent
+
+## Discord command descriptions + replies
+`ScarletDiscordCommands.java` — 536 strings
+
+- L289: Searches for VRChat things
+- L295: Searches for worlds
+- L305: Report world
+- L311: Searches for users
+- L320: Report account
+- L326: Searches for groups
+- L337: Report group
+- L343: Searches for avatars
+- L353: Report avatar
+- L362: Configures custom moderation tags
+- L367: Lists all custom moderation tags
+- L377: Adds a custom moderation tag
+- L383: Failed to add moderation tag: list == null
+- L386: Failed to add moderation tag: there are already the maximum of 125 moderation tags
+- L389: Failed to add moderation tag: list.add returned false
+- L420: Removes a custom moderation tag
+- L426: Failed to delete moderation tag: list == null
+- L429: Failed to add the tag: the tag `%s` does not exist
+- L432: Failed to delete moderation tag: there are no moderation tags
+- L435: Failed to delete moderation tag: list.remove returned false
+- L449: Configures watched groups
+- L454: Lists all watched groups
+- L469: Exports watched groups as a JSON file
+- L476: Imports watched groups from an attached file
+- L490: Successfully imported watched groups legacy CSV
+- L495: Failed to import watched groups legacy CSV with unknown reason
+- L501: Exception while importing %s: %s
+- L512: Successfully imported watched groups JSON
+- L517: Failed to import watched groups JSON with unknown reason
+- L523: Exception while importing %s: %s
+- L529: File '%s' is not importable.
+- L603: Adds a watched group
+- L613: That group is already watched
+- L620: That group doesn't seem to exist
+- L632: Added group [%s](%s)
+- L635: Removes a watched group
+- L641: Removed group [%s](%s)
+- L645: That group is not watched
+- L649: Views a group's watch information
+- L655: That group is not watched
+- L669: Sets a group's critical status
+- L675: That group is not watched
+- L683: That group is already flagged as critical
+- L686: Flagged group as critical
+- L692: That group is already not flagged as critical
+- L695: Unflagged group as critical
+- L701: Sets a group's silent status
+- L707: That group is not watched
+- L715: That group is already flagged as silent
+- L718: Flagged group as silent
+- L724: That group is already not flagged as silent
+- L727: Unflagged group as silent
+- L733: Sets a group's watch type
+- L739: That group is not watched
+- L745: That group is already marked as
+- L749: Marking group as
+- L753: Sets a group's priority
+- L759: That group is not watched
+- L764: Setting group priority to
+- L768: Sets a group's TTS announcement message
+- L774: That group is not watched
+- L782: That group already has no message
+- L787: Removing group's message (was `%s`)
+- L794: That group's message is already exactly that
+- L799: Setting group TTS announcement to `%s` (was `%s`)
+- L806: Sets a group's notes
+- L812: That group is not watched
+- L825: Sets a group's tags
+- L831: That group is not watched
+- L839: That group already has no tags
+- L844: Removing group's tags (was `%s`)
+- L856: That group already has those exact tags
+- L861: Setting group tags to `%s` (was `%s`)
+- L872: Adds a tag for a group
+- L878: That group is not watched
+- L886: Added tag `%s` (was empty)
+- L890: Added tag `%s` (was `%s`)
+- L898: That group already has that
+- L903: Removes a tag from a group
+- L909: That group is not watched
+- L915: That group already has no tags
+- L920: Removed group tag `%s`)
+- L924: That group doesn't have that tag
+- L945: Lists all watched groups
+- L959: Exports watched groups as a JSON file
+- L966: Imports watched groups from an attached file
+- L980: Successfully imported watched
+- L985: Failed to import watched
+- L991: Exception while importing %s: %s
+- L1002: Successfully imported watched
+- L1007: Failed to import watched
+- L1013: Exception while importing %s: %s
+- L1019: File '%s' is not importable.
+- L1095: Exports watched groups as a JSON file
+- L1105: That
+- L1112: That
+- L1124: Added %s [%s](
+- L1127: Removes a watched group
+- L1133: Removed %s [%s](
+- L1137: That
+- L1141: Views a group's watch information
+- L1147: That
+- L1155: Sets a group's critical status
+- L1161: That
+- L1169: That
+- L1172: Flagged
+- L1178: That
+- L1181: Unflagged
+- L1187: Sets a group's silent status
+- L1193: That
+- L1201: That
+- L1204: Flagged
+- L1210: That
+- L1213: Unflagged
+- L1219: Sets a group's watch type
+- L1225: That
+- L1231: That
+- L1235: Marking
+- L1239: Sets a group's priority
+- L1245: That
+- L1250: Setting
+- L1254: Sets a group's TTS announcement message
+- L1260: That
+- L1268: That
+- L1273: Removing
+- L1280: That
+- L1285: Setting
+- L1292: Sets a group's notes
+- L1298: That
+- L1315: That
+- L1318: Set notes for
+- L1323: Sets a group's tags
+- L1329: That
+- L1337: That
+- L1342: Removing
+- L1354: That
+- L1359: Setting
+- L1370: Adds a tag for a group
+- L1376: That
+- L1384: Added tag `%s` (was empty)
+- L1388: Added tag `%s` (was `%s`)
+- L1396: That
+- L1401: Removes a tag from a group
+- L1407: That
+- L1413: That
+- L1418: Removed
+- L1422: That
+- L1432: Configures watched users
+- L1455: Lists all watched users
+- L1459: Exports watched users as a JSON file
+- L1463: Imports watched users from an attached file
+- L1468: Adds a watched user
+- L1476: Removes a watched user
+- L1480: Views a user's watch information
+- L1484: Sets a user's critical status
+- L1488: Sets a user's silent status
+- L1492: Sets a user's watch type
+- L1496: Sets a user's priority
+- L1500: Sets a user's TTS announcement message
+- L1504: Sets a user's notes
+- L1508: Sets a user's tags
+- L1512: Adds a tag for a user
+- L1516: Removes a tag from a user
+- L1525: Configures watched avatars
+- L1548: Lists all watched avatars
+- L1552: Exports watched avatars as a JSON file
+- L1556: Imports watched avatars from an attached file
+- L1561: Adds a watched avatar
+- L1569: Removes a watched avatar
+- L1573: Views an avatar's watch information
+- L1577: Sets an avatar's critical status
+- L1581: Sets an avatar's silent status
+- L1585: Sets an avatar's watch type
+- L1589: Sets an avatar's priority
+- L1593: Sets an avatar's TTS announcement message
+- L1597: Sets an avatar's notes
+- L1601: Sets an avatar's tags
+- L1605: Adds a tag for an avatar
+- L1609: Removes a tag from an avatar
+- L1617: Configures the staff list
+- L1642: Lists all staff users
+- L1648: Adds a user to the staff list
+- L1654: Removes a user from the staff list
+- L1700: Joined
+- L1704: Roles
+- L1709: Linked Discord
+- L1722: No VRChat user found with id %s
+- L1730: Associating %s with VRChat user [%s](%s)
+- L1735: VRChat user [%s](%s) is already on the
+- L1740: Adding VRChat user [%s](%s) to the
+- L1751: VRChat user [%s](%s) is already has the role [%s](%s)
+- L1757: Adding the role [%s](%s) to [%s](%s)
+- L1767: %sVRChat user [%s](%s) is not on the
+- L1772: Removing VRChat user [%s](%s) from the
+- L1783: VRChat user [%s](%s) is already lacks the role [%s](%s)
+- L1789: Removing the role [%s](%s) from [%s](%s)
+- L1796: Configures the secret staff list
+- L1821: Lists all secret staff users
+- L1827: Adds a user to the secret staff list
+- L1833: Removes a user from the secret staff list
+- L1843: Lists internal and audit information for a specific VRChat user
+- L1850: No VRChat user found with id %s
+- L1857: No VRChat user metadata found for [%s](%s)
+- L1922: Ban a specific VRChat user
+- L1929: No VRChat user found with id %s
+- L1944: You do not have permission to ban users. / ||(Your admin can enable this by giving your associated VRChat user ban management permissions in the group or with the command `/scarlet-discord-permissions type:Other name:groupex-bans-manage value:Allow`)||
+- L1954: This VRChat user is already banned
+- L1960: This VRChat user currently has automated/assisted moderation pending, please retry later
+- L1968: No moderation tags!
+- L1999: This VRChat user currently has automated/assisted moderation pending, please retry later
+- L2004: Failed to ban %s
+- L2008: Banned %s
+- L2016: Ban several VRChat users
+- L2031: You do not have permission to ban users. / ||(Your admin can enable this by giving your associated VRChat user ban management permissions in the group or with the command `/scarlet-discord-permissions type:Other name:groupex-bans-manage value:Allow`)||
+- L2050: Unban a specific VRChat user
+- L2057: No VRChat user found with id %s
+- L2072: You do not have permission to unban users. / ||(Your admin can enable this by giving your associated VRChat user ban management permissions in the group or with the command `/scarlet-discord-permissions type:Other name:groupex-bans-manage value:Allow`)||
+- L2082: This VRChat user is not banned
+- L2086: This VRChat user currently has automated/assisted moderation pending, please retry later
+- L2091: Failed to unban %s
+- L2095: Unbanned %s
+- L2103: Unban several VRChat users
+- L2118: You do not have permission to unban users. / ||(Your admin can enable this by giving your associated VRChat user ban management permissions in the group or with the command `/scarlet-discord-permissions type:Other name:groupex-bans-manage value:Allow`)||
+- L2137: Manages groups
+- L2190: No VRChat user found with id %s
+- L2216: You need the VRChat group permission `
+- L2288: User ID
+- L2289: Status
+- L2290: Roles
+- L2292: Joined
+- L2294: Created
+- L2296: Banned
+- L2298: Accepted By
+- L2300: Manager Notes
+- L2313: Created
+- L2315: Updated
+- L2317: Author
+- L2327: Post ID
+- L2328: Visibility
+- L2330: Created
+- L2332: Updated
+- L2334: Author
+- L2336: Roles
+- L2344: VRChat did not return results for that request.
+- L2357: Lists audit event types currently present in this group
+- L2365: Failed to fetch audit event types from VRChat.
+- L2370: No audit event types were returned for this group.
+- L2379: Searches this group's members
+- L2389: Lists banned users in this group
+- L2399: Lists pending invites sent by this group
+- L2409: Lists pending or blocked join requests for this group
+- L2419: Shows the current group announcement
+- L2429: Creates or replaces the group announcement
+- L2447: Failed to create the group announcement.
+- L2450: Created group announcement.
+- L2454: Deletes the current group announcement
+- L2459: Deletion cancelled. Type `DELETE` exactly in the confirmation option to delete the announcement.
+- L2465: Deleted the group announcement.
+- L2469: Lists recent group posts
+- L2477: Failed to fetch group posts from VRChat.
+- L2482: No group posts were returned.
+- L2489: Creates a group post
+- L2512: Failed to create the group post.
+- L2515: Created group post.
+- L2519: Deletes a group post
+- L2524: Deletion cancelled. Type `DELETE` exactly in the confirmation option to delete the post.
+- L2530: Deleted group post `
+- L2534: Checks whether a user can receive group ownership
+- L2542: VRChat did not return transfer eligibility details.
+- L2549: Group not monetized
+- L2550: Target has VRC+
+- L2551: Target has verified email
+- L2552: Target can own more groups
+- L2553: Target is group member
+- L2563: Starts or accepts group ownership transfer
+- L2569: Transfer cancelled. The confirmation must exactly match this group id: `
+- L2575: Submitted the group transfer request for
+- L2579: Cancels an active group ownership transfer
+- L2585: Transfer cancellation skipped. The confirmation must exactly match this group id: `
+- L2591: Cancelled the active group transfer.
+- L2595: Opens an instance
+- L2605: No VRChat world found with id %s
+- L2615: Create a new [%s](%s) instance: / Leave avatar gate unchecked for no limit; select one Poor, Medium, or Good preset to set the minimum avatar performance.
+- L2667: Closes an instance
+- L2676: You do not have permission to close instances
+- L2687: Closed instance `%s`
+- L2690: Adds a VRChat Group Role
+- L2699: VRChat user [%s](%s) is already has the role [%s](%s)
+- L2705: Adding the role [%s](%s) to [%s](%s)
+- L2708: Removes a VRChat Group Role
+- L2717: VRChat user [%s](%s) is already lacks the role [%s](%s)
+- L2723: Removing the role [%s](%s) from [%s](%s)
+- L2730: Lists internal information for a specific Discord user
+- L2783: Queries audit events targeting a specific VRChat user
+- L2790: No VRChat user found with id %s
+- L2797: Error querying audit target history for [%s](<%s>) (%s)
+- L2802: No audit target history for [%s](<%s>) (%s)
+- L2845: Queries audit events actored by a specific VRChat user
+- L2852: No VRChat user found with id %s
+- L2860: Error querying audit actor history for [%s](<%s>) (%s)
+- L2867: No audit actor history for [%s](<%s>) (%s)
+- L2897: Generates a summary of certain moderation actions by a specific user
+- L2928: Generates a summary of moderation actions
+- L2938: Generates a list of outstanding moderation actions
+- L2944: No moderation events watched
+- L2960: Select submission type
+- L2974: Submit attachments for evidence
+- L3014: Message does not appear to be an audit entry
+- L3023: Failed to find data for entry `%s`
+- L3031: Attempting to fix entry `%s`
+- L3040: Shows information about the current configuration
+- L3106: Configures settings
+- L3112: Configure a setting
+- L3138: Must select exactly 1 value for %s
+- L3143: Set %s to %s
+- L3164: Must select exactly 1 value for %s
+- L3175: %s must be an integer between %d and %d
+- L3179: Set %s to %s
+- L3223: Must select exactly 1 value for %s
+- L3234: Invalid value %s for %s
+- L3238: Set %s to %s
+- L3264: Must select exactly 1 value for %s
+- L3274: Invalid value %s for %s
+- L3278: Set %s to %s
+- L3295: Invalid value %s for %s
+- L3299: Set %s to %s
+- L3327: Must select exactly 1 value for %s
+- L3332: Set %s to %s
+- L3358: Must select exactly 1 value for %s
+- L3362: Set %s to %s
+- L3373: Set %s to %s
+- L3392: Set %s to %s
+- L3396: Invalid value %s for %s
+- L3417: Set %s to %s
+- L3421: Invalid value %s for %s
+- L3438: The setting %s currently can't be configured via Discord.
+- L3446: Configures miscellaneous settings
+- L3479: Invalid time zone/offset `%s`
+- L3489: Invalid time of day `%s`
+- L3500: Moderation summary settings
+- L3504: Set what time of day to generate a summary of moderation activity
+- L3510: Set mod summary generation time: next summary at <t:%s:f>
+- L3514: Suggested moderation settings
+- L3520: The kick count
+- L3524: Set suggested moderation kick count: %d
+- L3527: The period
+- L3531: Set suggested moderation period: %d day%s
+- L3535: Outstanding moderation settings
+- L3540: The period
+- L3544: Set outstanding moderation period: %d day%s
+- L3547: Set what time of day to generate a summary of outstanding moderation activity
+- L3553: Set outstanding mod summary generation time: next summary at <t:%s:f>
+- L3557: Report template settings
+- L3562: View the report template
+- L3571: Download the report template
+- L3580: View the report template format parameters
+- L3588: Edit the report template
+- L3612: Upload the report template
+- L3627: Successfully uploaded report template
+- L3632: Failed to upload report template: empty content
+- L3638: Exception while uploading %s: %s
+- L3647: Restarts the Scarlet application
+- L3652: Restarts the application now
+- L3671: Updates the application now
+- L3703: Attaches a log file
+- L3712: No log files detected, strange...
+- L3720: Invalid log file name
+- L3729: That log file does not exist
+- L3733: `%s`
+- L3739: Sets a given text channel as the channel certain audit event types use
+- L3746: Unassociating VRChat group audit log event type %s (%s) from any channels
+- L3750: The channel %s doesn't support message sending
+- L3755: Associating VRChat group audit log event type %s (%s) with channel <#%s>
+- L3763: Sets the given webhooks as the webhooks certain audit event types use
+- L3790: Configures auxiliary webhooks
+- L3795: Lists all auxiliary webhooks
+- L3803: Url
+- L3813: Adds an auxiliary webhook
+- L3819: There is already an auxiliary webhook with that id
+- L3825: Invalid webhook url
+- L3830: Added auxiliary webhook
+- L3837: Removes an auxiliary webhook
+- L3843: There is no auxiliary webhook with that id
+- L3847: Removed auxiliary webhook
+- L3854: Sets a given text channel as the channel certain extended event types use
+- L3861: Unassociating VRChat extended group audit event type %s (%s) from any channels
+- L3865: The channel %s doesn't support message sending
+- L3870: Associating VRChat extended group audit event type %s (%s) with channel <#%s>
+- L3877: Sets a given text channel as the secret channel certain audit event types use
+- L3884: Unassociating VRChat group audit log event type %s (%s) from any secret channels
+- L3888: The channel %s doesn't support message sending
+- L3893: Associating VRChat group audit log event type %s (%s) with secret channel <#%s>
+- L3900: Sets a given text channel as the secret channel certain extended event types use
+- L3907: Unassociating VRChat extended group audit event type %s (%s) from any secret channels
+- L3911: The channel %s doesn't support message sending
+- L3916: Associating VRChat extended group audit event type %s (%s) with secret channel <#%s>
+- L3923: Sets a given voice channel as the channel in which to announce TTS messages
+- L3930: Disabling/disconnecting from voice channel
+- L3936: The channel %s isn't a voice channel
+- L3941: Enabling/connecting from voice channel <#%s>
+- L3952: Selects which TTS voice is used to make announcements
+- L3958: TTS voice `%s` is not installed on this system
+- L3964: Setting TTS voice to `%s`
+- L3971: Generates a VRChat animated emoji spritesheet from a gif
+- L3978: Generates a VRChat animated emoji spritesheet from the gif from this URL
+- L3984: Generates a VRChat animated emoji spritesheet from the gif from this file
+- L4001: Exception generating spritesheet: %s
+- L4017: Message doesn't contain a Tenor gif.
+- L4030: Exception generating spritesheet: %s
+- L4039: Configures event schedules
+- L4049: Lists all event schedules
+- L4074: Adds an event schedule
+- L4090: An event schedule with that id already exists
+- L4107: Added event schedule
+- L4110: Activate or deactivate an event schedule
+- L4117: There is no event schedule with that id
+- L4122: Set event schedule active to
+- L4125: Set whether a complementary Discord Event should be created
+- L4132: There is no event schedule with that id
+- L4137: Set event schedule mirror on discord to
+- L4140: Set the maximum number of future events to post
+- L4147: There is no event schedule with that id
+- L4152: Set event schedule maximum pending to
+- L4155: Set an event schedule's title
+- L4162: There is no event schedule with that id
+- L4167: Set event schedule title
+- L4170: Set an event schedule's description
+- L4177: There is no event schedule with that id
+- L4182: Set event schedule title
+- L4185: Set an event schedule's date
+- L4192: There is no event schedule with that id
+- L4197: Set event schedule date
+- L4200: Set an event schedule's time
+- L4208: There is no event schedule with that id
+- L4214: Set event schedule time
+- L4217: Set an event schedule's duration
+- L4224: There is no event schedule with that id
+- L4229: Set event schedule duration
+- L4232: Set an event schedule's frequency
+- L4239: There is no event schedule with that id
+- L4244: Set event schedule frequency
+- L4247: Set an event schedule's category
+- L4254: There is no event schedule with that id
+- L4259: Set event schedule category
+- L4263: Set an event schedule's access
+- L4270: There is no event schedule with that id
+- L4275: Set event schedule access
+- L4279: Set an event schedule's notification upon creation
+- L4286: There is no event schedule with that id
+- L4291: Set event schedule notification usage
+- L4299: Set an event schedule's tags
+- L4310: There is no event schedule with that id
+- L4322: Cleared event schedule tags
+- L4327: This group does not have Event Group Fair enabled, so you may not use that tag
+- L4332: Set event schedule tags
+- L4335: Set an event schedule's image
+- L4341: There is no event schedule with that id
+- L4402: Set the scheduled event image
+- L4408: Set Event roles
+- L4438: Cleared event roles
+- L4444: Set event roles
+- L4448: Set an event schedule's roles
+- L4453: There is no event schedule with that id
+- L4460: Set Event platforms
+- L4484: Cleared event platforms
+- L4490: Set event platforms
+- L4494: Set an event schedule's platforms
+- L4499: There is no event schedule with that id
+- L4517: Set an event schedule's languages
+- L4526: There is no event schedule with that id
+- L4539: Cleared event schedule languages
+- L4545: Invalid or unknown languages:
+- L4550: Set event schedule languages
+- L4554: Set an event schedule's host early join minutes
+- L4561: There is no event schedule with that id
+- L4566: Set event host early join minutes
+- L4570: Set an event schedule's guest early join minutes
+- L4577: There is no event schedule with that id
+- L4582: Set event guest early join minutes
+- L4586: Set an event schedule's close Instance after end minutes
+- L4593: There is no event schedule with that id
+- L4598: Set event close Instance after end minutes
+- L4602: Set an event schedule's overflow usage
+- L4609: There is no event schedule with that id
+- L4614: Set event schedule overflow usage
+- L4618: Set an event schedule's featured status
+- L4625: The group does not have Featured Events enabled by VRChat, this is not something you can simply change yourself
+- L4630: There is no event schedule with that id
+- L4635: Set event schedule overflow usage
+- L4638: Removes an event schedule
+- L4643: There is no event schedule with that id
+- L4646: Removed event schedule
+- L4653: Set the Discord channel used for Scarlet moderation action logs
+- L4662: Discord action logging channel removed.
+- L4666: Discord action logs will be sent to <#%s>.
+- L4673: Set the Discord account-age alert threshold
+- L4682: Discord account-age alerts disabled.
+- L4686: Discord account-age alerts will flag joins under
+- L4694: Configure the Ticket Tool age-verification auto-response
+- L4705: Invalid channel-name regex. Nothing changed.
+- L4727: Set (or reset) the Ticket Tool age-verification auto-response message
+- L4742: Ticket Tool age-verification auto-response message updated: /  / %s
+- L4750: Configure auto-inviting newly-verified members to a VRChat group
+- L4814: Link your Discord account to your VRChat account
+- L4822: No VRChat user found with id %s
+- L4828: Could not resolve your Discord membership.
+- L4983: Unlink your Discord account from your linked VRChat account
+- L4992: discord.noMembership
+- L4998: discord.unlink.notLinked
+- L5016: Staff: unlink another member's Discord/VRChat link (by Discord user and/or VRChat user)
+- L5026: Could not resolve your Discord membership.
+- L5035: Specify who to unlink: provide `discord-user` and/or `vrchat-user`.
+- L5077: Warn a Discord server member
+- L5086: The built-in Discord moderation commands are not enabled. /
+- L5092: Please select a valid server member.
+- L5100: Could not find the configured Discord server.
+- L5107: You do not have permission to warn members.
+- L5113: Cannot warn **%s** - they are the server owner.
+- L5120: Cannot warn **%s** - their highest role is equal to or above yours.
+- L5140: Warned **%s**.
+- L5148: Could not DM **%s**; warning was not delivered: %s
+- L5157: Could not DM **%s**; warning was not delivered: %s
+- L5167: Ban a Discord server member
+- L5176: The built-in Discord moderation commands are not enabled. /
+- L5182: Please select a valid server member.
+- L5190: Could not find the configured Discord server.
+- L5198: The bot does not have the **Ban Members** permission in this server.
+- L5204: Cannot ban **%s** — they are the server owner.
+- L5211: Cannot ban **%s** — their highest role is equal to or above mine.
+- L5240: Kick a Discord server member
+- L5249: The built-in Discord moderation commands are not enabled. /
+- L5255: Please select a valid server member.
+- L5263: Could not find the configured Discord server.
+- L5271: The bot does not have the **Kick Members** permission in this server.
+- L5277: Cannot kick **%s** — they are the server owner.
+- L5284: Cannot kick **%s** — their highest role is equal to or above mine.
+
+## Discord UI
+`ScarletDiscordUI.java` — 103 strings
+
+- L94: That group is not watched
+- L97: Set notes for group
+- L132: No moderation tags!
+- L287: Updated manager notes.
+- L313: No VRChat user found with id %s
+- L321: You do not have permission to ban users. / ||(Your admin can enable this by giving your associated VRChat user ban management permissions in the group or with the command `/scarlet-discord-permissions type:Other name:groupex-bans-manage value:Allow`)||
+- L332: This VRChat user is already banned
+- L338: This VRChat user currently has automated/assisted moderation pending, please retry later
+- L345: Failed to ban %s
+- L349: Banned %s
+- L362: No pending ban
+- L395: No pending ban
+- L441: You do not have permission to unban users. / ||(Your admin can enable this by giving your associated VRChat user ban management permissions in the group or with the command `/scarlet-discord-permissions type:Other name:groupex-bans-manage value:Allow`)||
+- L455: No user ids found!
+- L483: No VRChat user found with id %s
+- L491: You do not have permission to unban users. / ||(Your admin can enable this by giving your associated VRChat user ban management permissions in the group or with the command `/scarlet-discord-permissions type:Other name:groupex-bans-manage value:Allow`)||
+- L502: This VRChat user is not banned
+- L508: This VRChat user currently has automated/assisted moderation pending, please retry later
+- L515: Failed to unban %s
+- L519: Unbanned %s
+- L536: You do not have permission to unban users. / ||(Your admin can enable this by giving your associated VRChat user ban management permissions in the group or with the command `/scarlet-discord-permissions type:Other name:groupex-bans-manage value:Allow`)||
+- L550: No user ids found!
+- L572: Failed to find the audit event.
+- L578: Event is already redacted.
+- L584: Event redacted.
+- L622: Failed to find the audit event.
+- L628: Event isn't yet redacted.
+- L634: Event unredacted.
+- L655: No VRChat user found with id %s
+- L669: This interaction timed out.
+- L693: You do not have permission to create age gated instances.
+- L734: Failed to create new instance: %s
+- L742: Created [new %s instance](%s)
+- L787: This interaction has timed out.
+- L811: Interaction timed out
+- L831: Interaction timed out
+- L851: Interaction timed out
+- L884: Interaction timed out
+- L1107: Failed to find the audit event.
+- L1112: This event has no user snapshot available.
+- L1145: Failed to find the audit event.
+- L1150: This event has no user snapshot available.
+- L1175: Failed to find the audit event.
+- L1180: This event has no user represented group snapshot available.
+- L1219: This feature is not enabled.
+- L1227: The evidence folder hasn't been specified.
+- L1253: Could not determine audit event id.
+- L1261: No attachments.
+- L1270: Could not load audit event.
+- L1311: File '%s' already exists, skipping.
+- L1320: Saved '%s'.
+- L1325: Exception saving '%s' as '%s'.
+- L1349: No attachments.
+- L1371: Successfully imported watched groups legacy CSV
+- L1376: Failed to import watched groups legacy CSV with unknown reason
+- L1382: Exception while importing %s: %s
+- L1393: Successfully imported watched groups JSON
+- L1398: Failed to import watched groups JSON with unknown reason
+- L1404: Exception while importing %s: %s
+- L1410: File '%s' is not importable.
+- L1449: You do not have permission to kick members.
+- L1461: Could not find the configured Discord server.
+- L1470: The bot does not have the **Kick Members** permission in this server.
+- L1481: Could not retrieve that member — they may have already left.
+- L1487: Member not found — they may have already left.
+- L1493: Cannot kick **%s** — they are the server owner.
+- L1500: Cannot kick **%s** — their highest role is equal to or above mine.
+- L1541: **%s** has been kicked from the server.
+- L1549: Failed to kick **%s**: %s
+- L1580: Kick cancelled.
+- L1592: You do not have permission to ban members.
+- L1604: Could not find the configured Discord server.
+- L1612: The bot does not have the **Ban Members** permission in this server.
+- L1632: Cannot ban **%s** — they are the server owner.
+- L1638: Cannot ban **%s** — their highest role is equal to or above mine.
+- L1685: **%s** has been banned from the server.
+- L1693: Failed to ban **%s**: %s
+- L1731: Ban cancelled.
+- L1769: Could not determine your guild permissions.
+- L1777: You do not have permission to modify audit event moderation state.
+- L1785: Could not determine your guild permissions.
+- L1793: You do not have permission to modify audit event moderation state.
+- L1801: Could not determine your guild permissions.
+- L1809: You do not have permission to modify audit event moderation state.
+- L1817: Could not determine your guild permissions.
+- L1823: You do not have permission to
+- L1832: Could not determine your guild permissions.
+- L1838: You do not have permission to
+- L1847: Could not determine your guild permissions.
+- L1853: You do not have permission to
+- L1861: Could not determine your guild permissions.
+- L1869: You do not have permission to
+- L1877: Could not determine your guild permissions.
+- L1885: You do not have permission to
+- L1897: That moderation flow belongs to a different user or has expired.
+- L1904: That moderation flow belongs to a different user or has expired.
+- L1911: That moderation flow belongs to a different user or has expired.
+- L1918: That moderation flow belongs to a different user or has expired.
+- L1931: That instance creation flow belongs to a different user or has expired.
+- L1938: That instance creation flow belongs to a different user or has expired.
+- L1945: That instance creation flow belongs to a different user or has expired.
+- L1952: This interaction timed out.
+- L1957: That instance creation flow belongs to a different user or has expired.
+
+## Advisories / spoken alerts
+`ScarletEventListener.java` — 4 strings
+
+- L932: Mixed-character name
+- L1015: New account:
+- L1017: New,
+- L1036: Suspicious pronouns:
+

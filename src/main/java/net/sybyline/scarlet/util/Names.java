@@ -134,6 +134,44 @@ public final class Names
         }
     }
 
+    /**
+     * True when every letter in {@code name} belongs to one of {@code scripts}
+     * (ignoring digits, spaces, punctuation and other neutral characters), and there
+     * is at least one letter. Lets TTS detect a name already written in the user's own
+     * script so it can be left native instead of romanised.
+     */
+    public static boolean isEntirelyInScripts(String name, Set<Character.UnicodeScript> scripts)
+    {
+        if (name == null || scripts == null || scripts.isEmpty())
+            return false;
+        boolean sawLetter = false;
+        for (int i = 0; i < name.length(); )
+        {
+            int cp = name.codePointAt(i);
+            i += Character.charCount(cp);
+            if (!Character.isLetter(cp))
+                continue;
+            Character.UnicodeScript sc;
+            try { sc = Character.UnicodeScript.of(cp); }
+            catch (IllegalArgumentException ex) { return false; }
+            if (sc == Character.UnicodeScript.COMMON
+             || sc == Character.UnicodeScript.INHERITED
+             || sc == Character.UnicodeScript.UNKNOWN)
+                continue;
+            if (!scripts.contains(sc))
+                return false;
+            sawLetter = true;
+        }
+        return sawLetter;
+    }
+
+    /** Translated name of a writing system (for spoken script labels), English fallback. */
+    private static String scriptLabel(String english)
+    {
+        String key = "script." + english;
+        return I18n.has(I18n.getLocale(), key) ? I18n.tr(key) : english;
+    }
+
     public static String describeScripts(String name)
     {
         if (name == null || name.isEmpty()) return "";
@@ -155,44 +193,44 @@ public final class Names
             if (friendly != null) scripts.add(friendly);
         }
         if (scripts.isEmpty()) return "";
-        if (scripts.size() >= 3) return "mixed scripts";
+        if (scripts.size() >= 3) return I18n.tr("script.mixed");
         List<String> ordered = new ArrayList<>(scripts);
         if (ordered.size() == 1) return ordered.get(0);
-        return ordered.get(0) + " and " + ordered.get(1);
+        return ordered.get(0) + " " + I18n.tr("script.andWord") + " " + ordered.get(1);
     }
 
     private static String friendlyScriptName(Character.UnicodeScript script)
     {
         switch (script)
         {
-            case CYRILLIC:   return "Cyrillic";
-            case ARABIC:     return "Arabic";
-            case HAN:        return "CJK";
-            case HIRAGANA:   return "Japanese";
-            case KATAKANA:   return "Japanese";
-            case HANGUL:     return "Korean";
-            case THAI:       return "Thai";
-            case HEBREW:     return "Hebrew";
-            case DEVANAGARI: return "Devanagari";
-            case GREEK:      return "Greek";
-            case GEORGIAN:   return "Georgian";
-            case ARMENIAN:   return "Armenian";
-            case MYANMAR:    return "Myanmar";
-            case KHMER:      return "Khmer";
-            case TIBETAN:    return "Tibetan";
-            case ETHIOPIC:   return "Ethiopic";
-            case SINHALA:    return "Sinhala";
-            case TAMIL:      return "Tamil";
-            case TELUGU:     return "Telugu";
-            case KANNADA:    return "Kannada";
-            case MALAYALAM:  return "Malayalam";
-            case BENGALI:    return "Bengali";
-            case GUJARATI:   return "Gujarati";
-            case GURMUKHI:   return "Gurmukhi";
-            case LAO:        return "Lao";
-            case MONGOLIAN:  return "Mongolian";
-            case CHEROKEE:   return "Cherokee";
-            default:         return "non-Latin";
+            case CYRILLIC:   return scriptLabel("Cyrillic");
+            case ARABIC:     return scriptLabel("Arabic");
+            case HAN:        return scriptLabel("CJK");
+            case HIRAGANA:   return scriptLabel("Japanese");
+            case KATAKANA:   return scriptLabel("Japanese");
+            case HANGUL:     return scriptLabel("Korean");
+            case THAI:       return scriptLabel("Thai");
+            case HEBREW:     return scriptLabel("Hebrew");
+            case DEVANAGARI: return scriptLabel("Devanagari");
+            case GREEK:      return scriptLabel("Greek");
+            case GEORGIAN:   return scriptLabel("Georgian");
+            case ARMENIAN:   return scriptLabel("Armenian");
+            case MYANMAR:    return scriptLabel("Myanmar");
+            case KHMER:      return scriptLabel("Khmer");
+            case TIBETAN:    return scriptLabel("Tibetan");
+            case ETHIOPIC:   return scriptLabel("Ethiopic");
+            case SINHALA:    return scriptLabel("Sinhala");
+            case TAMIL:      return scriptLabel("Tamil");
+            case TELUGU:     return scriptLabel("Telugu");
+            case KANNADA:    return scriptLabel("Kannada");
+            case MALAYALAM:  return scriptLabel("Malayalam");
+            case BENGALI:    return scriptLabel("Bengali");
+            case GUJARATI:   return scriptLabel("Gujarati");
+            case GURMUKHI:   return scriptLabel("Gurmukhi");
+            case LAO:        return scriptLabel("Lao");
+            case MONGOLIAN:  return scriptLabel("Mongolian");
+            case CHEROKEE:   return scriptLabel("Cherokee");
+            default:         return scriptLabel("non-Latin");
         }
     }
 

@@ -1,6 +1,7 @@
 package net.sybyline.scarlet.util.tts;
 
 import java.awt.Component;
+import net.sybyline.scarlet.util.I18n;
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
@@ -118,12 +119,20 @@ public class TtsService implements Closeable
      */
     public static String sanitizeName(String displayName)
     {
+        // A name written entirely in the active UI language's own script is left as-is —
+        // the matching voice pronounces it natively (e.g. a Russian voice reads Cyrillic
+        // directly). Latin-based languages keep the romanise-everything path below so an
+        // English/German/Spanish/etc. voice stays intelligible on foreign handles.
+        java.util.Set<Character.UnicodeScript> nativeScripts = I18n.nativeScriptsForLocale(I18n.getLocale());
+        if (!nativeScripts.contains(Character.UnicodeScript.LATIN)
+         && Names.isEntirelyInScripts(displayName, nativeScripts))
+            return displayName.trim();
         String visualAscii = Names.toVisualAscii(displayName);
         if (visualAscii != null)
             return visualAscii;
         String ascii = Names.toAscii(displayName);
         if (ascii == null)
-            return "an unnamed user";
+            return I18n.tr("adv.unnamedUser");
         if (Names.hasMixedLetterScripts(displayName))
             return ascii;
         String scripts = Names.describeScripts(displayName);
@@ -194,7 +203,7 @@ public class TtsService implements Closeable
     public CompletableFuture<Void> submitMixedCharacterNameJoinAlert(String marker)
     {
         return this.submitAlertThenSpeak(marker,
-            "Mixed-letter name joined. Check nameplates.");
+            I18n.tr("adv.ttsMixedCharAlert"));
     }
 
     private CompletableFuture<Void> submitAlertThenSpeak(String marker, String text)

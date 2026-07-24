@@ -1,6 +1,7 @@
 package net.sybyline.scarlet;
 
 import java.io.File;
+import net.sybyline.scarlet.util.FileBackups;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.util.Arrays;
@@ -203,7 +204,7 @@ public class ScarletPronounLists
 
     private void saveFile(File file, String[] values, String label)
     {
-        try (FileWriter fw = new FileWriter(file))
+        try (java.io.Writer fw = FileBackups.writer(file))
         {
             Scarlet.GSON_PRETTY.toJson(values, String[].class, fw);
         }

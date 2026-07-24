@@ -66,7 +66,7 @@ public class ScarletUISplash implements IScarletUISplash
     final Scarlet scarlet;
 
     JWindow splash        = new JWindow();
-    JLabel  splashText    = new JLabel("Loading...", SwingConstants.CENTER);
+    JLabel  splashText    = new JLabel(net.sybyline.scarlet.util.I18n.tr("splash.loading"), SwingConstants.CENTER);
     JLabel  splashSubtext = new JLabel("",           SwingConstants.CENTER);
     Timer   dotTimer;
 

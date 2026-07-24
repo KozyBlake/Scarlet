@@ -72,6 +72,7 @@ import net.sybyline.scarlet.log.ScarletLogger;
 import net.sybyline.scarlet.ui.Swing;
 import net.sybyline.scarlet.util.GithubApi;
 import net.sybyline.scarlet.util.HttpURLInputStream;
+import net.sybyline.scarlet.util.I18n;
 import net.sybyline.scarlet.util.JsonAdapters;
 import net.sybyline.scarlet.util.Location;
 import net.sybyline.scarlet.util.MavenDepsLoader;
@@ -816,6 +817,22 @@ public class Scarlet implements Closeable
         this.settings.saveJson();
         return null;
     }
+    // Set up translations before any UI is built. The lang/ folder lets translators
+    // add or fix languages (dropping in messages_<lang>.properties) without a rebuild,
+    // and receives an up-to-date English template. Then apply the language: blank/
+    // "system" follows the OS language (I18n's default); a specific code overrides it.
+    // Read from the settings JSON directly because this runs ahead of the FileValued
+    // uiLanguage field, which is initialized later.
+    {
+        net.sybyline.scarlet.util.I18n.setExternalDir(new File(dir, "lang"));
+        // Validate community translation files immediately so a broken {0} placeholder
+        // or bad '' escaping is a startup log line, not a runtime surprise in a
+        // language the maintainer can't read.
+        net.sybyline.scarlet.util.I18n.lintExternalAndLog();
+        String lang = this.settings.getString("ui_language");
+        if (lang != null && !lang.trim().isEmpty() && !"system".equalsIgnoreCase(lang.trim()))
+            net.sybyline.scarlet.util.I18n.setLocale(new java.util.Locale(lang.trim().toLowerCase(java.util.Locale.ROOT)));
+    }
     final IScarletUI ui = IScarletUI.create(this);
     final ScarletEventListener eventListener = new ScarletEventListener(this);
     final ScarletPendingModActions pendingModActions = new ScarletPendingModActions(this, new File(dir, "pending_moderation_actions.json"));
@@ -880,23 +897,35 @@ public class Scarlet implements Closeable
     final ScarletVRChatLogs logs = new ScarletVRChatLogs(this.eventListener);
     final ScarletCacheCleanup cacheCleanup = new ScarletCacheCleanup(this);
     String[] last25logs = new String[0];
-    final ScarletSettings.FileValued<Boolean> confirmGroupInvite = this.settings.new FileValuedBoolean("ui_confirm_group_invite", "Confirmation dialog for group invites", false),
-                                     alertForUpdates = this.settings.new FileValuedBoolean("ui_alert_update", "Notify for updates", true),
-                                     alertForPreviewUpdates = this.settings.new FileValuedBoolean("ui_alert_update_preview", "Notify for preview updates", true),
-                                     alertForAnnouncements = this.settings.new FileValuedBoolean("ui_alert_announcement", "Notify for KozyBlake announcements", true),
-                                     showUiDuringLoad = this.settings.new FileValuedBoolean("ui_show_during_load", "Show UI during load", false),
-                                     showCliTab = this.settings.new FileValuedBoolean("ui_show_cli_tab", "Show CLI tab", true),
-                                     discordKickBanEnabled = this.settings.new FileValuedBoolean("discord_kick_ban_enabled", "Enable built-in Discord moderation commands", false),
-                                     discordKickBanPrompted = this.settings.new FileValuedBoolean("discord_kick_ban_prompted", "Discord moderation prompt shown", false),
-                                     autoInviteOnVerify = this.settings.new FileValuedBoolean("auto_invite_group_on_verify", "Auto-invite to VRChat group when the verified role is added", true);
-    final ScarletSettings.FileValued<String> verifiedRoleSf = this.settings.new FileValuedStringPattern("verified_role_snowflake", "Discord role snowflake that triggers VRChat group auto-invite", "1234567890", "\\d{1,20}", true);
-    final ScarletSettings.FileValued<String> membersRoleSf = this.settings.new FileValuedStringPattern("members_role_snowflake", "Discord role snowflake that members must have before being prompted to link their VRChat account", "1234567890", "\\d{1,20}", true);
-    final ScarletSettings.FileValued<String> notVerifiedLinkMessage = this.settings.new FileValuedStringPattern("link_vrchat_manual_verify_message", "Message shown when a member can't be auto-verified and needs manual verification (blank to disable)", "Please open a ticket so an Orchard administrator can verify you manually.", null, true);
-    final ScarletSettings.FileValued<String> autoInviteGroupId = this.settings.new FileValuedStringPattern("auto_invite_group_id", "VRChat group ID to auto-invite verified members to", DEFAULT_AUTO_INVITE_GROUP_ID, VrcIds.P_ID_GROUP, true);
-    final ScarletSettings.FileValued<EnforcementAgeState> enforceInstances18plus = this.settings.new FileValuedEnum<>("enforce_instances_18_plus", "Instances: enforce 18+", EnforcementAgeState.DISABLED);
-    final ScarletSettings.FileValued<EnforcementListState> enforceInstancesWorlds = this.settings.new FileValuedEnum<>("enforce_instances_worlds", "Instances: enforce worlds", EnforcementListState.DISABLED);
-    final ScarletSettings.FileValued<String[]> enforceInstancesWorldList = this.settings.new FileValuedStringArrayPattern("enforce_instances_world_list", "Instances: enforce world list", new String[0], VrcIds.P_ID_WORLD, true);
-    final ScarletSettings.FileValued<Integer> auditPollingInterval = this.settings.new FileValuedIntRange("audit_polling_interval", "Audit polling interval seconds (10-300 inclusive)", 60, 10, 300);
+    final ScarletSettings.FileValued<Boolean> confirmGroupInvite = this.settings.new FileValuedBoolean("ui_confirm_group_invite", I18n.tr("setting.ui_confirm_group_invite"), false),
+                                     alertForUpdates = this.settings.new FileValuedBoolean("ui_alert_update", I18n.tr("setting.ui_alert_update"), true),
+                                     alertForPreviewUpdates = this.settings.new FileValuedBoolean("ui_alert_update_preview", I18n.tr("setting.ui_alert_update_preview"), true),
+                                     alertForAnnouncements = this.settings.new FileValuedBoolean("ui_alert_announcement", I18n.tr("setting.ui_alert_announcement"), true),
+                                     showUiDuringLoad = this.settings.new FileValuedBoolean("ui_show_during_load", I18n.tr("setting.ui_show_during_load"), false),
+                                     showCliTab = this.settings.new FileValuedBoolean("ui_show_cli_tab", I18n.tr("setting.ui_show_cli_tab"), true),
+                                     discordKickBanEnabled = this.settings.new FileValuedBoolean("discord_kick_ban_enabled", I18n.tr("setting.discord_kick_ban_enabled"), false),
+                                     discordKickBanPrompted = this.settings.new FileValuedBoolean("discord_kick_ban_prompted", I18n.tr("setting.discord_kick_ban_prompted"), false),
+                                     autoInviteOnVerify = this.settings.new FileValuedBoolean("auto_invite_group_on_verify", I18n.tr("setting.auto_invite_group_on_verify"), true),
+                                     trainingMode = this.settings.new FileValuedBoolean("training_mode_enabled", I18n.tr("setting.training_mode_enabled"), false);
+    /** Desktop UI language override; blank/"system" follows the operating system language. Applied at startup (restart to change). */
+    final ScarletSettings.FileValued<String> uiLanguage = this.settings.new FileValuedStringChoice("ui_language", I18n.tr("setting.ui_language"), "system", () ->
+    {
+        // "system" (follow the OS language) plus every language we have a translation for.
+        java.util.List<String> langs = new java.util.ArrayList<>();
+        langs.add("system");
+        langs.addAll(I18n.availableLanguages());
+        return langs;
+    });
+    final ScarletSettings.FileValued<String> verifiedRoleSf = this.settings.new FileValuedStringPattern("verified_role_snowflake", I18n.tr("setting.verified_role_snowflake"), "1234567890", "\\d{1,20}", true);
+    final ScarletSettings.FileValued<String> membersRoleSf = this.settings.new FileValuedStringPattern("members_role_snowflake", I18n.tr("setting.members_role_snowflake"), "1234567890", "\\d{1,20}", true);
+    final ScarletSettings.FileValued<String> notVerifiedLinkMessage = this.settings.new FileValuedStringPattern("link_vrchat_manual_verify_message", I18n.tr("setting.link_vrchat_manual_verify_message"), "Please open a ticket so an Orchard administrator can verify you manually.", null, true);
+    final ScarletSettings.FileValued<String> autoInviteGroupId = this.settings.new FileValuedStringPattern("auto_invite_group_id", I18n.tr("setting.auto_invite_group_id"), DEFAULT_AUTO_INVITE_GROUP_ID, VrcIds.P_ID_GROUP, true);
+    final ScarletSettings.FileValued<EnforcementAgeState> enforceInstances18plus = this.settings.new FileValuedEnum<>("enforce_instances_18_plus", I18n.tr("setting.enforce_instances_18_plus"), EnforcementAgeState.DISABLED);
+    final ScarletSettings.FileValued<EnforcementListState> enforceInstancesWorlds = this.settings.new FileValuedEnum<>("enforce_instances_worlds", I18n.tr("setting.enforce_instances_worlds"), EnforcementListState.DISABLED);
+    final ScarletSettings.FileValued<String[]> enforceInstancesWorldList = this.settings.new FileValuedStringArrayPattern("enforce_instances_world_list", I18n.tr("setting.enforce_instances_world_list"), new String[0], VrcIds.P_ID_WORLD, true);
+    final ScarletSettings.FileValued<Integer> auditPollingInterval = this.settings.new FileValuedIntRange("audit_polling_interval", I18n.tr("setting.audit_polling_interval"), 60, 10, 300);
+    /** How much to fade players who have left the instance, as a percent blended toward the background (0 = no dimming). */
+    final ScarletSettings.FileValued<Integer> uiLeftPlayerDim = this.settings.new FileValuedIntRange("ui_left_player_dim_percent", I18n.tr("setting.ui_left_player_dim_percent"), 35, 0, 80);
     final ScarletSettings.FileValued<Void> addAltCreds = this.settings.new FileValuedVoid("Add alternate credentials", "Add", this.vrc::addAlternateCredentials),
                                   removeAltCreds = this.settings.new FileValuedVoid("Remove alternate credentials", "Remove", this.vrc::removeAlternateCredentials),
                                   listAltCreds = this.settings.new FileValuedVoid("List alternate credentials", "List", this.vrc::listAlternateCredentials),
@@ -1032,7 +1061,7 @@ public class Scarlet implements Closeable
         if (dryRun)
             message = "[CLI popup test: no acknowledgement will be saved.]\n\n" + message;
         final String dialogMessage = message;
-        this.splash.splashSubtext("Confirming KozyBlake/Scarlet data folder");
+        this.splash.splashSubtext(I18n.tr("splash.confirmingDataFolder"));
         try
         {
             if (!GraphicsEnvironment.isHeadless())
@@ -1170,13 +1199,13 @@ public class Scarlet implements Closeable
         this.mobile.settingsLoaded();
         this.checkVrchatApiPreflight();
         // Initialize TTS after UI is ready (for dialog parent component)
-        this.splash.splashSubtext("Initializing Text-to-Speech");
+        this.splash.splashSubtext(I18n.tr("splash.initTts"));
         this.initTtsService();
         // Run cache cleanup before any network login so neither VRChat nor Discord
         // are connected yet and no log file is being tailed — nothing is "active".
         this.exec.execute(this.cacheCleanup::maybeCleanup);
         this.cacheCleanup.schedulePeriodicCleanup();
-        this.splash.splashSubtext("Logging in to VRChat Api");
+        this.splash.splashSubtext(I18n.tr("splash.loginVrchat"));
         try
         {
             this.vrc.login();
@@ -1196,7 +1225,7 @@ public class Scarlet implements Closeable
         {
             this.vrc.modalNeedPerms(GroupPermissions.group_audit_view);
         }
-        this.splash.splashSubtext("Checking for updates");
+        this.splash.splashSubtext(I18n.tr("splash.checkingUpdates"));
         this.checkUpdate();
         this.checkAnnouncement();
         // One-time opt-in for built-in Discord moderation commands
@@ -1219,6 +1248,11 @@ public class Scarlet implements Closeable
         }
         this.logs.start();
         this.execIPC.execute(this::runIPC);
+        // Health watchdog: converts Scarlet's silent failure modes (dead log tailer,
+        // expired VRChat session) into visible, recoverable ones. Runs off the worker
+        // pool; each tick is cheap and failures in the watchdog itself are swallowed.
+        this.healthWatchdogStartedMillis = System.currentTimeMillis();
+        this.exec.scheduleWithFixedDelay(this::healthWatchdogTick, 90L, 60L, TimeUnit.SECONDS);
         try
         {
             long filecheck = 3;
@@ -1688,6 +1722,38 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
                 LOG.info(msg);
                 if (out != null) out.accept(msg);
             } break;
+            case "langlint": {
+                for (String lintLine : net.sybyline.scarlet.util.I18n.lintExternal())
+                {
+                    LOG.info(lintLine);
+                    if (out != null) out.accept(lintLine);
+                }
+            } break;
+            case "simulate": {
+                if (this.trainingMode == null || !this.trainingMode.get())
+                {
+                    String msg = I18n.tr("sim.disabled");
+                    if (out != null) out.accept(msg);
+                    break;
+                }
+                String kindAlias = ls.hasNext() ? ls.next() : "";
+                String simName = ls.hasNextLine() ? ls.nextLine().trim() : "";
+                ScarletSimulation.Kind kind = ScarletSimulation.Kind.byAlias(kindAlias);
+                if (kind == null)
+                {
+                    StringBuilder kinds = new StringBuilder();
+                    for (ScarletSimulation.Kind k : ScarletSimulation.Kind.values())
+                        kinds.append(kinds.length() > 0 ? ", " : "").append(k.cliAlias);
+                    String msg = "Usage: simulate <kind> [name]  -  kinds: " + kinds;
+                    if (out != null) out.accept(msg);
+                }
+                else
+                {
+                    String msg = ScarletSimulation.trigger(this, kind, simName, null);
+                    LOG.info(msg);
+                    if (out != null) out.accept(msg);
+                }
+            } break;
             case "explore": {
                 MiscUtils.AWTDesktop.browse(dir.toURI());
                 if (out != null) out.accept("Opening data folder: " + dir.getAbsolutePath());
@@ -1913,27 +1979,167 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
 
     void checkVrchatApiPreflight()
     {
-        this.splash.splashSubtext("Checking VRChat API status");
-        VrchatApiVersionChecker.Report report = VrchatApiVersionChecker.check();
-        this.vrchatApiPreflightReport = report;
-        if (report.failure != null)
-            this.logVrchatApiCheckFailure("VRChat API preflight check", report.failure);
-        switch (report.level)
+        this.splash.splashSubtext(I18n.tr("splash.checkingApiStatus"));
+        // Run off the startup path: this pings JitPack (which can be slow to cold-build a
+        // fresh artifact), and it's non-critical, so it must never hold up launch. It
+        // still catches an upstream vrchatapi-java bump — it just reports as soon as it
+        // finishes rather than blocking, and updates the status / warning when ready.
+        this.exec.execute(() ->
         {
-        case OK:
-            LOG.info(report.message);
-            this.ui.refreshVrchatApiStatus();
+            VrchatApiVersionChecker.Report report = VrchatApiVersionChecker.check();
+            this.vrchatApiPreflightReport = report;
+            if (report.failure != null)
+                this.logVrchatApiCheckFailure("VRChat API preflight check", report.failure);
+            switch (report.level)
+            {
+            case OK:
+            case INFO:
+                LOG.info(report.message);
+                this.ui.refreshVrchatApiStatus();
+                return;
+            case WARNING:
+            default:
+                LOG.warn(report.message);
+                this.showVrchatApiPreflightWarning(report);
+                this.discord.emitOpsAlert("VRChat API version mismatch", report.message, 0xE67E22);
+                this.ui.refreshVrchatApiStatus();
+                return;
+            }
+        });
+    }
+
+    // ── Health watchdog ────────────────────────────────────────────────────
+    // Scarlet's dangerous failures are silent: the log tailer dying or the VRChat
+    // session expiring both just make moderation quietly stop. The watchdog makes
+    // them loud (popup + ops channel) and, for the session, self-healing.
+
+    long healthWatchdogStartedMillis = 0L;
+    private int healthTickCounter = 0;
+    private boolean tailerStallAlerted = false,
+                    sessionLostAlerted = false;
+    private long lastSessionRecoveryAttemptMillis = 0L;
+    /** How long the VRChat log may be silent (while VRChat runs) before alerting. */
+    static final long TAILER_STALL_MILLIS = 5L * 60_000L;
+    /** Minimum spacing between unattended re-login attempts. */
+    static final long SESSION_RECOVERY_RETRY_MILLIS = 10L * 60_000L;
+
+    void healthWatchdogTick()
+    {
+        try
+        {
+            this.checkTailerHealth();
+        }
+        catch (Throwable t)
+        {
+            LOG.debug("Tailer health check failed", t);
+        }
+        // The session probe is a real API call; run it on every 5th tick (~5 min).
+        if (++this.healthTickCounter % 5 == 0) try
+        {
+            this.checkSessionHealth();
+        }
+        catch (Throwable t)
+        {
+            LOG.debug("Session health check failed", t);
+        }
+    }
+
+    private void checkTailerHealth()
+    {
+        if (ScarletUI.findVRChatPids().isEmpty())
+        {
+            // VRChat not running: a quiet log is expected; clear any stall latch so the
+            // next session starts fresh.
+            this.tailerStallAlerted = false;
             return;
-        case INFO:
-            LOG.info(report.message);
-            this.ui.refreshVrchatApiStatus();
+        }
+        long lastEntry = this.logs.lastEntryMillis(),
+             reference = lastEntry > 0L ? lastEntry : this.healthWatchdogStartedMillis,
+             quietMillis = System.currentTimeMillis() - reference;
+        if (quietMillis > TAILER_STALL_MILLIS)
+        {
+            if (!this.tailerStallAlerted)
+            {
+                this.tailerStallAlerted = true;
+                long quietMinutes = quietMillis / 60_000L;
+                LOG.warn("VRChat is running but no log lines have been seen for {} minutes - the log tailer may be stalled", quietMinutes);
+                this.splash.queueFeedbackPopup(null, 10_000L,
+                    I18n.tr("health.tailerStalled"),
+                    I18n.tr("health.tailerStalledDetail", quietMinutes),
+                    java.awt.Color.ORANGE, java.awt.Color.ORANGE);
+                this.discord.emitOpsAlert("VRChat log tailer stalled",
+                    "VRChat is running, but Scarlet has not seen a log line in " + quietMinutes
+                    + " minutes. Instance monitoring (joins/leaves, watched groups, TTS) may be down."
+                    + " Restarting Scarlet usually recovers this.", 0xE74C3C);
+            }
+        }
+        else if (this.tailerStallAlerted && lastEntry > 0L)
+        {
+            this.tailerStallAlerted = false;
+            LOG.info("VRChat log lines are flowing again");
+            this.splash.queueFeedbackPopup(null, 6_000L,
+                I18n.tr("health.tailerRecovered"), null,
+                java.awt.Color.GREEN, java.awt.Color.GREEN);
+            this.discord.emitOpsAlert("VRChat log tailer recovered",
+                "Log lines are flowing again; instance monitoring has resumed.", 0x2ECC71);
+        }
+    }
+
+    private void checkSessionHealth()
+    {
+        if (!this.vrc.isSessionValid())
+            return; // never logged in this run; startup/login flow owns that state
+        Boolean probe = this.vrc.probeSession();
+        if (probe == null)
+            return; // inconclusive (network trouble is not an auth verdict)
+        if (probe.booleanValue())
+        {
+            if (this.sessionLostAlerted)
+            {
+                this.sessionLostAlerted = false;
+                LOG.info("VRChat session is working again");
+                this.splash.queueFeedbackPopup(null, 8_000L,
+                    I18n.tr("health.sessionRecovered"), null,
+                    java.awt.Color.GREEN, java.awt.Color.GREEN);
+                this.discord.emitOpsAlert("VRChat session recovered",
+                    "Scarlet's VRChat session is authorized again; moderation has resumed.", 0x2ECC71);
+            }
             return;
-        case WARNING:
-        default:
-            LOG.warn(report.message);
-            this.showVrchatApiPreflightWarning(report);
-            this.ui.refreshVrchatApiStatus();
+        }
+        // Session is dead. Alert once, then retry unattended recovery with spacing.
+        if (!this.sessionLostAlerted)
+        {
+            this.sessionLostAlerted = true;
+            LOG.warn("VRChat session is no longer authorized; attempting unattended re-login");
+            this.splash.queueFeedbackPopup(null, 10_000L,
+                I18n.tr("health.sessionLost"),
+                I18n.tr("health.sessionLostDetail"),
+                java.awt.Color.PINK, java.awt.Color.PINK);
+            this.discord.emitOpsAlert("VRChat session lost",
+                "VRChat rejected Scarlet's session as unauthorized. Audit polling and moderation"
+                + " actions are failing. Scarlet will attempt unattended re-login with the stored"
+                + " credentials.", 0xE74C3C);
+        }
+        long now = System.currentTimeMillis();
+        if (now - this.lastSessionRecoveryAttemptMillis < SESSION_RECOVERY_RETRY_MILLIS)
             return;
+        this.lastSessionRecoveryAttemptMillis = now;
+        if (this.vrc.tryRecoverSession())
+        {
+            this.sessionLostAlerted = false;
+            LOG.info("Unattended re-login succeeded");
+            this.splash.queueFeedbackPopup(null, 8_000L,
+                I18n.tr("health.sessionRecovered"), null,
+                java.awt.Color.GREEN, java.awt.Color.GREEN);
+            this.discord.emitOpsAlert("VRChat session recovered",
+                "Unattended re-login succeeded; moderation has resumed.", 0x2ECC71);
+        }
+        else
+        {
+            this.discord.emitOpsAlert("VRChat re-login failed",
+                "Unattended re-login did not succeed; will retry every "
+                + (SESSION_RECOVERY_RETRY_MILLIS / 60_000L) + " minutes. If this persists,"
+                + " restart Scarlet and check the stored VRChat credentials.", 0xE74C3C);
         }
     }
 
@@ -2170,9 +2376,13 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
             LOG.info(NAME+" version "+latest+" available");
             if (this.alertForUpdates.get())
             {
-                this.settings.requireConfirmYesNoAsync("Hey, your release is "+VERSION+", there is a new release of "+latest+". Open the download page?", "Update available",
+                this.settings.requireConfirmYesNoAsync(
+                    I18n.tr("ui.updateAvailableMsg1", VERSION, latest) + "\n\n" + I18n.tr("ui.updateAvailableMsg2"),
+                    I18n.tr("ui.updateAvailableTitle"),
                     () -> MiscUtils.AWTDesktop.browse(releaseUri(latest)), null);
             }
+            this.discord.emitOpsAlert("Scarlet update available",
+                "Running " + VERSION + "; " + latest + " has been released.", 0x3498DB);
             this.newerVersion = latest;
         }
         if (result.updateAvailable)

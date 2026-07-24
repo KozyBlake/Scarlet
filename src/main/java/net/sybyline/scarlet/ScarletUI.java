@@ -116,11 +116,13 @@ import io.github.vrchatapi.model.World;
 
 import net.sybyline.scarlet.ScarletSettings.FileValued;
 import net.sybyline.scarlet.ext.AvatarBundleInfo;
+import net.sybyline.scarlet.ext.AvatarSearch;
 import net.sybyline.scarlet.ext.VrcLaunch;
 import net.sybyline.scarlet.ui.Swing;
 import net.sybyline.scarlet.util.Credits;
 import net.sybyline.scarlet.util.Func;
 import net.sybyline.scarlet.util.HttpURLInputStream;
+import net.sybyline.scarlet.util.I18n;
 import net.sybyline.scarlet.util.MiscUtils;
 import net.sybyline.scarlet.util.PropsTable;
 import net.sybyline.scarlet.util.VrcIds;
@@ -149,10 +151,10 @@ public class ScarletUI implements IScarletUI
         this.propstable = new PropsTable<>();
         this.jpanel_settings = new JPanel();
         this.jlabel_lastSavedAt = new JLabel("", JLabel.LEFT);
-        this.jlabel_status = new JLabel(" Ready", JLabel.LEFT);
-        this.jlabel_vrchatApiStatus = new JLabel("Checking bundled VRChat API status...");
-        this.jbutton_vrchatApiCheck = new JButton("Check now");
-        this.jbutton_vrchatApiOpen = new JButton("Open API page");
+        this.jlabel_status = new JLabel(" "+I18n.tr("ui.statusReady"), JLabel.LEFT);
+        this.jlabel_vrchatApiStatus = new JLabel(I18n.tr("ui.checkingBundledVrchatApiStatus"));
+        this.jbutton_vrchatApiCheck = new JButton(I18n.tr("ui.checkNow"));
+        this.jbutton_vrchatApiOpen = new JButton(I18n.tr("ui.openApiPage"));
         this.jbutton_vrchatApiCheck.addActionListener($ -> this.checkVrchatApiStatusManual());
         this.jbutton_vrchatApiOpen.addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.VRCHAT_API_RELEASES_URL)));
         this.ssettings = Collections.synchronizedList(new ArrayList<>());
@@ -194,11 +196,11 @@ public class ScarletUI implements IScarletUI
             JPanel panel = new JPanel(new BorderLayout());
             panel.add(label, BorderLayout.NORTH);
             panel.add(slider, BorderLayout.CENTER);
-            if (JOptionPane.showConfirmDialog(null, panel, "Set UI scale %", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE) == JOptionPane.OK_OPTION)
+            if (JOptionPane.showConfirmDialog(null, panel, I18n.tr("ui.setUiScale"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE) == JOptionPane.OK_OPTION)
             {
                 float newUiScale = 0.01F * (float)slider.getValue();
                 this.scarlet.settings.setObject("ui_scale", Float.class, newUiScale);
-                this.messageModalAsyncInfo(null, "UI scale will take effect on restart", "UI scale updated");
+                this.messageModalAsyncInfo(null, I18n.tr("ui.uiScaleRestart"), I18n.tr("ui.uiScaleUpdated"));
             }
         });
     }
@@ -220,7 +222,9 @@ public class ScarletUI implements IScarletUI
             period = user.getDateJoined().until(LocalDate.now(ZoneOffset.UTC));
         }
         
-        ConnectedPlayer player = this.connectedPlayers.get(id);
+        Map<String, ConnectedPlayer> map = this.trainingView && !isTrainingId(id) ? this.parkedPlayers : this.connectedPlayers;
+        boolean visible = map == this.connectedPlayers;
+        ConnectedPlayer player = map.get(id);
         if (player != null)
         {
             player.name = name;
@@ -236,11 +240,7 @@ public class ScarletUI implements IScarletUI
             player.pronouns = user == null ? null : user.getPronouns();
             player.pronounsFlagged = this.scarlet.eventListener.getShowSuspiciousPronounAdvisory() && PronounValidator.isFlagged(player.pronouns);
             this.updatePending(id, player);
-            if (initialPreamble)
-            {
-                ; // noop
-            }
-            else
+            if (visible && !initialPreamble)
             {
                 this.propstable.updateEntry(player);
             }
@@ -261,21 +261,20 @@ public class ScarletUI implements IScarletUI
             player.pronouns = user == null ? null : user.getPronouns();
             player.pronounsFlagged = this.scarlet.eventListener.getShowSuspiciousPronounAdvisory() && PronounValidator.isFlagged(player.pronouns);
             this.updatePending(id, player);
-            this.connectedPlayers.put(id, player);
-            if (initialPreamble)
+            map.put(id, player);
+            if (visible)
             {
-                this.propstable.addEntrySilently(player);
-            }
-            else
-            {
-                this.propstable.addEntry(player);
+                if (initialPreamble)
+                {
+                    this.propstable.addEntrySilently(player);
+                }
+                else
+                {
+                    this.propstable.addEntry(player);
+                }
             }
         }
-        if (initialPreamble)
-        {
-            ; // noop
-        }
-        else
+        if (visible && !initialPreamble)
         {
             this.fireSort();
             this.updateStatusBar();
@@ -284,7 +283,9 @@ public class ScarletUI implements IScarletUI
 
     public synchronized void playerUpdate(boolean initialPreamble, String id, Func.V1.NE<ConnectedPlayer> update)
     {
-        ConnectedPlayer player = this.connectedPlayers.get(id);
+        Map<String, ConnectedPlayer> map = this.trainingView && !isTrainingId(id) ? this.parkedPlayers : this.connectedPlayers;
+        boolean visible = map == this.connectedPlayers;
+        ConnectedPlayer player = map.get(id);
         if (player == null)
         {
             List<Func.V1.NE<ConnectedPlayer>> pending = this.pendingUpdates.get(id);
@@ -294,30 +295,27 @@ public class ScarletUI implements IScarletUI
             return;
         }
         update.invoke(player);
-        this.propstable.updateEntry(player);
-        if (initialPreamble)
+        if (visible)
         {
-            ; // noop
-        }
-        else
-        {
-            this.fireSort();
+            this.propstable.updateEntry(player);
+            if (!initialPreamble)
+            {
+                this.fireSort();
+            }
         }
     }
 
     public synchronized void playerLeave(boolean initialPreamble, String id, String name, LocalDateTime left)
     {
-        ConnectedPlayer player = this.connectedPlayers.get(id);
+        Map<String, ConnectedPlayer> map = this.trainingView && !isTrainingId(id) ? this.parkedPlayers : this.connectedPlayers;
+        boolean visible = map == this.connectedPlayers;
+        ConnectedPlayer player = map.get(id);
         if (player != null)
         {
             player.name = name;
             player.left = left;
             this.updatePending(id, player);
-            if (initialPreamble)
-            {
-                ; // noop
-            }
-            else
+            if (visible && !initialPreamble)
             {
                 this.propstable.updateEntry(player);
             }
@@ -329,28 +327,46 @@ public class ScarletUI implements IScarletUI
             player.name = name;
             player.left = left;
             this.updatePending(id, player);
-            this.connectedPlayers.put(id, player);
-            if (initialPreamble)
+            map.put(id, player);
+            if (visible)
             {
-                this.propstable.addEntrySilently(player);
-            }
-            else
-            {
-                this.propstable.addEntry(player);
+                if (initialPreamble)
+                {
+                    this.propstable.addEntrySilently(player);
+                }
+                else
+                {
+                    this.propstable.addEntry(player);
+                }
             }
         }
-        if (initialPreamble)
-        {
-            ; // noop
-        }
-        else
+        if (visible && !initialPreamble)
         {
             this.fireSort();
             this.updateStatusBar();
         }
     }
 
+    /**
+     * Event-driven clear: the REAL instance changed or closed. During training this
+     * wipes the parked real state (so exiting training shows current reality) and
+     * leaves the visible training rows untouched; otherwise it clears the live view.
+     */
     public synchronized void clearInstance()
+    {
+        if (this.trainingView)
+        {
+            this.parkedPlayers.clear();
+            return;
+        }
+        this.clearInstanceManual();
+    }
+
+    /**
+     * Manual clear (the toolbar button): clears whatever the user is looking at —
+     * during training that's the simulated rows, never the parked real instance.
+     */
+    synchronized void clearInstanceManual()
     {
         this.connectedPlayers.clear();
         this.propstable.clearEntries();
@@ -365,7 +381,8 @@ public class ScarletUI implements IScarletUI
     @Override
     public synchronized boolean hasActivePlayers()
     {
-        return this.connectedPlayers.values().stream().anyMatch(p -> p.left == null);
+        Map<String, ConnectedPlayer> real = this.trainingView ? this.parkedPlayers : this.connectedPlayers;
+        return real.values().stream().anyMatch(p -> p.left == null);
     }
 
     /** Appends a line of text to the in-app CLI output panel (thread-safe). */
@@ -386,14 +403,15 @@ public class ScarletUI implements IScarletUI
     {
         long present = this.connectedPlayers.values().stream().filter(p -> p.left == null).count();
         long total   = this.connectedPlayers.size();
+        boolean training = this.trainingView;
         Swing.invokeLater(() ->
         {
-            if (total == 0)
-                this.jlabel_status.setText(" No instance loaded");
-            else
-                this.jlabel_status.setText(String.format(
-                    " \u25CF %d present   \u25CB %d left   \u2022 %d total this session",
-                    present, total - present, total));
+            String text = total == 0
+                ? " " + I18n.tr("ui.statusNoInstance")
+                : I18n.tr("ui.statusBar", present, total - present, total);
+            if (training)
+                text = " " + I18n.tr("sim.statusTag") + text;
+            this.jlabel_status.setText(text);
         });
     }
 
@@ -432,6 +450,45 @@ public class ScarletUI implements IScarletUI
     private boolean propstableColumsDirty;
     private volatile boolean exitPromptInFlight;
     private final Map<String, ConnectedPlayer> connectedPlayers;
+    /** True while the training sandbox view replaces the real player list. */
+    private boolean trainingView = false;
+    /** The real instance's players, kept updated in the background during training. */
+    private final Map<String, ConnectedPlayer> parkedPlayers = new HashMap<>();
+
+    /** Simulated players live in their own unmistakable id namespace. */
+    static boolean isTrainingId(String id)
+    {
+        return ScarletSimulation.isTrainingId(id);
+    }
+
+    /** Parks the live player list and presents an empty sandbox for training. */
+    synchronized void enterTrainingView()
+    {
+        if (this.trainingView)
+            return;
+        this.parkedPlayers.clear();
+        this.parkedPlayers.putAll(this.connectedPlayers);
+        this.connectedPlayers.clear();
+        this.propstable.clearEntries();
+        this.trainingView = true;
+        this.updateStatusBar();
+    }
+
+    /** Drops the simulated rows and restores the real instance as it is now. */
+    synchronized void exitTrainingView()
+    {
+        if (!this.trainingView)
+            return;
+        this.trainingView = false;
+        this.connectedPlayers.clear();
+        this.propstable.clearEntries();
+        this.connectedPlayers.putAll(this.parkedPlayers);
+        this.parkedPlayers.clear();
+        for (ConnectedPlayer player : this.connectedPlayers.values())
+            this.propstable.addEntry(player);
+        this.fireSort();
+        this.updateStatusBar();
+    }
     private final Map<String, List<Func.V1.NE<ConnectedPlayer>>> pendingUpdates;
     // ── Settings search ───────────────────────────────────────────────────────
     private JTextField jfield_settingsSearch;
@@ -458,7 +515,7 @@ public class ScarletUI implements IScarletUI
             @Override
             public String toString()
             {
-                return "View";
+                return I18n.tr("ui.actView");
             }
         };
         Period acctdays;
@@ -472,6 +529,13 @@ public class ScarletUI implements IScarletUI
             @Override
             public void actionPerformed(ActionEvent e)
             {
+                if (isTrainingId(ConnectedPlayer.this.id))
+                {
+                    // Simulated players have no real profile page to open.
+                    ScarletUI.this.scarlet.splash.queueFeedbackPopup(ScarletUI.this.jframe, 2_000L,
+                        I18n.tr("sim.actionSimulated"), ConnectedPlayer.this.name);
+                    return;
+                }
                 MiscUtils.AWTDesktop.browse(URI.create("https://vrchat.com/home/user/"+ConnectedPlayer.this.id));
             }
             @Override
@@ -485,13 +549,13 @@ public class ScarletUI implements IScarletUI
             @Override
             public void actionPerformed(ActionEvent e)
             {
-                ScarletUI.this.scarlet.settings.requireConfirmYesNoAsync("Are you sure you want to ban "+ConnectedPlayer.this.name+"?", "Confirm ban",
+                ScarletUI.this.scarlet.settings.requireConfirmYesNoAsync(I18n.tr("ui.confirmBanMsg", ConnectedPlayer.this.name), I18n.tr("ui.confirmBanTitle"),
                     () -> ScarletUI.this.tryBan(ConnectedPlayer.this.id, ConnectedPlayer.this.name), null);
             }
             @Override
             public String toString()
             {
-                return "Ban";
+                return I18n.tr("ui.actBan");
             }
         };
         Action unban = new AbstractAction("Unban") {
@@ -499,13 +563,13 @@ public class ScarletUI implements IScarletUI
             @Override
             public void actionPerformed(ActionEvent e)
             {
-                ScarletUI.this.scarlet.settings.requireConfirmYesNoAsync("Are you sure you want to unban "+ConnectedPlayer.this.name+"?", "Confirm unban",
+                ScarletUI.this.scarlet.settings.requireConfirmYesNoAsync(I18n.tr("ui.confirmUnbanMsg", ConnectedPlayer.this.name), I18n.tr("ui.confirmUnbanTitle"),
                     () -> ScarletUI.this.tryUnban(ConnectedPlayer.this.id, ConnectedPlayer.this.name), null);
             }
             @Override
             public String toString()
             {
-                return "Unban";
+                return I18n.tr("ui.actUnban");
             }
         };
         Action copy = new AbstractAction("Copy") {
@@ -518,7 +582,7 @@ public class ScarletUI implements IScarletUI
             @Override
             public String toString()
             {
-                return "Copy";
+                return I18n.tr("ui.actCopy");
             }
         };
         Action invite = new AbstractAction("Invite") {
@@ -531,7 +595,7 @@ public class ScarletUI implements IScarletUI
             @Override
             public String toString()
             {
-                return "Invite";
+                return I18n.tr("ui.actInvite");
             }
         };
         Color text_color;
@@ -610,22 +674,22 @@ public class ScarletUI implements IScarletUI
     {
         // Properties
         {
-            this.propstable.addProperty("Name", false, true, String.class, $ -> $.name);
-            this.propstable.addProperty("Id", false, true, String.class, $ -> $.id);
-            this.propstable.addProperty("Pronouns", false, true, String.class, $ -> $.pronouns);
-            this.propstable.addProperty("Avatar", false, true, String.class, $ -> $.avatarName);
-            this.propstable.addProperty("Performance", false, true, String.class, $ -> $.avatarInfo==null?null:$.avatarInfo.analysis==null?null:$.avatarInfo.analysis.getPerformanceRating());
-            this.propstable.addProperty("Avatar Stats", true, true, Action.class, $ -> $.avatarStats);
-            this.propstable.addProperty("AcctAge", "Acc-Age", false, true, Period.class, $ -> $.acctdays);
-            this.propstable.addProperty("Joined", false, true, LocalDateTime.class, $ -> $.joined);
-            this.propstable.addProperty("Left", false, true, LocalDateTime.class, $ -> $.left);
-            this.propstable.addProperty("Advisory", false, true, String.class, $ -> $.advisory);
-            this.propstable.addProperty("AgeVer", "18+", false, true, AgeVerificationStatus.class, $ -> $.ageVerificationStatus);
-            this.propstable.addProperty("Profile", true, true, Action.class, $ -> $.profile);
-            this.propstable.addProperty("Copy ID", true, true, Action.class, $ -> $.copy);
-            this.propstable.addProperty("Ban", true, true, Action.class, $ -> $.ban);
-            this.propstable.addProperty("Unban", true, false, Action.class, $ -> $.unban);
-            this.propstable.addProperty("Invite", true, false, Action.class, $ -> $.invite);
+            this.propstable.addProperty(I18n.tr("ui.name"), false, true, String.class, $ -> $.name);
+            this.propstable.addProperty("Id", I18n.tr("ui.colId"), false, true, String.class, $ -> $.id);
+            this.propstable.addProperty("Pronouns", I18n.tr("ui.colPronouns"), false, true, String.class, $ -> $.pronouns);
+            this.propstable.addProperty(I18n.tr("ui.avatar"), false, true, String.class, $ -> $.avatarName);
+            this.propstable.addProperty(I18n.tr("ui.performance"), false, true, String.class, $ -> $.avatarInfo==null?null:$.avatarInfo.analysis==null?null:$.avatarInfo.analysis.getPerformanceRating());
+            this.propstable.addProperty(I18n.tr("ui.avatarStats"), true, true, Action.class, $ -> $.avatarStats);
+            this.propstable.addProperty(I18n.tr("ui.acctage"), "Acc-Age", false, true, Period.class, $ -> $.acctdays);
+            this.propstable.addProperty(I18n.tr("ui.joined"), false, true, LocalDateTime.class, $ -> $.joined);
+            this.propstable.addProperty(I18n.tr("ui.left"), false, true, LocalDateTime.class, $ -> $.left);
+            this.propstable.addProperty(I18n.tr("ui.advisory"), false, true, String.class, $ -> $.advisory);
+            this.propstable.addProperty(I18n.tr("ui.agever"), "18+", false, true, AgeVerificationStatus.class, $ -> $.ageVerificationStatus);
+            this.propstable.addProperty(I18n.tr("ui.profile"), true, true, Action.class, $ -> $.profile);
+            this.propstable.addProperty(I18n.tr("ui.copyId"), true, true, Action.class, $ -> $.copy);
+            this.propstable.addProperty("Ban", I18n.tr("ui.colBan"), true, true, Action.class, $ -> $.ban);
+            this.propstable.addProperty("Unban", I18n.tr("ui.colUnban"), true, false, Action.class, $ -> $.unban);
+            this.propstable.addProperty("Invite", I18n.tr("ui.colInvite"), true, false, Action.class, $ -> $.invite);
             
             this.propstable.getColumnModel().addColumnModelListener(new TableColumnModelListener()
             {
@@ -705,13 +769,24 @@ public class ScarletUI implements IScarletUI
                 @Override
                 public Color getOverrideForegroundColor(ConnectedPlayer element, Color prev)
                 {
-                    // Players who have left are significantly dimmed
+                    // Players who have left are dimmed by a user-configurable amount
+                    // (ui_left_player_dim_percent) blended toward the table background.
                     if (element.left != null)
                     {
-                        Color fg = prev != null ? prev : UIManager.getColor("Table.foreground");
+                        // Dim from the table's BASE text colour, never from `prev`: the
+                        // JTable reuses one renderer component whose foreground carries
+                        // over between cells, so dimming `prev` re-dimmed each successive
+                        // left row on top of the last — players got darker and darker down
+                        // the list. Starting from the base keeps every left row identical.
+                        Color fg = UIManager.getColor("Table.foreground");
+                        if (fg == null) fg = prev;
                         Color bg = UIManager.getColor("Table.background");
                         if (fg != null && bg != null)
-                            return MiscUtils.lerp(fg, bg, 0.55f);
+                        {
+                            Integer dimPct = ScarletUI.this.scarlet.uiLeftPlayerDim.get();
+                            float t = (dimPct == null ? 35 : dimPct) / 100f;
+                            return MiscUtils.lerp(fg, bg, Math.max(0f, Math.min(1f, t)));
+                        }
                     }
                     // Flagged pronouns — bright amber foreground
                     if (element.text_color != null)
@@ -727,46 +802,52 @@ public class ScarletUI implements IScarletUI
         {
             JMenuBar jmenubar = new JMenuBar();
             {
-                JMenu jmenu_file = new JMenu("File");
+                JMenu jmenu_file = new JMenu(I18n.tr("menu.file"));
                 {
-                    jmenu_file.add("Browse data folder").addActionListener($ -> MiscUtils.AWTDesktop.browseDirectory(Scarlet.dir));
-                    jmenu_file.add("Create VRChat instance...").addActionListener($ -> this.uiCreateGroupInstance());
+                    jmenu_file.add(I18n.tr("menu.file.browseData")).addActionListener($ -> MiscUtils.AWTDesktop.browseDirectory(Scarlet.dir));
+                    jmenu_file.add(I18n.tr("menu.file.createInstance")).addActionListener($ -> this.uiCreateGroupInstance());
                     jmenu_file.addSeparator();
-                    jmenu_file.add("Quit").addActionListener($ -> this.uiModalExit());
+                    jmenu_file.add(I18n.tr("menu.file.quit")).addActionListener($ -> this.uiModalExit());
                 }
                 jmenubar.add(jmenu_file);
             }
             {
-                JMenu jmenu_edit = new JMenu("Edit");
+                JMenu jmenu_edit = new JMenu(I18n.tr("menu.edit"));
                 {
                     JMenu jmenu_props = this.propstable.getColumnSelectMenu();
-                    jmenu_props.setText("Columns");
+                    jmenu_props.setText(I18n.tr("ui.columns"));
                     jmenu_edit.add(jmenu_props);
                 }
                 {
-                    JMenu jmenu_importwg = new JMenu("Import watched groups");
+                    JMenu jmenu_importwg = new JMenu(I18n.tr("ui.importWatchedGroups"));
                     {
-                        jmenu_importwg.add("From URL").addActionListener($ -> this.importWG(false));
-                        jmenu_importwg.add("From File").addActionListener($ -> this.importWG(true));
+                        jmenu_importwg.add(I18n.tr("menu.fromUrl")).addActionListener($ -> this.importWG(false));
+                        jmenu_importwg.add(I18n.tr("menu.fromFile")).addActionListener($ -> this.importWG(true));
                     }
                     jmenu_edit.add(jmenu_importwg);
                 }
                 {
-                    JMenu jmenu_advanced = new JMenu("Advanced");
+                    JMenu jmenu_advanced = new JMenu(I18n.tr("ui.advanced"));
                     {
-                        jmenu_advanced.add("Discord: update command list").addActionListener($ -> this.discordUpdateCommandList());
+                        jmenu_advanced.add(I18n.tr("menu.discordUpdateCommands")).addActionListener($ -> this.discordUpdateCommandList());
                     }
                     jmenu_edit.add(jmenu_advanced);
+                    this.simMenuItem = jmenu_edit.add(I18n.tr("sim.menu"));
+                    this.simMenuItem.addActionListener($ -> this.uiSimulateEvent());
+                    // Gated by the Training-mode setting; applied in loadSettings once
+                    // the settings block (initialized after this UI) is available.
+                    this.simMenuItem.setEnabled(false);
+                    this.simMenuItem.setToolTipText(I18n.tr("sim.menuDisabledTooltip"));
                 }
                 jmenubar.add(jmenu_edit);
             }
             {
-                JMenu jmenu_view = new JMenu("View");
+                JMenu jmenu_view = new JMenu(I18n.tr("menu.view"));
                 {
                     // Default to shown; the persisted value is applied in loadSettings(), because
                     // the FileValued settings block is initialized AFTER the UI is built.
-                    this.cliTabMenuItem = new javax.swing.JCheckBoxMenuItem("CLI tab", true);
-                    this.cliTabMenuItem.setToolTipText("Show or hide the CLI tab");
+                    this.cliTabMenuItem = new javax.swing.JCheckBoxMenuItem(I18n.tr("menu.view.cliTab"), true);
+                    this.cliTabMenuItem.setToolTipText(I18n.tr("menu.view.cliTab.tooltip"));
                     this.cliTabMenuItem.addActionListener($ ->
                     {
                         boolean show = this.cliTabMenuItem.isSelected();
@@ -779,26 +860,27 @@ public class ScarletUI implements IScarletUI
                 jmenubar.add(jmenu_view);
             }
             {
-                JMenu jmenu_help = new JMenu("Help");
+                JMenu jmenu_help = new JMenu(I18n.tr("menu.help"));
                 {
                     // ── This fork ──────────────────────────────────────────────
-                    jmenu_help.add("Scarlet: GitHub").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.GITHUB_URL)));
-                    jmenu_help.add("Scarlet: VRChat Group").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.SCARLET_VRCHAT_GROUP_URL)));
+                    jmenu_help.add(I18n.tr("help.github")).addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.GITHUB_URL)));
+                    jmenu_help.add(I18n.tr("help.vrchatGroup")).addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.SCARLET_VRCHAT_GROUP_URL)));
                     jmenu_help.addSeparator();
-                    jmenu_help.add("Scarlet: License").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.LICENSE_URL)));
-                    jmenu_help.add("Scarlet: Credits").addActionListener($ -> this.infoCredits());
-                    jmenu_help.add("Scarlet: Check for updates").addActionListener($ -> this.checkScarletUpdateManual());
-                    jmenu_help.add("Scarlet: Check for announcements").addActionListener($ -> this.checkScarletAnnouncementManual());
-                    jmenu_help.add("VRChat API: Check Status").addActionListener($ -> this.checkVrchatApiStatusManual());
+                    jmenu_help.add(I18n.tr("help.license")).addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.LICENSE_URL)));
+                    jmenu_help.add(I18n.tr("help.credits")).addActionListener($ -> this.infoCredits());
+                    jmenu_help.add(I18n.tr("help.checkUpdates")).addActionListener($ -> this.checkScarletUpdateManual());
+                    jmenu_help.add(I18n.tr("help.checkAnnouncements")).addActionListener($ -> this.checkScarletAnnouncementManual());
+                    jmenu_help.add(I18n.tr("help.checkApiStatus")).addActionListener($ -> this.checkVrchatApiStatusManual());
+                    jmenu_help.add(I18n.tr("help.diagnostics")).addActionListener($ -> this.showDiagnostics());
                     jmenu_help.addSeparator();
-                    jmenu_help.add("Text-to-Speech: Natural Voices (Windows)").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(WinSapiTtsProvider.NaturalVoiceSAPIAdapter_URL)));
+                    jmenu_help.add(I18n.tr("help.naturalVoices")).addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(WinSapiTtsProvider.NaturalVoiceSAPIAdapter_URL)));
                     jmenu_help.addSeparator();
-                    jmenu_help.add("VRChat: Terms of Service").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(VrcWeb.TERMS_OF_SERVICE)));
-                    jmenu_help.add("VRChat: Privacy Policy").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(VrcWeb.PRIVACY_POLICY+"#7")));
-                    jmenu_help.add("VRChat: Community Guidelines").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(VrcWeb.Community.GUIDELINES)));
+                    jmenu_help.add(I18n.tr("help.tos")).addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(VrcWeb.TERMS_OF_SERVICE)));
+                    jmenu_help.add(I18n.tr("help.privacy")).addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(VrcWeb.PRIVACY_POLICY+"#7")));
+                    jmenu_help.add(I18n.tr("help.guidelines")).addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(VrcWeb.Community.GUIDELINES)));
                     jmenu_help.addSeparator();
-                    jmenu_help.add("VRChat Community (unofficial): API Documentation").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.COMMUNITY_URL)));
-                    jmenu_help.add("VRChat Community (unofficial): API Documentation Github").addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.COMMUNITY_GITHUB_URL)));
+                    jmenu_help.add(I18n.tr("help.apiDocs")).addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.COMMUNITY_URL)));
+                    jmenu_help.add(I18n.tr("help.apiDocsGithub")).addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.COMMUNITY_GITHUB_URL)));
                 }
                 jmenubar.add(jmenu_help);
             }
@@ -880,41 +962,41 @@ public class ScarletUI implements IScarletUI
                 return b;
             };
 
-            JButton btn_dataFolder = mkBtn.apply("Data Folder");
-            btn_dataFolder.setToolTipText("Open KozyBlake/Scarlet's data directory");
+            JButton btn_dataFolder = mkBtn.apply(I18n.tr("ui.btnDataFolder"));
+            btn_dataFolder.setToolTipText(I18n.tr("ui.openKozyblakeScarletSDataDirectory"));
             btn_dataFolder.addActionListener($ -> MiscUtils.AWTDesktop.browseDirectory(Scarlet.dir));
             actions.add(btn_dataFolder);
 
-            JButton btn_createInstance = mkBtn.apply("Create Instance");
-            btn_createInstance.setToolTipText("Create a VRChat group instance and open it in the VRChat client");
+            JButton btn_createInstance = mkBtn.apply(I18n.tr("ui.btnCreateInstance"));
+            btn_createInstance.setToolTipText(I18n.tr("ui.createAVrchatGroupInstanceAnd"));
             btn_createInstance.addActionListener($ -> this.uiCreateGroupInstance());
             actions.add(btn_createInstance);
 
-            JButton btn_importUrl = mkBtn.apply("Import Groups (URL)");
-            btn_importUrl.setToolTipText("Import watched groups from a URL");
+            JButton btn_importUrl = mkBtn.apply(I18n.tr("ui.btnImportGroupsUrl"));
+            btn_importUrl.setToolTipText(I18n.tr("ui.importWatchedGroupsFromAUrl"));
             btn_importUrl.addActionListener($ -> this.importWG(false));
             actions.add(btn_importUrl);
 
-            JButton btn_importFile = mkBtn.apply("Import Groups (File)");
-            btn_importFile.setToolTipText("Import watched groups from a local file");
+            JButton btn_importFile = mkBtn.apply(I18n.tr("ui.btnImportGroupsFile"));
+            btn_importFile.setToolTipText(I18n.tr("ui.importWatchedGroupsFromALocal"));
             btn_importFile.addActionListener($ -> this.importWG(true));
             actions.add(btn_importFile);
 
-            JButton btn_discord = mkBtn.apply("Sync Discord");
-            btn_discord.setToolTipText("Push the current slash command list to Discord");
+            JButton btn_discord = mkBtn.apply(I18n.tr("ui.btnSyncDiscord"));
+            btn_discord.setToolTipText(I18n.tr("ui.pushTheCurrentSlashCommandList"));
             btn_discord.addActionListener($ -> this.discordUpdateCommandList());
             actions.add(btn_discord);
 
-            JButton btn_clear = mkBtn.apply("Clear Instance");
-            btn_clear.setToolTipText("Clear the current instance player list");
+            JButton btn_clear = mkBtn.apply(I18n.tr("ui.btnClearInstance"));
+            btn_clear.setToolTipText(I18n.tr("ui.clearTheCurrentInstancePlayerList"));
             btn_clear.addActionListener($ ->
                 this.scarlet.settings.requireConfirmYesNoAsync(
-                    "Clear the instance player list?", "Confirm clear", this::clearInstance, null));
+                    I18n.tr("ui.confirmClearMsg"), I18n.tr("ui.confirmClearTitle"), this::clearInstanceManual, null));
             actions.add(btn_clear);
 
             // TTS pause/resume toggle — state is reflected in label and colour
-            JButton btn_tts = mkBtn.apply("TTS: On");
-            btn_tts.setToolTipText("Pause or resume text-to-speech announcements");
+            JButton btn_tts = mkBtn.apply(I18n.tr("ui.ttsOn"));
+            btn_tts.setToolTipText(I18n.tr("ui.pauseOrResumeTextToSpeech"));
             final java.awt.Color TTS_ON_FG    = new java.awt.Color(120, 220, 130); // green-ish
             final java.awt.Color TTS_PAUSED_FG = new java.awt.Color(220, 120,  60); // amber
             btn_tts.setForeground(TTS_ON_FG);
@@ -924,14 +1006,14 @@ public class ScarletUI implements IScarletUI
                 if (svc == null)
                     return;
                 boolean nowPaused = svc.togglePaused();
-                btn_tts.setText(nowPaused ? "TTS: Paused" : "TTS: On");
+                btn_tts.setText(nowPaused ? I18n.tr("ui.ttsPaused") : I18n.tr("ui.ttsOn"));
                 btn_tts.setForeground(nowPaused ? TTS_PAUSED_FG : TTS_ON_FG);
             });
             actions.add(btn_tts);
 
             // TTS skip — stops the currently-playing clip immediately
-            JButton btn_tts_skip = mkBtn.apply("Skip TTS");
-            btn_tts_skip.setToolTipText("Skip the currently playing TTS announcement");
+            JButton btn_tts_skip = mkBtn.apply(I18n.tr("ui.skipTts"));
+            btn_tts_skip.setToolTipText(I18n.tr("ui.skipTheCurrentlyPlayingTtsAnnouncement"));
             btn_tts_skip.addActionListener($ ->
             {
                 net.sybyline.scarlet.util.tts.TtsService svc = this.scarlet.getTtsService();
@@ -960,8 +1042,8 @@ public class ScarletUI implements IScarletUI
                 emptyCard.setBackground(TAB_BG);
                 JLabel emptyState = new JLabel(
                     "<html><center>\u25CB<br><br>"
-                        + "No instance loaded<br>"
-                        + "<font color='#505064'>Player data will appear here once connected</font>"
+                        + I18n.tr("ui.statusNoInstance") + "<br>"
+                        + "<font color='#505064'>" + I18n.tr("ui.playerDataWillAppear") + "</font>"
                         + "</center></html>",
                     SwingConstants.CENTER);
                 emptyState.setForeground(EMPTY_FG);
@@ -980,7 +1062,7 @@ public class ScarletUI implements IScarletUI
                     Swing.invokeLater(() -> instanceCards.show(instancePanel,
                         this.propstable.getRowCount() == 0 ? "empty" : "table")));
 
-                this.jtabs.addTab("  Instance  ", instancePanel);
+                this.jtabs.addTab("  "+I18n.tr("ui.tabInstance")+"  ", instancePanel);
             }
             {
                 this.jpanel_settings.setLayout(new GridBagLayout());
@@ -996,7 +1078,7 @@ public class ScarletUI implements IScarletUI
                 settingsOuter.setBackground(Swing.BG_INPUT);
                 settingsOuter.setOpaque(true);
                 this.jfield_settingsSearch = new JTextField();
-                this.jfield_settingsSearch.putClientProperty("JTextField.placeholderText", "Search settings\u2026");
+                this.jfield_settingsSearch.putClientProperty("JTextField.placeholderText", I18n.tr("ui.searchSettings"));
                 this.jfield_settingsSearch.setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createMatteBorder(0, 0, 1, 0, Swing.BORDER),
                     BorderFactory.createEmptyBorder(6, 12, 6, 12)));
@@ -1008,7 +1090,7 @@ public class ScarletUI implements IScarletUI
                 });
                 settingsOuter.add(this.jfield_settingsSearch, BorderLayout.NORTH);
                 settingsOuter.add(settingsScroll, BorderLayout.CENTER);
-                this.jtabs.addTab("  Settings  ", settingsOuter);
+                this.jtabs.addTab("  "+I18n.tr("ui.tabSettings")+"  ", settingsOuter);
             }
             // ── CLI tab ────────────────────────────────────────────────────────
             {
@@ -1030,7 +1112,7 @@ public class ScarletUI implements IScarletUI
                 this.jtext_cli.setForeground(CLI_FG);
                 this.jtext_cli.setCaretColor(CLI_FG);
                 this.jtext_cli.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
-                this.jtext_cli.setText("KozyBlake/Scarlet CLI  —  type a command below or run 'help' to list all commands.\n");
+                this.jtext_cli.setText(I18n.tr("ui.cliHeader")+"\n");
 
                 JScrollPane cliScroll = new JScrollPane(this.jtext_cli);
                 cliScroll.setBorder(BorderFactory.createMatteBorder(0, 0, 1, 0, CLI_BORD));
@@ -1055,12 +1137,12 @@ public class ScarletUI implements IScarletUI
                 cliInput.setBackground(Swing.BG_BASE);
                 cliInput.setForeground(CLI_FG);
                 cliInput.setCaretColor(CLI_FG);
-                cliInput.putClientProperty("JTextField.placeholderText", "Enter command (e.g. help)");
+                cliInput.putClientProperty("JTextField.placeholderText", I18n.tr("ui.cliPlaceholder"));
                 cliInput.setBorder(BorderFactory.createCompoundBorder(
                     BorderFactory.createLineBorder(CLI_BORD, 1),
                     BorderFactory.createEmptyBorder(4, 8, 4, 8)));
 
-                JButton cliRunBtn = new JButton("Run");
+                JButton cliRunBtn = new JButton(I18n.tr("ui.run"));
                 cliRunBtn.setFont(new java.awt.Font("Dialog", java.awt.Font.PLAIN, 12));
 
                 java.util.function.Consumer<String> submitCmd = cmd ->
@@ -1083,7 +1165,7 @@ public class ScarletUI implements IScarletUI
 
                 this.tabCli = cliPanel;
                 // Added unconditionally; loadSettings() hides it if the user turned it off.
-                this.jtabs.addTab("  CLI  ", cliPanel);
+                this.jtabs.addTab("  "+I18n.tr("ui.tabCli")+"  ", cliPanel);
             }
             this.jframe.add(this.jtabs, BorderLayout.CENTER);
         }
@@ -1125,7 +1207,7 @@ public class ScarletUI implements IScarletUI
                     g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
                                         java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
                     String txt = jlabel_status.getText();
-                    boolean live = txt != null && !txt.contains("No instance") && !txt.contains("Ready");
+                    boolean live = txt != null && !txt.contains(I18n.tr("ui.noInstance")) && !txt.contains(I18n.tr("ui.ready"));
                     g2.setColor(live ? new java.awt.Color(60, 200, 90) : new java.awt.Color(70, 70, 90));
                     g2.fillOval(2, 2, 8, 8);
                 }
@@ -1256,7 +1338,7 @@ public class ScarletUI implements IScarletUI
         if (show)
         {
             if (idx < 0)
-                this.jtabs.addTab("  CLI  ", this.tabCli);
+                this.jtabs.addTab("  "+I18n.tr("ui.tabCli")+"  ", this.tabCli);
         }
         else if (idx >= 0)
         {
@@ -1270,8 +1352,8 @@ public class ScarletUI implements IScarletUI
             return;
         this.exitPromptInFlight = true;
         this.scarlet.settings.requireConfirmYesNoAsync(
-            "Are you sure you want to quit?",
-            "Confirm exit",
+            I18n.tr("dialog.exit.message"),
+            I18n.tr("dialog.exit.title"),
             this.scarlet::stop,
             () -> this.exitPromptInFlight = false);
     }
@@ -1290,12 +1372,10 @@ public class ScarletUI implements IScarletUI
             List<String> vrchatPids = findVRChatPids();
             if (vrchatPids.isEmpty())
                 break;
-            String[] vrcOptions = { "Check again", "Export anyway", "Cancel" };
+            String[] vrcOptions = { I18n.tr("ui.checkAgain"), I18n.tr("ui.exportAnyway"), I18n.tr("common.cancel") };
             int vrcChoice = JOptionPane.showOptionDialog(this.jframe,
-                "<html>VRChat is currently running (PID" + (vrchatPids.size() > 1 ? "s" : "") + ": <b>"
-              + String.join(", ", vrchatPids) + "</b>).<br><br>"
-              + "Please close VRChat before exporting, then press <b>Check again</b>.</html>",
-                "Close VRChat first", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE, null, vrcOptions, vrcOptions[0]);
+                I18n.tr("ui.vrchatRunningPid", String.join(", ", vrchatPids)),
+                I18n.tr("ui.closeVrchatFirst"), JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE, null, vrcOptions, vrcOptions[0]);
             if (vrcChoice == 1)
                 break;
             if (vrcChoice != 0)
@@ -1313,27 +1393,24 @@ public class ScarletUI implements IScarletUI
                  cachesBytes = ScarletMigration.directorySize(cachesDir) + ScarletMigration.directorySize(ttsDir);
             if (logsBytes + cachesBytes > EXPORT_CLEANUP_PROMPT_BYTES)
             {
-                String[] cleanupOptions = { "Clear them now", "Export anyway", "Cancel" };
+                String[] cleanupOptions = { I18n.tr("ui.clearThemNow"), I18n.tr("ui.exportAnyway"), I18n.tr("common.cancel") };
                 int cleanupChoice = JOptionPane.showOptionDialog(this.jframe,
-                    "<html>Your logs and caches take up <b>" + humanBytes(logsBytes + cachesBytes) + "</b><br>"
-                  + "(logs: " + humanBytes(logsBytes) + ", caches: " + humanBytes(cachesBytes) + ").<br><br>"
-                  + "All of it would be packed into the bundle, making the export very large and slow.<br>"
-                  + "Clear them first? The current session's log file is kept.</html>",
-                    "Large logs and caches", JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE, null, cleanupOptions, cleanupOptions[0]);
+                    I18n.tr("ui.cacheWarning", humanBytes(logsBytes + cachesBytes), humanBytes(logsBytes), humanBytes(cachesBytes)),
+                    I18n.tr("ui.largeLogsCaches"), JOptionPane.YES_NO_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE, null, cleanupOptions, cleanupOptions[0]);
                 if (cleanupChoice != 0 && cleanupChoice != 1)
                     return;
                 if (cleanupChoice == 0)
                 {
                     long freed = this.uiClearLogsAndCaches(logsDir, cachesDir, ttsDir);
                     JOptionPane.showMessageDialog(this.jframe,
-                        "Cleared " + humanBytes(freed) + " of logs and caches.",
-                        "Cleanup complete", JOptionPane.INFORMATION_MESSAGE);
+                        I18n.tr("ui.clearedBytes", humanBytes(freed)),
+                        I18n.tr("ui.cleanupComplete"), JOptionPane.INFORMATION_MESSAGE);
                 }
             }
         }
         JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Export Scarlet migration bundle");
-        chooser.setFileFilter(new FileNameExtensionFilter("Zip bundle", "zip"));
+        chooser.setDialogTitle(I18n.tr("ui.exportBundleChooserTitle"));
+        chooser.setFileFilter(new FileNameExtensionFilter(I18n.tr("ui.zipBundle"), "zip"));
         chooser.setSelectedFile(new File("scarlet-migration.zip"));
         if (chooser.showSaveDialog(this.jframe) != JFileChooser.APPROVE_OPTION)
             return;
@@ -1345,28 +1422,27 @@ public class ScarletUI implements IScarletUI
         // Mandatory PIN (encrypts the whole bundle, AES-GCM) plus an optional move-out.
         JPasswordField pinField = new JPasswordField(16);
         JPasswordField pinConfirm = new JPasswordField(16);
-        JCheckBox movingBox = new JCheckBox("I'm moving to another computer (offer to remove this copy after export)");
+        JCheckBox movingBox = new JCheckBox(I18n.tr("ui.iMMovingToAnotherComputer"));
         JPanel pinPanel = new JPanel(new GridBagLayout());
         GridBagConstraints pgbc = new GridBagConstraints();
         pgbc.gridx = 0; pgbc.gridy = 0; pgbc.gridwidth = 2;
         pgbc.fill = GridBagConstraints.HORIZONTAL; pgbc.weightx = 1.0;
         pgbc.anchor = GridBagConstraints.WEST; pgbc.insets = new Insets(0, 0, 8, 0);
-        pinPanel.add(new JLabel("<html>Set a PIN to encrypt this bundle (required, at least 4 characters).<br>"
-            + "You'll need the same PIN to import it. A lost PIN cannot be recovered.</html>"), pgbc);
+        pinPanel.add(new JLabel(I18n.tr("ui.encryptPinPrompt")), pgbc);
         pgbc.gridy++; pgbc.gridwidth = 1; pgbc.weightx = 0; pgbc.fill = GridBagConstraints.NONE;
         pgbc.insets = new Insets(0, 0, 4, 8);
-        pinPanel.add(new JLabel("PIN"), pgbc);
+        pinPanel.add(new JLabel(I18n.tr("ui.pin")), pgbc);
         pgbc.gridx = 1; pgbc.weightx = 1.0; pgbc.fill = GridBagConstraints.HORIZONTAL;
         pinPanel.add(pinField, pgbc);
         pgbc.gridx = 0; pgbc.gridy++; pgbc.weightx = 0; pgbc.fill = GridBagConstraints.NONE;
         pgbc.insets = new Insets(0, 0, 8, 8);
-        pinPanel.add(new JLabel("Confirm"), pgbc);
+        pinPanel.add(new JLabel(I18n.tr("ui.confirm")), pgbc);
         pgbc.gridx = 1; pgbc.weightx = 1.0; pgbc.fill = GridBagConstraints.HORIZONTAL;
         pinPanel.add(pinConfirm, pgbc);
         pgbc.gridx = 0; pgbc.gridy++; pgbc.gridwidth = 2; pgbc.weightx = 1.0;
         pgbc.fill = GridBagConstraints.HORIZONTAL; pgbc.insets = new Insets(0, 0, 0, 0);
         pinPanel.add(movingBox, pgbc);
-        if (JOptionPane.showConfirmDialog(this.jframe, pinPanel, "Encrypt bundle",
+        if (JOptionPane.showConfirmDialog(this.jframe, pinPanel, I18n.tr("ui.encryptBundle"),
                 JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION)
             return;
         char[] entered = pinField.getPassword();
@@ -1375,14 +1451,14 @@ public class ScarletUI implements IScarletUI
         {
             if (entered.length < 4)
             {
-                JOptionPane.showMessageDialog(this.jframe, "A PIN of at least 4 characters is required to encrypt the bundle.",
-                    "Encrypt bundle", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this.jframe, I18n.tr("ui.aPinOfAtLeast4"),
+                    I18n.tr("ui.encryptBundle"), JOptionPane.WARNING_MESSAGE);
                 return;
             }
             if (!java.util.Arrays.equals(entered, confirm))
             {
-                JOptionPane.showMessageDialog(this.jframe, "The PINs did not match.",
-                    "Encrypt bundle", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this.jframe, I18n.tr("ui.thePinsDidNotMatch"),
+                    I18n.tr("ui.encryptBundle"), JOptionPane.WARNING_MESSAGE);
                 return;
             }
         }
@@ -1395,17 +1471,17 @@ public class ScarletUI implements IScarletUI
 
         // Explorer-style progress dialog: phase, current file, file counts, byte totals.
         final JDialog progressDialog = new JDialog(this.jframe, "Exporting migration bundle", false);
-        final JLabel progressPhase = new JLabel("Preparing...");
+        final JLabel progressPhase = new JLabel(I18n.tr("ui.preparing"));
         final JLabel progressFile = new JLabel(" ");
         final JLabel progressStats = new JLabel(" ");
         final JProgressBar progressBar = new JProgressBar(0, 1000);
-        final JButton progressCancel = new JButton("Cancel");
+        final JButton progressCancel = new JButton(I18n.tr("common.cancel"));
         final AtomicBoolean exportCancelled = new AtomicBoolean(false);
         progressCancel.addActionListener($ ->
         {
             exportCancelled.set(true);
             progressCancel.setEnabled(false);
-            progressCancel.setText("Cancelling...");
+            progressCancel.setText(I18n.tr("ui.cancelling"));
         });
         progressDialog.setDefaultCloseOperation(JDialog.DO_NOTHING_ON_CLOSE);
         progressDialog.addWindowListener(new WindowAdapter()
@@ -1476,33 +1552,28 @@ public class ScarletUI implements IScarletUI
                 {
                     this.scarlet.requestDataWipeOnShutdown();
                     JOptionPane.showMessageDialog(this.jframe,
-                        "<html>Bundle saved to:<br><b>" + file.getAbsolutePath() + "</b><br><br>"
-                      + "This computer's Scarlet data and credentials will be removed as Scarlet quits now.</html>",
-                        "Moving out", JOptionPane.INFORMATION_MESSAGE);
+                        I18n.tr("ui.bundleSavedMoveOut", file.getAbsolutePath()),
+                        I18n.tr("ui.movingOut"), JOptionPane.INFORMATION_MESSAGE);
                     return;
                 }
                 String tail = offerWipe && exportedOk && bundleInData
-                    ? "<br><br>Move-out removal was skipped because the bundle is saved inside the data folder it would delete."
+                    ? I18n.tr("ui.moveOutSkipped")
                     : "";
                 this.messageModalAsyncInfo(null,
-                    "<html>Saved migration bundle to:<br><b>" + file.getAbsolutePath() + "</b><br><br>"
-                  + "Bundled " + summary + ".<br><br>"
-                  + "This bundle is <b>PIN-encrypted</b> - you'll need the same PIN to import it, and a lost PIN cannot be recovered."
-                  + tail
-                  + "</html>",
-                    "Export complete");
+                    I18n.tr("ui.savedBundle", file.getAbsolutePath(), summary, tail),
+                    I18n.tr("ui.exportComplete"));
             }
             catch (Exception ex)
             {
                 if (exportCancelled.get() || ScarletMigration.CANCELLED_MESSAGE.equals(ex.getMessage()))
                 {
                     LOG.info("Migration export to {} cancelled by user", file);
-                    this.messageModalAsyncInfo(null, "Export cancelled - no bundle was written.", "Export cancelled");
+                    this.messageModalAsyncInfo(null, I18n.tr("ui.exportCancelledMsg"), I18n.tr("ui.exportCancelled"));
                 }
                 else
                 {
                     LOG.error("Migration export to {} failed", file, ex);
-                    this.messageModalAsyncInfo(null, "Export failed: " + ex.getMessage(), "Export failed");
+                    this.messageModalAsyncInfo(null, I18n.tr("ui.exportFailed") + ": " + ex.getMessage(), I18n.tr("ui.exportFailed"));
                 }
             }
             finally
@@ -1717,21 +1788,15 @@ public class ScarletUI implements IScarletUI
 
     /**
      * Confirmation for the destructive move-out wipe. The "Keep" button is immediate; the
-     * "Remove all" button is disabled and counts down ~10s before it can be pressed, so the
+     * I18n.tr("ui.removeAll") button is disabled and counts down ~10s before it can be pressed, so the
      * removal can't be triggered reflexively. Must run on the EDT (via {@code Swing.getWait}).
      */
     private boolean uiConfirmTimedWipe()
     {
-        JLabel message = new JLabel("<html><div style='width:390px'>"
-            + "<b>Remove all Scarlet data and credentials from THIS computer?</b><br><br>"
-            + "This deletes this machine's data folder (settings, watched lists, Discord config, metadata) "
-            + "and clears its stored credentials (bot token, VRChat login, 2FA secret, session cookie).<br><br>"
-            + "Do this only after you've imported your bundle on the new computer and confirmed it works. "
-            + "This cannot be undone."
-            + "</div></html>");
+        JLabel message = new JLabel(I18n.tr("ui.removeDataWarning"));
 
-        JButton keepBtn = new JButton("Keep on this computer");
-        JButton removeBtn = new JButton("Remove all settings… 10");
+        JButton keepBtn = new JButton(I18n.tr("ui.keepOnThisComputer"));
+        JButton removeBtn = new JButton(I18n.tr("ui.removeAllSettings")+" 10");
         removeBtn.setEnabled(false);
 
         JOptionPane pane = new JOptionPane(message, JOptionPane.WARNING_MESSAGE,
@@ -1749,11 +1814,11 @@ public class ScarletUI implements IScarletUI
             remaining[0]--;
             if (remaining[0] > 0)
             {
-                removeBtn.setText("Remove all settings… " + remaining[0]);
+                removeBtn.setText(I18n.tr("ui.removeAllSettings")+" " + remaining[0]);
             }
             else
             {
-                removeBtn.setText("Remove all settings");
+                removeBtn.setText(I18n.tr("ui.removeAllSettings"));
                 removeBtn.setEnabled(true);
                 removeBtn.setForeground(new Color(226, 100, 104));
                 timer.stop();
@@ -1771,18 +1836,14 @@ public class ScarletUI implements IScarletUI
     private void uiImportMigrationBundle()
     {
         int proceed = JOptionPane.showConfirmDialog(this.jframe,
-            "<html>Importing a bundle can <b>overwrite</b> this machine's Scarlet data and/or credentials "
-          + "with the contents of the bundle. You'll choose which parts to import next.<br><br>"
-          + "Scarlet will first create an automatic backup of this machine's current data and credentials. "
-          + "If that backup fails, import will stop.<br><br>"
-          + "Scarlet will need to be restarted afterward. Continue?</html>",
-            "Import migration bundle", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+            I18n.tr("ui.importOverwriteWarning"),
+            I18n.tr("ui.importBundleConfirmTitle"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
         if (proceed != JOptionPane.OK_OPTION)
             return;
         JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Import Scarlet migration bundle");
-        chooser.setFileFilter(new FileNameExtensionFilter("Zip bundle", "zip"));
-        if (chooser.showDialog(this.jframe, "Import") != JFileChooser.APPROVE_OPTION)
+        chooser.setDialogTitle(I18n.tr("ui.importBundleChooserTitle"));
+        chooser.setFileFilter(new FileNameExtensionFilter(I18n.tr("ui.zipBundle"), "zip"));
+        if (chooser.showDialog(this.jframe, I18n.tr("ui.importFileBtn")) != JFileChooser.APPROVE_OPTION)
             return;
         final File file = chooser.getSelectedFile();
 
@@ -1798,17 +1859,17 @@ public class ScarletUI implements IScarletUI
                 pgbc.gridx = 0; pgbc.gridy = 0; pgbc.gridwidth = GridBagConstraints.REMAINDER;
                 pgbc.fill = GridBagConstraints.HORIZONTAL; pgbc.weightx = 1.0;
                 pgbc.anchor = GridBagConstraints.WEST; pgbc.insets = new Insets(0, 0, 8, 0);
-                pinPanel.add(new JLabel("This bundle is PIN-protected. Enter its PIN to import."), pgbc);
+                pinPanel.add(new JLabel(I18n.tr("ui.thisBundleIsPinProtectedEnter")), pgbc);
                 pgbc.gridy++;
                 pinPanel.add(pinField, pgbc);
-                if (JOptionPane.showConfirmDialog(this.jframe, pinPanel, "Enter bundle PIN",
+                if (JOptionPane.showConfirmDialog(this.jframe, pinPanel, I18n.tr("ui.enterBundlePin"),
                         JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION)
                     return;
                 enteredPin = pinField.getPassword();
                 if (enteredPin.length == 0)
                 {
-                    JOptionPane.showMessageDialog(this.jframe, "A PIN is required to import this bundle.",
-                        "Import bundle", JOptionPane.WARNING_MESSAGE);
+                    JOptionPane.showMessageDialog(this.jframe, I18n.tr("ui.aPinIsRequiredToImport"),
+                        I18n.tr("ui.importBundleTitle"), JOptionPane.WARNING_MESSAGE);
                     return;
                 }
             }
@@ -1817,7 +1878,7 @@ public class ScarletUI implements IScarletUI
         {
             LOG.error("Could not read migration bundle {}", file, ex);
             JOptionPane.showMessageDialog(this.jframe, "Could not read that bundle: " + ex.getMessage(),
-                "Import bundle", JOptionPane.ERROR_MESSAGE);
+                I18n.tr("ui.importBundleTitle"), JOptionPane.ERROR_MESSAGE);
             return;
         }
 
@@ -1836,15 +1897,13 @@ public class ScarletUI implements IScarletUI
                 ScarletMigration.ImportResult result = ScarletMigration.importBundle(file, options, pin);
                 this.scarlet.stopAfterMigrationImport();
                 JOptionPane.showMessageDialog(this.jframe,
-                    "<html>Import complete (" + result.summary + ").<br><br>"
-                  + "Pre-import backup saved to:<br><b>" + result.backupFile.getAbsolutePath() + "</b><br><br>"
-                  + "Scarlet will quit now. Start it again to load the imported credentials and data.</html>",
-                    "Import complete", JOptionPane.INFORMATION_MESSAGE);
+                    I18n.tr("ui.importCompleteMsg", result.summary, result.backupFile.getAbsolutePath()),
+                    I18n.tr("ui.importComplete"), JOptionPane.INFORMATION_MESSAGE);
             }
             catch (Exception ex)
             {
                 LOG.error("Migration import from {} failed", file, ex);
-                this.messageModalAsyncInfo(null, "Import failed: " + ex.getMessage(), "Import failed");
+                this.messageModalAsyncInfo(null, I18n.tr("ui.importFailed") + ": " + ex.getMessage(), I18n.tr("ui.importFailed"));
             }
             finally
             {
@@ -1856,8 +1915,8 @@ public class ScarletUI implements IScarletUI
 
     private ScarletMigration.ImportOptions uiChooseMigrationImportOptions()
     {
-        JCheckBox importDataFiles = new JCheckBox("Data/config files", true);
-        JCheckBox importCredentials = new JCheckBox("Secure credentials and sign-ins", true);
+        JCheckBox importDataFiles = new JCheckBox(I18n.tr("ui.dataConfigFiles"), true);
+        JCheckBox importCredentials = new JCheckBox(I18n.tr("ui.secureCredentialsAndSignIns"), true);
 
         JPanel panel = new JPanel(new GridBagLayout());
         GridBagConstraints ogbc = new GridBagConstraints();
@@ -1868,7 +1927,7 @@ public class ScarletUI implements IScarletUI
         ogbc.anchor = GridBagConstraints.WEST;
         ogbc.weightx = 1.0;
         ogbc.insets = new Insets(0, 0, 8, 0);
-        panel.add(new JLabel("<html>Select what to import from the bundle.</html>"), ogbc);
+        panel.add(new JLabel("<html>"+I18n.tr("ui.selectWhatToImport")+"</html>"), ogbc);
 
         ogbc.gridy++;
         ogbc.insets = new Insets(0, 0, 2, 0);
@@ -1876,8 +1935,7 @@ public class ScarletUI implements IScarletUI
 
         ogbc.gridy++;
         ogbc.insets = new Insets(0, 24, 8, 0);
-        panel.add(new JLabel("<html>Settings, watched lists, Discord config, metadata, cache/data files. "
-            + "If credentials are not selected, Scarlet skips credential key files so this PC's sign-ins stay usable.</html>"), ogbc);
+        panel.add(new JLabel(I18n.tr("ui.importDataDesc")), ogbc);
 
         ogbc.gridy++;
         ogbc.insets = new Insets(0, 0, 2, 0);
@@ -1885,18 +1943,17 @@ public class ScarletUI implements IScarletUI
 
         ogbc.gridy++;
         ogbc.insets = new Insets(0, 24, 0, 0);
-        panel.add(new JLabel("<html>Discord bot token, VRChat username/password, 2FA secret, session cookies, "
-            + "alternate credentials, Java Preferences, and <code>global-prefs.key</code>.</html>"), ogbc);
+        panel.add(new JLabel(I18n.tr("ui.importCredDesc")), ogbc);
 
         int choice = JOptionPane.showConfirmDialog(this.jframe, panel,
-            "Choose what to import", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            I18n.tr("ui.chooseWhatToImport"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (choice != JOptionPane.OK_OPTION)
             return null;
         if (!importDataFiles.isSelected() && !importCredentials.isSelected())
         {
             JOptionPane.showMessageDialog(this.jframe,
-                "Select at least one part of the bundle to import.",
-                "Import bundle", JOptionPane.WARNING_MESSAGE);
+                I18n.tr("ui.selectAtLeastOne"),
+                I18n.tr("ui.importBundleTitle"), JOptionPane.WARNING_MESSAGE);
             return null;
         }
         return new ScarletMigration.ImportOptions(importDataFiles.isSelected(), importCredentials.isSelected());
@@ -1916,18 +1973,18 @@ public class ScarletUI implements IScarletUI
             {
                 if (MiscUtils.blank(groupId))
                 {
-                    this.showInstanceWizardError("Scarlet does not have a configured VRChat group id yet.", "Create instance");
+                    this.showInstanceWizardError(I18n.tr("ui.noGroupIdConfigured"), I18n.tr("ui.createInstanceTitle"));
                     return;
                 }
                 GroupPermissions requiredPermission = this.requiredCreateInstancePermission(selection.accessType);
                 if (!this.scarlet.vrc.checkSelfUserHasVRChatPermission(requiredPermission))
                 {
-                    this.showInstanceWizardError(this.scarlet.vrc.messageNeedPerms(requiredPermission), "Create instance");
+                    this.showInstanceWizardError(this.scarlet.vrc.messageNeedPerms(requiredPermission), I18n.tr("ui.createInstanceTitle"));
                     return;
                 }
                 if (selection.ageGate && !this.scarlet.vrc.checkSelfUserHasVRChatPermission(GroupPermissions.group_instance_age_gated_create))
                 {
-                    this.showInstanceWizardError(this.scarlet.vrc.messageNeedPerms(GroupPermissions.group_instance_age_gated_create), "Create age-gated instance");
+                    this.showInstanceWizardError(this.scarlet.vrc.messageNeedPerms(GroupPermissions.group_instance_age_gated_create), I18n.tr("ui.createAgeGatedInstance"));
                     return;
                 }
             }
@@ -1935,7 +1992,7 @@ public class ScarletUI implements IScarletUI
             World world = this.scarlet.vrc.getWorld(selection.worldId);
             if (world == null)
             {
-                this.showInstanceWizardError("Scarlet could not find a VRChat world for:\n" + selection.worldId, "Create instance");
+                this.showInstanceWizardError(I18n.tr("ui.couldNotFindWorld") + "\n" + selection.worldId, I18n.tr("ui.createInstanceTitle"));
                 return;
             }
 
@@ -1946,13 +2003,13 @@ public class ScarletUI implements IScarletUI
             }
             catch (ApiException apiex)
             {
-                this.showInstanceWizardError("VRChat rejected the instance request:\n" + this.apiExceptionMessage(apiex), "Create instance");
+                this.showInstanceWizardError(I18n.tr("ui.vrchatRejectedInstance") + "\n" + this.apiExceptionMessage(apiex), I18n.tr("ui.createInstanceTitle"));
                 return;
             }
             catch (Exception ex)
             {
                 LOG.error("Exception creating VRChat group instance", ex);
-                this.showInstanceWizardError("Scarlet could not create the instance:\n" + ex.getMessage(), "Create instance");
+                this.showInstanceWizardError(I18n.tr("ui.couldNotCreateInstance") + "\n" + ex.getMessage(), I18n.tr("ui.createInstanceTitle"));
                 return;
             }
 
@@ -1986,40 +2043,40 @@ public class ScarletUI implements IScarletUI
     private InstanceWizardSelection showCreateGroupInstanceDialog()
     {
         JTextField worldField = new JTextField(34);
-        worldField.setToolTipText("Paste a VRChat world URL or wrld_ id");
+        worldField.setToolTipText(I18n.tr("ui.pasteAVrchatWorldUrlOr"));
         JTextField displayNameField = new JTextField(24);
-        displayNameField.setToolTipText("Optional instance name shown in VRChat");
+        displayNameField.setToolTipText(I18n.tr("ui.optionalInstanceNameShownInVrchat"));
 
         JComboBox<ComboChoice<InstanceKind>> accessType = new JComboBox<>();
         for (InstanceKind kind : InstanceKind.values())
             accessType.addItem(new ComboChoice<>(kind.label, kind));
 
         JComboBox<ComboChoice<InstanceRegion>> region = new JComboBox<>();
-        region.addItem(new ComboChoice<>("US West", InstanceRegion.US));
-        region.addItem(new ComboChoice<>("US East", InstanceRegion.USE));
-        region.addItem(new ComboChoice<>("Europe", InstanceRegion.EU));
-        region.addItem(new ComboChoice<>("Japan", InstanceRegion.JP));
+        region.addItem(new ComboChoice<>(I18n.tr("ui.regionUsWest"), InstanceRegion.US));
+        region.addItem(new ComboChoice<>(I18n.tr("ui.regionUsEast"), InstanceRegion.USE));
+        region.addItem(new ComboChoice<>(I18n.tr("ui.regionEurope"), InstanceRegion.EU));
+        region.addItem(new ComboChoice<>(I18n.tr("ui.regionJapan"), InstanceRegion.JP));
 
         JComboBox<ComboChoice<PerformanceRatings>> avatarGate = new JComboBox<>();
-        avatarGate.addItem(new ComboChoice<>("None", null));
-        avatarGate.addItem(new ComboChoice<>("Poor or better", PerformanceRatings.POOR));
-        avatarGate.addItem(new ComboChoice<>("Medium or better", PerformanceRatings.MEDIUM));
-        avatarGate.addItem(new ComboChoice<>("Good or better", PerformanceRatings.GOOD));
+        avatarGate.addItem(new ComboChoice<>(I18n.tr("ui.gateNone"), null));
+        avatarGate.addItem(new ComboChoice<>(I18n.tr("ui.gatePoor"), PerformanceRatings.POOR));
+        avatarGate.addItem(new ComboChoice<>(I18n.tr("ui.gateMedium"), PerformanceRatings.MEDIUM));
+        avatarGate.addItem(new ComboChoice<>(I18n.tr("ui.gateGood"), PerformanceRatings.GOOD));
 
         JComboBox<ComboChoice<VrcLaunch.LaunchMode>> launchMode = new JComboBox<>();
         launchMode.addItem(new ComboChoice<>("VR", VrcLaunch.LaunchMode.VR));
-        launchMode.addItem(new ComboChoice<>("Desktop", VrcLaunch.LaunchMode.DESKTOP));
+        launchMode.addItem(new ComboChoice<>(I18n.tr("ui.launchDesktop"), VrcLaunch.LaunchMode.DESKTOP));
 
-        JCheckBox queueEnabled = new JCheckBox("Enable queue when the instance is full", true);
-        JCheckBox ageGate = new JCheckBox("Require Age Verified 18+ users", false);
-        JCheckBox openInVrchat = new JCheckBox("Open in VRChat after creating", true);
+        JCheckBox queueEnabled = new JCheckBox(I18n.tr("ui.enableQueueWhenTheInstanceIs"), true);
+        JCheckBox ageGate = new JCheckBox(I18n.tr("ui.requireAgeVerified18Users"), false);
+        JCheckBox openInVrchat = new JCheckBox(I18n.tr("ui.openInVrchatAfter"), true);
         openInVrchat.addItemListener($ -> launchMode.setEnabled(openInVrchat.isSelected()));
-        JCheckBox contentDrones = new JCheckBox("Drones", true);
-        JCheckBox contentEmoji = new JCheckBox("Emoji", true);
-        JCheckBox contentItems = new JCheckBox("Items", true);
-        JCheckBox contentPedestals = new JCheckBox("Pedestals", true);
-        JCheckBox contentPrints = new JCheckBox("Prints", true);
-        JCheckBox contentStickers = new JCheckBox("Stickers", true);
+        JCheckBox contentDrones = new JCheckBox(I18n.tr("ui.drones"), true);
+        JCheckBox contentEmoji = new JCheckBox(I18n.tr("ui.emoji"), true);
+        JCheckBox contentItems = new JCheckBox(I18n.tr("ui.items"), true);
+        JCheckBox contentPedestals = new JCheckBox(I18n.tr("ui.pedestals"), true);
+        JCheckBox contentPrints = new JCheckBox(I18n.tr("ui.prints"), true);
+        JCheckBox contentStickers = new JCheckBox(I18n.tr("ui.stickers"), true);
 
         JPanel panel = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
@@ -2028,18 +2085,18 @@ public class ScarletUI implements IScarletUI
         gbc.fill = GridBagConstraints.HORIZONTAL;
         gbc.weightx = 1.0;
 
-        JTextArea intro = new JTextArea("Scarlet will create the instance using the logged-in VRChat account, then optionally open it. Group types require a configured group and the matching permission; the personal types (Public, Friends+, Friends, Invite+, Invite) are owned by the logged-in account.");
+        JTextArea intro = new JTextArea(I18n.tr("ui.instanceIntro"));
         intro.setEditable(false);
         intro.setLineWrap(true);
         intro.setWrapStyleWord(true);
         intro.setOpaque(false);
         intro.setFocusable(false);
         this.addWizardRow(panel, gbc, 0, null, intro);
-        this.addWizardRow(panel, gbc, 1, "World URL or ID", worldField);
-        this.addWizardRow(panel, gbc, 2, "Who can join", accessType);
-        this.addWizardRow(panel, gbc, 3, "Region", region);
-        this.addWizardRow(panel, gbc, 4, "Avatar gate", avatarGate);
-        this.addWizardRow(panel, gbc, 5, "Instance name", displayNameField);
+        this.addWizardRow(panel, gbc, 1, I18n.tr("ui.rowWorldUrl"), worldField);
+        this.addWizardRow(panel, gbc, 2, I18n.tr("ui.rowWhoCanJoin"), accessType);
+        this.addWizardRow(panel, gbc, 3, I18n.tr("ui.rowRegion"), region);
+        this.addWizardRow(panel, gbc, 4, I18n.tr("ui.rowAvatarGate"), avatarGate);
+        this.addWizardRow(panel, gbc, 5, I18n.tr("ui.instanceName"), displayNameField);
 
         JPanel options = new JPanel(new GridBagLayout());
         GridBagConstraints ogbc = new GridBagConstraints();
@@ -2054,10 +2111,10 @@ public class ScarletUI implements IScarletUI
         options.add(openInVrchat, ogbc);
         ogbc.gridy++;
         JPanel launchModePanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 4, 0));
-        launchModePanel.add(new JLabel("Mode"));
+        launchModePanel.add(new JLabel(I18n.tr("ui.mode")));
         launchModePanel.add(launchMode);
         options.add(launchModePanel, ogbc);
-        this.addWizardRow(panel, gbc, 6, "Options", options);
+        this.addWizardRow(panel, gbc, 6, I18n.tr("ui.rowOptions"), options);
 
         JPanel content = new JPanel(new GridBagLayout());
         GridBagConstraints cgbc = new GridBagConstraints();
@@ -2070,7 +2127,7 @@ public class ScarletUI implements IScarletUI
             cgbc.gridy = i / 3;
             content.add(contentBoxes[i], cgbc);
         }
-        this.addWizardRow(panel, gbc, 7, "Allow content", content);
+        this.addWizardRow(panel, gbc, 7, I18n.tr("ui.rowAllowContent"), content);
 
         // Wrap in a scroll pane capped below typical screen height so the dialog's
         // OK/Cancel buttons stay on-screen no matter how many rows the form has.
@@ -2086,21 +2143,21 @@ public class ScarletUI implements IScarletUI
         String worldId;
         while (true)
         {
-            int result = JOptionPane.showConfirmDialog(this.jframe, wizardScroll, "Create VRChat instance", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+            int result = JOptionPane.showConfirmDialog(this.jframe, wizardScroll, I18n.tr("ui.createVrchatInstance"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
             if (result != JOptionPane.OK_OPTION)
                 return null;
 
             worldId = VrcIds.resolveWorldId(worldField.getText());
             if (!VrcIds.id_world.matcher(worldId == null ? "" : worldId).matches())
             {
-                JOptionPane.showMessageDialog(this.jframe, "Paste a valid VRChat world URL or wrld_ id.", "Create instance", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this.jframe, I18n.tr("ui.pasteAValidVrchatWorldUrl"), I18n.tr("ui.createInstanceTitle"), JOptionPane.WARNING_MESSAGE);
                 continue;
             }
 
             String displayName = displayNameField.getText() == null ? "" : displayNameField.getText().trim();
             if (displayName.length() > 32 || displayName.indexOf('.') >= 0 || displayName.indexOf('/') >= 0 || displayName.indexOf('\\') >= 0)
             {
-                JOptionPane.showMessageDialog(this.jframe, "Instance names can be blank, or up to 32 characters without '.', '/', or '\\'.", "Create instance", JOptionPane.WARNING_MESSAGE);
+                JOptionPane.showMessageDialog(this.jframe, I18n.tr("ui.instanceNamesCanBeBlankOr"), I18n.tr("ui.createInstanceTitle"), JOptionPane.WARNING_MESSAGE);
                 continue;
             }
 
@@ -2227,11 +2284,11 @@ public class ScarletUI implements IScarletUI
             String webLink = MiscUtils.blank(location) ? null : VrcWeb.Home.instance(location);
             JPanel panel = new JPanel(new BorderLayout(0, 8));
             StringBuilder message = new StringBuilder();
-            message.append("Created ");
-            message.append(world == null || MiscUtils.blank(world.getName()) ? "the instance" : world.getName());
+            message.append(I18n.tr("ui.createdWord") + " ");
+            message.append(world == null || MiscUtils.blank(world.getName()) ? I18n.tr("ui.theInstance") : world.getName());
             message.append('.');
             if (launchError != null)
-                message.append("\n\nScarlet created it, but could not open VRChat:\n").append(launchError);
+                message.append("\n\n" + I18n.tr("ui.createdButCouldNotOpen") + "\n").append(launchError);
             panel.add(new JLabel("<html>"+message.toString().replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\n", "<br>")+"</html>"), BorderLayout.NORTH);
             if (webLink != null)
             {
@@ -2242,7 +2299,7 @@ public class ScarletUI implements IScarletUI
 
             if (MiscUtils.blank(location))
             {
-                JOptionPane.showOptionDialog(this.jframe, panel, "Instance created", JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, new Object[] { "Close" }, "Close");
+                JOptionPane.showOptionDialog(this.jframe, panel, I18n.tr("ui.instanceCreatedTitle"), JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, new Object[] { I18n.tr("common.close") }, I18n.tr("common.close"));
                 return;
             }
 
@@ -2250,13 +2307,13 @@ public class ScarletUI implements IScarletUI
             // send yourself an in-client invite to the new instance instead.
             boolean vrchatRunning = !findVRChatPids().isEmpty();
             List<String> optionList = new ArrayList<>();
-            final String INVITE = "Invite myself in VRChat";
-            final String INVITE_USER = "Invite a user...";
-            final String OPEN_VR = "Open in VRChat (VR)";
-            final String OPEN_DESKTOP = "Open in VRChat (Desktop)";
-            final String OPEN_WEB = "Open Web Page";
-            final String COPY = "Copy Link";
-            final String CLOSE = "Close";
+            final String INVITE = I18n.tr("ui.inviteMyselfInVrchat");
+            final String INVITE_USER = I18n.tr("ui.inviteAUser");
+            final String OPEN_VR = I18n.tr("ui.openVrchatVr");
+            final String OPEN_DESKTOP = I18n.tr("ui.openVrchatDesktop");
+            final String OPEN_WEB = I18n.tr("ui.openWebPage");
+            final String COPY = I18n.tr("ui.copyLink");
+            final String CLOSE = I18n.tr("common.close");
             if (vrchatRunning)
                 optionList.add(INVITE);
             optionList.add(INVITE_USER);
@@ -2266,10 +2323,9 @@ public class ScarletUI implements IScarletUI
             optionList.add(COPY);
             optionList.add(CLOSE);
             if (vrchatRunning)
-                panel.add(new JLabel("<html><body style='width: 360px'><i>VRChat is already running — \"Invite myself in VRChat\" "
-                    + "sends an invite to your VRChat account so you can join without relaunching the game.</i></body></html>"), BorderLayout.SOUTH);
+                panel.add(new JLabel(I18n.tr("ui.vrchatRunningInvite")), BorderLayout.SOUTH);
             Object[] options = optionList.toArray();
-            int choice = JOptionPane.showOptionDialog(this.jframe, panel, "Instance created", JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
+            int choice = JOptionPane.showOptionDialog(this.jframe, panel, I18n.tr("ui.instanceCreatedTitle"), JOptionPane.DEFAULT_OPTION, JOptionPane.INFORMATION_MESSAGE, null, options, options[0]);
             if (choice < 0)
                 return;
             String selected = optionList.get(choice);
@@ -2279,9 +2335,9 @@ public class ScarletUI implements IScarletUI
                 {
                     boolean ok = this.scarlet.vrc.selfInvite(location);
                     if (ok)
-                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Invite sent", "Check your invites in VRChat.", Swing.ACCENT, Swing.ACCENT);
+                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, I18n.tr("ui.inviteSent"), I18n.tr("ui.checkYourInvites"), Swing.ACCENT, Swing.ACCENT);
                     else
-                        this.showInstanceWizardError("Scarlet could not send a self-invite.\nThe VRChat account may not be able to see this instance.", "Invite myself");
+                        this.showInstanceWizardError(I18n.tr("ui.selfInviteFail1") + "\n" + I18n.tr("ui.selfInviteFail2"), I18n.tr("ui.inviteMyself"));
                 });
             }
             else if (INVITE_USER.equals(selected))
@@ -2300,7 +2356,7 @@ public class ScarletUI implements IScarletUI
                     catch (Exception ex)
                     {
                         LOG.warn("Failed to launch VRChat instance {}", location, ex);
-                        this.showInstanceWizardError("Scarlet could not open VRChat:\n" + ex.getMessage(), "Open in VRChat");
+                        this.showInstanceWizardError(I18n.tr("ui.couldNotOpenVrchat") + "\n" + ex.getMessage(), I18n.tr("ui.openInVrchat"));
                     }
                 });
             }
@@ -2346,6 +2402,92 @@ public class ScarletUI implements IScarletUI
      * account: fetches the account's friends, shows them in a searchable list
      * (filter by display name or user ID), and invites the selected friend.
      */
+    /**
+     * Non-modal training dialog: fire simulated moderation events on demand so a
+     * trainer can demonstrate Scarlet's alerts (and the Discord side) on a
+     * screenshare without needing anyone to actually join a bad group. Stays open
+     * so multiple events can be fired in sequence.
+     */
+    private javax.swing.JDialog simDialog = null;
+    private javax.swing.JMenuItem simMenuItem = null;
+    private void uiSimulateEvent()
+    {
+        if (this.scarlet.trainingMode == null || !this.scarlet.trainingMode.get())
+        {
+            JOptionPane.showMessageDialog(this.jframe, I18n.tr("sim.disabled"), I18n.tr("sim.title"), JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        if (this.simDialog != null && this.simDialog.isShowing())
+        {
+            this.simDialog.toFront();
+            return;
+        }
+        javax.swing.JDialog dialog = new javax.swing.JDialog(this.jframe, I18n.tr("sim.title"), false);
+        this.simDialog = dialog;
+        JPanel panel = new JPanel(new GridBagLayout());
+        panel.setBorder(BorderFactory.createEmptyBorder(10, 12, 10, 12));
+        GridBagConstraints gbc = new GridBagConstraints();
+        gbc.insets = new Insets(3, 4, 3, 4);
+        gbc.anchor = GridBagConstraints.WEST;
+        gbc.fill = GridBagConstraints.HORIZONTAL;
+
+        JComboBox<ScarletSimulation.Kind> kindCombo = new JComboBox<>(ScarletSimulation.Kind.values());
+        kindCombo.setRenderer(new javax.swing.DefaultListCellRenderer()
+        {
+            private static final long serialVersionUID = 1L;
+            @Override
+            public java.awt.Component getListCellRendererComponent(javax.swing.JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus)
+            {
+                Object shown = value instanceof ScarletSimulation.Kind ? ((ScarletSimulation.Kind)value).display() : value;
+                return super.getListCellRendererComponent(list, shown, index, isSelected, cellHasFocus);
+            }
+        });
+        JTextField nameField = new JTextField("TrainingUser", 18),
+                   detailField = new JTextField("Training Example", 18);
+        JLabel status = new JLabel(" ");
+        JButton triggerBtn = new JButton(I18n.tr("sim.trigger"));
+        triggerBtn.addActionListener($ ->
+        {
+            ScarletSimulation.Kind kind = (ScarletSimulation.Kind)kindCombo.getSelectedItem();
+            String name = nameField.getText(),
+                   detail = detailField.getText();
+            this.scarlet.exec.execute(() ->
+            {
+                String result;
+                try
+                {
+                    result = ScarletSimulation.trigger(this.scarlet, kind, name, detail);
+                }
+                catch (Exception ex)
+                {
+                    LOG.warn("Simulated event failed", ex);
+                    result = ex.toString();
+                }
+                final String result0 = result;
+                SwingUtilities.invokeLater(() -> status.setText(result0));
+            });
+        });
+
+        int row = 0;
+        gbc.gridy = row++; gbc.gridx = 0; panel.add(new JLabel(I18n.tr("sim.kind") + ":"), gbc);
+        gbc.gridx = 1; panel.add(kindCombo, gbc);
+        gbc.gridy = row++; gbc.gridx = 0; panel.add(new JLabel(I18n.tr("sim.name") + ":"), gbc);
+        gbc.gridx = 1; panel.add(nameField, gbc);
+        gbc.gridy = row++; gbc.gridx = 0; panel.add(new JLabel(I18n.tr("sim.detail") + ":"), gbc);
+        gbc.gridx = 1; panel.add(detailField, gbc);
+        gbc.gridy = row++; gbc.gridx = 0; gbc.gridwidth = 2;
+        JLabel note = new JLabel(I18n.tr("sim.note"));
+        note.setFont(note.getFont().deriveFont(Font.PLAIN, 11f));
+        panel.add(note, gbc);
+        gbc.gridy = row++; panel.add(triggerBtn, gbc);
+        gbc.gridy = row++; panel.add(status, gbc);
+
+        dialog.setContentPane(panel);
+        dialog.pack();
+        dialog.setLocationRelativeTo(this.jframe);
+        dialog.setVisible(true);
+    }
+
     private void uiInviteFriendToInstance(String location)
     {
         this.scarlet.execModal.execute(() ->
@@ -2358,7 +2500,7 @@ public class ScarletUI implements IScarletUI
             entries.sort(Comparator.comparing(e -> e.displayName.toLowerCase(java.util.Locale.ROOT)));
             if (entries.isEmpty())
             {
-                this.showInstanceWizardError("The Scarlet account has no friends to invite (or the friend list could not be loaded).", "Invite a user");
+                this.showInstanceWizardError(I18n.tr("ui.noFriendsToInvite"), I18n.tr("ui.inviteAUserTitle"));
                 return;
             }
             Swing.invokeWait(() ->
@@ -2406,13 +2548,13 @@ public class ScarletUI implements IScarletUI
                         list.setSelectedIndex(0);
                 });
                 JPanel panel = new JPanel(new BorderLayout(0, 8));
-                panel.add(new JLabel("Search by display name or user ID:"), BorderLayout.NORTH);
+                panel.add(new JLabel(I18n.tr("ui.searchByDisplayNameOrUser")), BorderLayout.NORTH);
                 JPanel inner = new JPanel(new BorderLayout(0, 6));
                 inner.add(search, BorderLayout.NORTH);
                 inner.add(new JScrollPane(list), BorderLayout.CENTER);
                 panel.add(inner, BorderLayout.CENTER);
                 panel.setPreferredSize(new Dimension(420, 320));
-                if (JOptionPane.showConfirmDialog(this.jframe, panel, "Invite a friend ("+entries.size()+")",
+                if (JOptionPane.showConfirmDialog(this.jframe, panel, I18n.tr("ui.inviteAFriend", entries.size()),
                         JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION)
                     return;
                 FriendEntry picked = list.getSelectedValue();
@@ -2424,16 +2566,102 @@ public class ScarletUI implements IScarletUI
                     switch (result)
                     {
                     case SENT:
-                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Invite sent", "Invited "+picked.displayName+" to the instance.", Swing.ACCENT, Swing.ACCENT);
+                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, I18n.tr("ui.inviteSent"), I18n.tr("ui.invitedToInstance", picked.displayName), Swing.ACCENT, Swing.ACCENT);
                         break;
                     case NOT_FRIENDS:
-                        this.showInstanceWizardError("The Scarlet account is no longer friends with "+picked.displayName+".", "Invite a user");
+                        this.showInstanceWizardError(I18n.tr("ui.noLongerFriends", picked.displayName), I18n.tr("ui.inviteAUserTitle"));
                         break;
                     default:
-                        this.showInstanceWizardError("Scarlet could not invite "+picked.displayName+".\nThe account may not be able to see this instance.", "Invite a user");
+                        this.showInstanceWizardError(I18n.tr("ui.couldNotInviteUser", picked.displayName) + "\n" + I18n.tr("ui.accountMayNotSee"), I18n.tr("ui.inviteAUserTitle"));
                         break;
                     }
                 });
+            });
+        });
+    }
+
+    /**
+     * A read-only snapshot of Scarlet's connectivity and rate-limit state: VRChat
+     * session, the central API rate limiter, audit polling, avatar-search providers,
+     * and Discord. Uses only cached/known state (no extra API calls), so opening it
+     * is free and rate-limit friendly.
+     */
+    private void showDiagnostics()
+    {
+        this.scarlet.execModal.execute(() ->
+        {
+            StringBuilder sb = new StringBuilder();
+            DateTimeFormatter stamp = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm");
+
+            sb.append("VRChat account\n");
+            if (this.scarlet.vrc.isSessionValid())
+            {
+                String name = this.scarlet.vrc.currentUserDisplayName();
+                sb.append("  Logged in: yes").append(name != null ? " ("+name+")" : "").append('\n');
+            }
+            else
+            {
+                sb.append("  Logged in: NO — session invalid or not yet authenticated\n");
+            }
+            long backoff = this.scarlet.vrc.rateLimiter.backoffRemainingMs();
+            sb.append("  API rate limit: ").append(backoff > 0
+                ? "BACKING OFF (" + (backoff / 1000L) + "s remaining)"
+                : "ok").append('\n');
+            sb.append('\n');
+
+            sb.append("Audit log\n");
+            sb.append("  Polling interval: ").append(this.scarlet.auditPollingInterval.get()).append("s\n");
+            java.time.OffsetDateTime lastAudit = this.scarlet.settings.lastAuditQuery.getOrNull();
+            sb.append("  Last query cursor: ").append(lastAudit != null
+                ? lastAudit.atZoneSameInstant(java.time.ZoneId.systemDefault()).format(stamp)
+                : "never").append('\n');
+            sb.append('\n');
+
+            sb.append("Avatar search providers\n");
+            java.util.Map<String, Long> providers = AvatarSearch.providerBackoffRemainingMs();
+            if (providers.isEmpty())
+                sb.append("  (none configured)\n");
+            for (java.util.Map.Entry<String, Long> entry : providers.entrySet())
+            {
+                long ms = entry.getValue().longValue();
+                sb.append("  ").append(ms > 0 ? "[backoff " + (ms / 1000L) + "s] " : "[up]       ")
+                  .append(entry.getKey()).append('\n');
+            }
+            sb.append('\n');
+
+            sb.append("Discord\n");
+            String discordStatus;
+            try
+            {
+                discordStatus = this.scarlet.discord instanceof ScarletDiscordJDA
+                    ? ((ScarletDiscordJDA) this.scarlet.discord).connectionStatus()
+                    : "unknown";
+            }
+            catch (Exception ex)
+            {
+                discordStatus = "unavailable (" + ex.getMessage() + ")";
+            }
+            sb.append("  Status: ").append(discordStatus).append('\n');
+
+            final String report = sb.toString();
+            Swing.invokeWait(() ->
+            {
+                JTextArea area = new JTextArea(report, 20, 60);
+                area.setEditable(false);
+                area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+                area.setCaretPosition(0);
+                JButton copy = new JButton("Copy");
+                copy.addActionListener($ ->
+                {
+                    Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(report), null);
+                    copy.setText("Copied!");
+                });
+                JPanel panel = new JPanel(new BorderLayout(0, 8));
+                panel.add(new JScrollPane(area), BorderLayout.CENTER);
+                JPanel south = new JPanel(new FlowLayout(FlowLayout.RIGHT, 0, 0));
+                south.add(copy);
+                panel.add(south, BorderLayout.SOUTH);
+                JOptionPane.showMessageDialog(this.jframe, panel, I18n.tr("ui.scarletDiagnostics"), JOptionPane.PLAIN_MESSAGE);
             });
         });
     }
@@ -2491,14 +2719,14 @@ public class ScarletUI implements IScarletUI
      */
     enum InstanceKind
     {
-        GROUP_PUBLIC ("Group Public - anyone can join",                 true,  GroupAccessType.PUBLIC,  null,                false),
-        GROUP_PLUS   ("Group+ - friends of people there can join",      true,  GroupAccessType.PLUS,    null,                false),
-        GROUP_MEMBERS("Group Members - members only",                   true,  GroupAccessType.MEMBERS, null,                false),
-        PUBLIC       ("Public - anyone can join",                       false, null,                    InstanceType.PUBLIC,  false),
-        FRIENDS_PLUS ("Friends+ - friends of guests can join",          false, null,                    InstanceType.HIDDEN,  false),
-        FRIENDS      ("Friends - your friends can join",                false, null,                    InstanceType.FRIENDS, false),
-        INVITE_PLUS  ("Invite+ - invite only, guests can invite too",   false, null,                    InstanceType.PRIVATE, true),
-        INVITE       ("Invite - invite only",                           false, null,                    InstanceType.PRIVATE, false),
+        GROUP_PUBLIC (I18n.tr("ui.instGroupPublic"),                 true,  GroupAccessType.PUBLIC,  null,                false),
+        GROUP_PLUS   (I18n.tr("ui.instGroupPlus"),      true,  GroupAccessType.PLUS,    null,                false),
+        GROUP_MEMBERS(I18n.tr("ui.instGroupMembers"),                   true,  GroupAccessType.MEMBERS, null,                false),
+        PUBLIC       (I18n.tr("ui.instPublic"),                       false, null,                    InstanceType.PUBLIC,  false),
+        FRIENDS_PLUS (I18n.tr("ui.instFriendsPlus"),          false, null,                    InstanceType.HIDDEN,  false),
+        FRIENDS      (I18n.tr("ui.instFriends"),                false, null,                    InstanceType.FRIENDS, false),
+        INVITE_PLUS  (I18n.tr("ui.instInvitePlus"),   false, null,                    InstanceType.PRIVATE, true),
+        INVITE       (I18n.tr("ui.instInvite"),                           false, null,                    InstanceType.PRIVATE, false),
         ;
         InstanceKind(String label, boolean group, GroupAccessType groupAccessType, InstanceType instanceType, boolean canRequestInvite)
         {
@@ -2543,9 +2771,9 @@ public class ScarletUI implements IScarletUI
             VrchatApiVersionChecker.Report report = this.scarlet.vrchatApiPreflightReport;
             if (report == null)
             {
-                this.jlabel_vrchatApiStatus.setText("<html><b>VRChat API status:</b> Not checked yet.</html>");
+                this.jlabel_vrchatApiStatus.setText("<html><b>"+I18n.tr("ui.apiStatusLabel")+"</b> "+I18n.tr("ui.apiNotChecked")+"</html>");
                 this.jlabel_vrchatApiStatus.setForeground(Swing.FG_SOFT);
-                this.jlabel_vrchatApiStatus.setToolTipText("Scarlet has not checked the bundled VRChat API version yet.");
+                this.jlabel_vrchatApiStatus.setToolTipText(I18n.tr("ui.scarletHasNotCheckedTheBundled"));
                 this.jbutton_vrchatApiOpen.setEnabled(false);
                 return;
             }
@@ -2566,28 +2794,28 @@ public class ScarletUI implements IScarletUI
 
             if (report.updateAvailable)
             {
-                this.jlabel_vrchatApiStatus.setText("<html><b>VRChat API status:</b> Update available. Bundled "
+                this.jlabel_vrchatApiStatus.setText("<html><b>"+I18n.tr("ui.apiStatusLabel")+"</b> "+I18n.tr("ui.apiUpdateAvailableBundled")+" "
                     + bundled + ", latest " + latest + ".</html>");
                 this.jlabel_vrchatApiStatus.setForeground(new Color(230, 190, 90));
                 this.jbutton_vrchatApiOpen.setEnabled(true);
             }
             else if (report.level == VrchatApiVersionChecker.Level.WARNING)
             {
-                this.jlabel_vrchatApiStatus.setText("<html><b>VRChat API status:</b> "
+                this.jlabel_vrchatApiStatus.setText("<html><b>"+I18n.tr("ui.apiStatusLabel")+"</b> "
                     + report.message.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;") + "</html>");
                 this.jlabel_vrchatApiStatus.setForeground(new Color(230, 140, 120));
                 this.jbutton_vrchatApiOpen.setEnabled(true);
             }
             else if (report.level == VrchatApiVersionChecker.Level.INFO)
             {
-                this.jlabel_vrchatApiStatus.setText("<html><b>VRChat API status:</b> Bundled "
+                this.jlabel_vrchatApiStatus.setText("<html><b>"+I18n.tr("ui.apiStatusLabel")+"</b> "+I18n.tr("ui.apiBundledStatus")+" "
                     + bundled + ". Online check unavailable.</html>");
                 this.jlabel_vrchatApiStatus.setForeground(new Color(170, 190, 220));
                 this.jbutton_vrchatApiOpen.setEnabled(true);
             }
             else
             {
-                this.jlabel_vrchatApiStatus.setText("<html><b>VRChat API status:</b> Up to date (" + bundled + ").</html>");
+                this.jlabel_vrchatApiStatus.setText("<html><b>"+I18n.tr("ui.apiStatusLabel")+"</b> "+I18n.tr("ui.apiUpToDate")+" (" + bundled + ").</html>");
                 this.jlabel_vrchatApiStatus.setForeground(new Color(120, 205, 135));
                 this.jbutton_vrchatApiOpen.setEnabled(true);
             }
@@ -2597,7 +2825,7 @@ public class ScarletUI implements IScarletUI
 
     private void checkVrchatApiStatusManual()
     {
-        this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_500L, "Checking VRChat API", "Fetching upstream version info", Color.WHITE);
+        this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_500L, I18n.tr("ui.checkingVrchatApi"), I18n.tr("ui.fetchingUpstreamInfo"), Color.WHITE);
         this.jbutton_vrchatApiCheck.setEnabled(false);
         this.scarlet.exec.execute(() ->
         {
@@ -2621,7 +2849,7 @@ public class ScarletUI implements IScarletUI
      */
     private void checkScarletUpdateManual()
     {
-        this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_500L, "Checking for Scarlet updates", "Fetching meta.json from " + Scarlet.FORK_GROUP + "/" + Scarlet.FORK_REPOSITORY, Color.WHITE);
+        this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_500L, I18n.tr("ui.checkingScarletUpdates"), I18n.tr("ui.fetchingMetaFrom", Scarlet.FORK_GROUP + "/" + Scarlet.FORK_REPOSITORY), Color.WHITE);
         this.scarlet.exec.execute(() ->
         {
             Scarlet.UpdateCheckResult result = this.scarlet.checkUpdateNow();
@@ -2637,7 +2865,7 @@ public class ScarletUI implements IScarletUI
      */
     private void checkScarletAnnouncementManual()
     {
-        this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_500L, "Checking for Scarlet announcements", "Fetching meta.json from " + Scarlet.FORK_GROUP + "/" + Scarlet.FORK_REPOSITORY, Color.WHITE);
+        this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_500L, I18n.tr("ui.checkingScarletAnnouncements"), I18n.tr("ui.fetchingMetaFrom", Scarlet.FORK_GROUP + "/" + Scarlet.FORK_REPOSITORY), Color.WHITE);
         this.scarlet.exec.execute(() ->
         {
             Scarlet.AnnouncementCheckResult result = this.scarlet.checkAnnouncementNow();
@@ -2651,8 +2879,8 @@ public class ScarletUI implements IScarletUI
         {
             JOptionPane.showMessageDialog(
                 this.jframe,
-                "Could not check for announcements:\n\n" + result.error,
-                "Scarlet Announcement Check",
+                I18n.tr("ui.couldNotCheckAnnouncements") + "\n\n" + result.error,
+                I18n.tr("ui.announcementCheckTitle"),
                 JOptionPane.WARNING_MESSAGE
             );
             return;
@@ -2661,8 +2889,8 @@ public class ScarletUI implements IScarletUI
         {
             JOptionPane.showMessageDialog(
                 this.jframe,
-                "No announcements right now.",
-                "Scarlet Announcement Check",
+                I18n.tr("ui.noAnnouncements"),
+                I18n.tr("ui.announcementCheckTitle"),
                 JOptionPane.INFORMATION_MESSAGE
             );
             return;
@@ -2687,7 +2915,7 @@ public class ScarletUI implements IScarletUI
         {
             String title = ann.title != null && !ann.title.trim().isEmpty()
                 ? ann.title
-                : "Scarlet announcement";
+                : I18n.tr("ui.scarletAnnouncement");
             int icon;
             String severity = ann.severity == null ? "" : ann.severity.trim().toLowerCase();
             switch (severity)
@@ -2711,10 +2939,10 @@ public class ScarletUI implements IScarletUI
             boolean hasLink = announcementUri != null;
             if (ann.url != null && !ann.url.trim().isEmpty() && !hasLink)
                 LOG.warn("Ignoring unsafe announcement link {}", ann.url);
-            String message = hasLink ? ann.message + "\n\nLink: " + announcementUri : ann.message;
+            String message = hasLink ? ann.message + "\n\n" + I18n.tr("ui.linkWord") + ": " + announcementUri : ann.message;
             Object[] options = hasLink
-                ? new Object[] { "OK", "Open link" }
-                : new Object[] { "OK" };
+                ? new Object[] { I18n.tr("common.ok"), I18n.tr("ui.openLink") }
+                : new Object[] { I18n.tr("common.ok") };
             int choice = JOptionPane.showOptionDialog(
                 this.jframe,
                 message,
@@ -2771,8 +2999,8 @@ public class ScarletUI implements IScarletUI
         {
             JOptionPane.showMessageDialog(
                 this.jframe,
-                "Could not check for updates:\n\n" + result.error,
-                "Scarlet Update Check",
+                I18n.tr("ui.couldNotCheckUpdates") + "\n\n" + result.error,
+                I18n.tr("ui.updateCheckTitle"),
                 JOptionPane.WARNING_MESSAGE
             );
             return;
@@ -2782,13 +3010,13 @@ public class ScarletUI implements IScarletUI
             String latest = result.latestVersion;
             int choice = JOptionPane.showOptionDialog(
                 this.jframe,
-                "Hey, your release is " + Scarlet.VERSION + ", there is a new release of " + latest + ".\n\nOpen the download page?",
-                "Scarlet Update Available",
+                I18n.tr("ui.updateAvailableMsg1", Scarlet.VERSION, latest) + "\n\n" + I18n.tr("ui.updateAvailableMsg2"),
+                I18n.tr("ui.updateAvailableTitle"),
                 JOptionPane.YES_NO_OPTION,
                 JOptionPane.INFORMATION_MESSAGE,
                 null,
-                new Object[] { "Open download page", "Later" },
-                "Open download page"
+                new Object[] { I18n.tr("ui.openDownloadPage"), I18n.tr("ui.later") },
+                I18n.tr("ui.openDownloadPage")
             );
             if (choice == JOptionPane.YES_OPTION)
                 MiscUtils.AWTDesktop.browse(Scarlet.releaseUri(latest));
@@ -2797,8 +3025,8 @@ public class ScarletUI implements IScarletUI
         String latest = result.latestVersion == null ? "unknown" : result.latestVersion;
         JOptionPane.showMessageDialog(
             this.jframe,
-            "You're up to date.\n\nRunning: " + Scarlet.VERSION + "\nLatest reported: " + latest,
-            "Scarlet Update Check",
+            I18n.tr("ui.upToDate") + "\n\n" + I18n.tr("ui.runningLabel") + ": " + Scarlet.VERSION + "\n" + I18n.tr("ui.latestReportedLabel") + ": " + latest,
+            I18n.tr("ui.updateCheckTitle"),
             JOptionPane.INFORMATION_MESSAGE
         );
     }
@@ -2822,11 +3050,11 @@ public class ScarletUI implements IScarletUI
             int choice = JOptionPane.showOptionDialog(
                 this.jframe,
                 message.toString(),
-                "VRChat API Status",
+                I18n.tr("ui.apiStatusDialogTitle"),
                 JOptionPane.DEFAULT_OPTION,
                 JOptionPane.WARNING_MESSAGE,
                 null,
-                new Object[] { "OK", "Open API Page" },
+                new Object[] { I18n.tr("common.ok"), I18n.tr("ui.openApiPageAction") },
                 "OK"
             );
             if (choice == 1)
@@ -2836,7 +3064,7 @@ public class ScarletUI implements IScarletUI
         int messageType = report.level == VrchatApiVersionChecker.Level.WARNING
             ? JOptionPane.WARNING_MESSAGE
             : JOptionPane.INFORMATION_MESSAGE;
-        JOptionPane.showMessageDialog(this.jframe, message.toString(), "VRChat API Status", messageType);
+        JOptionPane.showMessageDialog(this.jframe, message.toString(), I18n.tr("ui.apiStatusDialogTitle"), messageType);
     }
 
     private void importWG(boolean isFile)
@@ -2844,10 +3072,10 @@ public class ScarletUI implements IScarletUI
         if (isFile)
         {
             JFileChooser chooser = new JFileChooser();
-            chooser.setFileFilter(new FileNameExtensionFilter("CSV or JSON", "csv", "json"));
-            if (chooser.showDialog(this.jframe, "Import") != JFileChooser.APPROVE_OPTION)
+            chooser.setFileFilter(new FileNameExtensionFilter(I18n.tr("ui.csvOrJson"), "csv", "json"));
+            if (chooser.showDialog(this.jframe, I18n.tr("ui.importFileBtn")) != JFileChooser.APPROVE_OPTION)
             {
-                this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Operation canceled", Color.PINK);
+                this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, I18n.tr("ui.opCanceled"), Color.PINK);
                 return;
             }
             File file = chooser.getSelectedFile();
@@ -2857,71 +3085,71 @@ public class ScarletUI implements IScarletUI
                 {
                     if (this.scarlet.watchedGroups.importLegacyCSV(reader, true))
                     {
-                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Operation succeeded", Color.WHITE);
+                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, I18n.tr("ui.opSucceeded"), Color.WHITE);
                     }
                     else
                     {
-                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Operation failed", Color.PINK);
+                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, I18n.tr("ui.opFailed"), Color.PINK);
                     }
                 }
                 else if (file.getName().endsWith(".json"))
                 {
                     if (this.scarlet.watchedGroups.importJson(reader, true))
                     {
-                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Operation succeeded", Color.WHITE);
+                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, I18n.tr("ui.opSucceeded"), Color.WHITE);
                     }
                     else
                     {
-                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Operation failed", Color.PINK);
+                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, I18n.tr("ui.opFailed"), Color.PINK);
                     }
                 }
                 else
                 {
-                    this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Unrecognized file type", Color.PINK);
+                    this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, I18n.tr("ui.opUnrecognizedType"), Color.PINK);
                 }
             }
             catch (Exception ex)
             {
                 LOG.error("Exception importing watched groups from "+file, ex);
-                this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Operation failed", Color.PINK);
+                this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, I18n.tr("ui.opFailed"), Color.PINK);
             }
         }
         else
         {
-            String url = this.scarlet.settings.requireInput("URL of CSV or JSON", false);
+            String url = this.scarlet.settings.requireInput(I18n.tr("ui.urlOfCsvOrJson"), false);
             try (Reader reader = new InputStreamReader(HttpURLInputStream.get(url, HttpURLInputStream.PUBLIC_ONLY), StandardCharsets.UTF_8))
             {
                 if (url.contains(".csv"))
                 {
                     if (this.scarlet.watchedGroups.importLegacyCSV(reader, true))
                     {
-                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Operation succeeded", Color.WHITE);
+                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, I18n.tr("ui.opSucceeded"), Color.WHITE);
                     }
                     else
                     {
-                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Operation failed", Color.PINK);
+                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, I18n.tr("ui.opFailed"), Color.PINK);
                     }
                 }
                 else if (url.contains(".json"))
                 {
                     if (this.scarlet.watchedGroups.importJson(reader, true))
                     {
-                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Operation succeeded", Color.WHITE);
+                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, I18n.tr("ui.opSucceeded"), Color.WHITE);
                     }
                     else
                     {
-                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Operation failed", Color.PINK);
+                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, I18n.tr("ui.opFailed"), Color.PINK);
                     }
                 }
                 else
                 {
-                    this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Unrecognized file type", Color.PINK);
+                    this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, I18n.tr("ui.opUnrecognizedType"), Color.PINK);
                 }
             }
             catch (Exception ex)
             {
                 LOG.error("Exception importing watched groups from "+url, ex);
-                this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Operation failed", Color.PINK);
+                this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, I18n.tr("ui.opFailed"), Color.PINK);
             }
         }
     }
@@ -2933,15 +3161,15 @@ public class ScarletUI implements IScarletUI
              now = System.currentTimeMillis();
         if (then > (now - 3600_000L))
         {
-            this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Skipped, too fast", Color.PINK);
+            this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, I18n.tr("ui.opSkippedTooFast"), Color.PINK);
             return;
         }
         if (!this.discordUpdateCommandListlastUpdated.compareAndSet(then, now))
         {
-            this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Skipped, file type", Color.PINK);
+            this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, I18n.tr("ui.opSkippedFileType"), Color.PINK);
             return;
         }
-        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, "Operation queued", Color.WHITE);
+        this.scarlet.splash.queueFeedbackPopup(this.jframe, 3_000L, I18n.tr("ui.opQueued"), Color.WHITE);
         this.scarlet.execModal.execute(this.scarlet.discord::updateCommandList);
     }
 
@@ -2996,7 +3224,7 @@ public class ScarletUI implements IScarletUI
         {
             String reason = avatarInfoNote != null && !avatarInfoNote.trim().isEmpty()
                 ? avatarInfoNote
-                : "Avatar info is not yet available for " + name + ".";
+                : I18n.tr("ui.avatarInfoNotYet", name);
             JPanel noInfoPanel = new JPanel(new GridBagLayout());
             GridBagConstraints nic = new GridBagConstraints();
             nic.gridx = 0; nic.gridy = 0; nic.fill = GridBagConstraints.HORIZONTAL; nic.weightx = 1.0;
@@ -3008,9 +3236,7 @@ public class ScarletUI implements IScarletUI
             {
                 String launchOptions = ScarletEventListener.VRCHAT_API_LOGGING_FLAGS + " " + ScarletEventListener.VRCHAT_API_LOGGING_LEVELS;
                 nic.gridy++; nic.insets = new Insets(4, 0, 6, 0);
-                noInfoPanel.add(new JLabel("<html><body style='width: 380px'><b>Get exact avatar data</b><br>"
-                    + "Add these launch options to VRChat in Steam, or launch VRChat through "
-                    + "KozyBlake/Scarlet (which applies them automatically):</body></html>"), nic);
+                noInfoPanel.add(new JLabel(I18n.tr("ui.getExactAvatarDataDesc")), nic);
                 nic.gridy++; nic.insets = new Insets(0, 0, 6, 0);
                 JTextArea optionsArea = new JTextArea(launchOptions, 4, 40);
                 optionsArea.setEditable(false);
@@ -3019,7 +3245,7 @@ public class ScarletUI implements IScarletUI
                 noInfoPanel.add(new JScrollPane(optionsArea), nic);
                 nic.gridy++; nic.fill = GridBagConstraints.NONE; nic.anchor = GridBagConstraints.EAST;
                 nic.insets = new Insets(0, 0, 0, 0);
-                JButton copyOptions = new JButton("Copy launch options");
+                JButton copyOptions = new JButton(I18n.tr("ui.copyLaunchOptions"));
                 copyOptions.addActionListener($ ->
                 {
                     Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(launchOptions), null);
@@ -3027,7 +3253,7 @@ public class ScarletUI implements IScarletUI
                 });
                 noInfoPanel.add(copyOptions, nic);
             }
-            ScarletUI.this.messageModalAsyncInfo(null, noInfoPanel, name + "'s selected avatar's stats");
+            ScarletUI.this.messageModalAsyncInfo(null, noInfoPanel, I18n.tr("ui.selectedAvatarStats", name));
             return;
         }
         // Always-visible basics; the long tail of stats lives in `panel` behind a toggle.
@@ -3054,87 +3280,87 @@ public class ScarletUI implements IScarletUI
             VersionedFile versionedFile = bundleInfo.id;
             ModelFile file = bundleInfo.file;
             FileAnalysisAvatarStats stats = analysis != null ? analysis.getAvatarStats() : null;
-            infoStatsAppend(basicsPanel, basicsConstraints, "Avatar name", ()->avatarDisplayName);
+            infoStatsAppend(basicsPanel, basicsConstraints, I18n.tr("avstat.avatarName"), ()->avatarDisplayName);
             if (avatarInfoNote != null && !avatarInfoNote.trim().isEmpty())
-                infoStatsAppend(basicsPanel, basicsConstraints, "Note", ()->avatarInfoNote);
+                infoStatsAppend(basicsPanel, basicsConstraints, I18n.tr("avstat.note"), ()->avatarInfoNote);
             if (analysis != null)
             {
-                infoStatsAppend(basicsPanel, basicsConstraints, "Performance rating", analysis::getPerformanceRating);
-                infoStatsAppend(basicsPanel, basicsConstraints, "File size", ()->humanBytesObj(analysis.getFileSize()));
-                infoStatsAppend(basicsPanel, basicsConstraints, "Uncompressed size", ()->humanBytesObj(analysis.getUncompressedSize()));
+                infoStatsAppend(basicsPanel, basicsConstraints, I18n.tr("avstat.perfRating"), analysis::getPerformanceRating);
+                infoStatsAppend(basicsPanel, basicsConstraints, I18n.tr("avstat.fileSize"), ()->humanBytesObj(analysis.getFileSize()));
+                infoStatsAppend(basicsPanel, basicsConstraints, I18n.tr("avstat.uncompressedSize"), ()->humanBytesObj(analysis.getUncompressedSize()));
             }
-            infoStatsAppend(panel, constraints, "File statistics");
+            infoStatsAppend(panel, constraints, I18n.tr("avstat.fileStatistics"));
             if (file != null)
             {
-                infoStatsAppend(panel, constraints, "Owner ID", file::getOwnerId);
-                infoStatsAppend(panel, constraints, "Owner name", ()->this.scarlet.vrc.getUserDisplayName(file.getOwnerId()));
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.ownerId"), file::getOwnerId);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.ownerName"), ()->this.scarlet.vrc.getUserDisplayName(file.getOwnerId()));
             }
             if (analysis != null)
             {
-                infoStatsAppend(panel, constraints, "Created at", ()->formatTimestamp(analysis.getCreatedAt()));
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.createdAt"), ()->formatTimestamp(analysis.getCreatedAt()));
             }
             if (versionedFile != null)
             {
-                infoStatsAppend(panel, constraints, "File version", versionedFile::version);
-                infoStatsAppend(panel, constraints, "File qualifier", versionedFile::qualifier);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.fileVersion"), versionedFile::version);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.fileQualifier"), versionedFile::qualifier);
             }
             if (file != null)
             {
-                infoStatsAppend(panel, constraints, "File version count", ()->file.getVersions().size());
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.fileVersionCount"), ()->file.getVersions().size());
             }
             if (stats != null)
             {
-            infoStatsAppend(panel, constraints, "Avatar statistics");
-                infoStatsAppend(panel, constraints, "Animator count", stats::getAnimatorCount);
-                infoStatsAppend(panel, constraints, "Audio source count", stats::getAudioSourceCount);
-                infoStatsAppend(panel, constraints, "Blend shape count", stats::getBlendShapeCount);
-                infoStatsAppend(panel, constraints, "Bone count", stats::getBoneCount);
-                infoStatsAppend(panel, constraints, "Bounds", ()->formatNumberList(stats.getBounds()));
-                infoStatsAppend(panel, constraints, "Camera count", stats::getCameraCount);
-                infoStatsAppend(panel, constraints, "Cloth count", stats::getClothCount);
-                infoStatsAppend(panel, constraints, "Constraint count", stats::getConstraintCount);
-                infoStatsAppend(panel, constraints, "Constraint depth", stats::getConstraintDepth);
-                infoStatsAppend(panel, constraints, "Contact count", stats::getContactCount);
-                infoStatsAppend(panel, constraints, "Custom expressions", stats::getCustomExpressions);
-                infoStatsAppend(panel, constraints, "Customize animation layers", stats::getCustomizeAnimationLayers);
-                infoStatsAppend(panel, constraints, "Enable eye look", stats::getEnableEyeLook);
-                infoStatsAppend(panel, constraints, "Light count", stats::getLightCount);
-                infoStatsAppend(panel, constraints, "Line renderer count", stats::getLineRendererCount);
-                infoStatsAppend(panel, constraints, "Lip sync", stats::getLipSync);
-                infoStatsAppend(panel, constraints, "Material count", stats::getMaterialCount);
-                infoStatsAppend(panel, constraints, "Material slots used", stats::getMaterialSlotsUsed);
-                infoStatsAppend(panel, constraints, "Mesh count", stats::getMeshCount);
-                infoStatsAppend(panel, constraints, "Mesh indices", stats::getMeshIndices);
-                infoStatsAppend(panel, constraints, "Mesh particle max polygons", stats::getMeshParticleMaxPolygons);
-                infoStatsAppend(panel, constraints, "Mesh polygons", stats::getMeshPolygons);
-                infoStatsAppend(panel, constraints, "Mesh vertices", stats::getMeshVertices);
-                infoStatsAppend(panel, constraints, "Particle collision enabled", stats::getParticleCollisionEnabled);
-                infoStatsAppend(panel, constraints, "Particle system count", stats::getParticleSystemCount);
-                infoStatsAppend(panel, constraints, "Particle trails enabled", stats::getParticleTrailsEnabled);
-                infoStatsAppend(panel, constraints, "Phys bone collider count", stats::getPhysBoneColliderCount);
-                infoStatsAppend(panel, constraints, "Phys bone collision check count", stats::getPhysBoneCollisionCheckCount);
-                infoStatsAppend(panel, constraints, "Phys bone component count", stats::getPhysBoneComponentCount);
-                infoStatsAppend(panel, constraints, "Phys bone transform count", stats::getPhysBoneTransformCount);
-                infoStatsAppend(panel, constraints, "Physics colliders", stats::getPhysicsColliders);
-                infoStatsAppend(panel, constraints, "Physics rigidbodies", stats::getPhysicsRigidbodies);
-                infoStatsAppend(panel, constraints, "Skinned mesh count", stats::getSkinnedMeshCount);
-                infoStatsAppend(panel, constraints, "Skinned mesh indices", stats::getSkinnedMeshIndices);
-                infoStatsAppend(panel, constraints, "Skinned mesh polygons", stats::getSkinnedMeshPolygons);
-                infoStatsAppend(panel, constraints, "Skinned mesh vertices", stats::getSkinnedMeshVertices);
-                infoStatsAppend(panel, constraints, "Total cloth vertices", stats::getTotalClothVertices);
-                infoStatsAppend(panel, constraints, "Total indices", stats::getTotalIndices);
-                infoStatsAppend(panel, constraints, "Total max particles", stats::getTotalMaxParticles);
-                infoStatsAppend(panel, constraints, "Total polygons", stats::getTotalPolygons);
-                infoStatsAppend(panel, constraints, "Total texture usage", ()->humanBytesObj(stats.getTotalTextureUsage()));
-                infoStatsAppend(panel, constraints, "Total vertices", stats::getTotalVertices);
-                infoStatsAppend(panel, constraints, "Trail renderer count", stats::getTrailRendererCount);
-                infoStatsAppend(panel, constraints, "Write defaults used", stats::getWriteDefaultsUsed);
+            infoStatsAppend(panel, constraints, I18n.tr("avstat.avatarStatistics"));
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.animatorCount"), stats::getAnimatorCount);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.audioSourceCount"), stats::getAudioSourceCount);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.blendShapeCount"), stats::getBlendShapeCount);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.boneCount"), stats::getBoneCount);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.bounds"), ()->formatNumberList(stats.getBounds()));
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.cameraCount"), stats::getCameraCount);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.clothCount"), stats::getClothCount);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.constraintCount"), stats::getConstraintCount);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.constraintDepth"), stats::getConstraintDepth);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.contactCount"), stats::getContactCount);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.customExpressions"), stats::getCustomExpressions);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.customizeAnimLayers"), stats::getCustomizeAnimationLayers);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.enableEyeLook"), stats::getEnableEyeLook);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.lightCount"), stats::getLightCount);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.lineRendererCount"), stats::getLineRendererCount);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.lipSync"), stats::getLipSync);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.materialCount"), stats::getMaterialCount);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.materialSlotsUsed"), stats::getMaterialSlotsUsed);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.meshCount"), stats::getMeshCount);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.meshIndices"), stats::getMeshIndices);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.meshParticleMaxPoly"), stats::getMeshParticleMaxPolygons);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.meshPolygons"), stats::getMeshPolygons);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.meshVertices"), stats::getMeshVertices);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.particleCollisionEnabled"), stats::getParticleCollisionEnabled);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.particleSystemCount"), stats::getParticleSystemCount);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.particleTrailsEnabled"), stats::getParticleTrailsEnabled);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.physBoneColliderCount"), stats::getPhysBoneColliderCount);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.physBoneCollisionCheckCount"), stats::getPhysBoneCollisionCheckCount);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.physBoneComponentCount"), stats::getPhysBoneComponentCount);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.physBoneTransformCount"), stats::getPhysBoneTransformCount);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.physicsColliders"), stats::getPhysicsColliders);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.physicsRigidbodies"), stats::getPhysicsRigidbodies);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.skinnedMeshCount"), stats::getSkinnedMeshCount);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.skinnedMeshIndices"), stats::getSkinnedMeshIndices);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.skinnedMeshPolygons"), stats::getSkinnedMeshPolygons);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.skinnedMeshVertices"), stats::getSkinnedMeshVertices);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.totalClothVertices"), stats::getTotalClothVertices);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.totalIndices"), stats::getTotalIndices);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.totalMaxParticles"), stats::getTotalMaxParticles);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.totalPolygons"), stats::getTotalPolygons);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.totalTextureUsage"), ()->humanBytesObj(stats.getTotalTextureUsage()));
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.totalVertices"), stats::getTotalVertices);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.trailRendererCount"), stats::getTrailRendererCount);
+                infoStatsAppend(panel, constraints, I18n.tr("avstat.writeDefaultsUsed"), stats::getWriteDefaultsUsed);
             }
             
         }
         // The long tail of stats starts hidden; most people only need the basics.
         panel.setVisible(false);
-        JButton detailsToggle = new JButton("Show all details");
+        JButton detailsToggle = new JButton(I18n.tr("ui.showAllDetails"));
         basicsConstraints.gridx = 0;
         basicsConstraints.gridwidth = 2;
         basicsConstraints.anchor = GridBagConstraints.WEST;
@@ -3163,7 +3389,7 @@ public class ScarletUI implements IScarletUI
         {
             boolean show = !panel.isVisible();
             panel.setVisible(show);
-            detailsToggle.setText(show ? "Hide details" : "Show all details");
+            detailsToggle.setText(show ? I18n.tr("ui.hideDetails") : I18n.tr("ui.showAllDetails"));
             sizeScroll.run();
             root.revalidate();
             root.repaint();
@@ -3171,19 +3397,29 @@ public class ScarletUI implements IScarletUI
             if (window != null)
                 window.pack();
         });
-        ScarletUI.this.messageModalAsyncInfo(null, scroll, name+"'s selected avatar's stats");
+        ScarletUI.this.messageModalAsyncInfo(null, scroll, I18n.tr("ui.selectedAvatarStats", name));
     }
     private static void infoCreditsAppend(JPanel panel, GridBagConstraints constraints, Credits credits)
     {
-        JLabel name = new JLabel(String.format("<html><a href=\"#\">%s</a></html>", credits.name), JLabel.RIGHT),
-               desc = new JLabel(credits.role, JLabel.LEFT);
-        name.setCursor(new Cursor(Cursor.HAND_CURSOR));
-        name.addMouseListener(new MouseAdapter() {
-            @Override
-            public void mouseClicked(MouseEvent e) {
-                MiscUtils.AWTDesktop.browse(URI.create(credits.url));
-            }
-        });
+        boolean hasUrl = credits.url != null && !credits.url.trim().isEmpty();
+        // Only render a clickable link when there's a URL; otherwise plain text so
+        // credits without a link (e.g. translators) don't look clickable or error.
+        JLabel name = hasUrl
+            ? new JLabel(String.format("<html><a href=\"#\">%s</a></html>", credits.name), JLabel.RIGHT)
+            : new JLabel(credits.name, JLabel.RIGHT);
+        // Separate the name and what they did with a dash, e.g. "KozyBlake — Author",
+        // rather than letting the two columns run together as "KozyBlake Author".
+        JLabel desc = new JLabel("—  " + credits.role, JLabel.LEFT);
+        if (hasUrl)
+        {
+            name.setCursor(new Cursor(Cursor.HAND_CURSOR));
+            name.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    MiscUtils.AWTDesktop.browse(URI.create(credits.url));
+                }
+            });
+        }
         constraints.gridx = 0;
         constraints.anchor = GridBagConstraints.EAST;
         panel.add(name, constraints);
@@ -3215,7 +3451,7 @@ public class ScarletUI implements IScarletUI
             constraints.gridwidth = 1;
             constraints.gridx = 0;
             constraints.gridy = 0;
-            constraints.insets = new Insets(1, 1, 1, 1);
+            constraints.insets = new Insets(1, 5, 1, 5); // horizontal room around the name — role dash
             constraints.weightx = 0.0D;
             constraints.weighty = 0.0D;
             Credits[] credits = Credits.load();
@@ -3237,12 +3473,19 @@ public class ScarletUI implements IScarletUI
 
     private void tryBan(String id, String name)
     {
+        if (isTrainingId(id))
+        {
+            // Training rows never touch the real VRChat API — but the drill should feel
+            // real, so show the same success feedback a live action gives on success.
+            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.bannedUser"), name);
+            return;
+        }
         String ownerId = this.scarlet.vrc.groupOwnerId;
         
         if (!this.scarlet.staffMode)
         if (ownerId == null)
         {
-            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "Internal error", "Group owner id missing", Color.PINK);
+            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.internalError"), I18n.tr("ui.groupOwnerIdMissing"), Color.PINK);
             return;
         }
         
@@ -3250,34 +3493,41 @@ public class ScarletUI implements IScarletUI
         
         if (status == GroupMemberStatus.BANNED)
         {
-            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "User already banned");
+            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.userAlreadyBanned"));
             return;
         }
         
         if (!this.scarlet.staffMode)
         if (this.scarlet.pendingModActions.addPending(GroupAuditType.USER_BAN, id, ownerId) != null)
         {
-            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "User ban pending", name, Color.CYAN);
+            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.userBanPending"), name, Color.CYAN);
             return;
         }
         
         if (!this.scarlet.vrc.banFromGroup(id))
         {
-            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "Failed to ban user", name, Color.PINK);
+            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.failedBanUser"), name, Color.PINK);
             return;
         }
         
-        this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "Banned user", name);
+        this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.bannedUser"), name);
     }
 
     private void tryUnban(String id, String name)
     {
+        if (isTrainingId(id))
+        {
+            // Training rows never touch the real VRChat API — but the drill should feel
+            // real, so show the same success feedback a live action gives on success.
+            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.unbannedUser"), name);
+            return;
+        }
         String ownerId = this.scarlet.vrc.groupOwnerId;
 
         if (!this.scarlet.staffMode)
         if (ownerId == null)
         {
-            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "Internal error", "Group owner id missing", Color.PINK);
+            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.internalError"), I18n.tr("ui.groupOwnerIdMissing"), Color.PINK);
             return;
         }
         
@@ -3285,28 +3535,35 @@ public class ScarletUI implements IScarletUI
         
         if (status != GroupMemberStatus.BANNED)
         {
-            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "User not banned", name);
+            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.userNotBanned"), name);
             return;
         }
 
         if (!this.scarlet.staffMode)
         if (this.scarlet.pendingModActions.addPending(GroupAuditType.USER_UNBAN, id, ownerId) != null)
         {
-            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "User unban pending", name, Color.CYAN);
+            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.userUnbanPending"), name, Color.CYAN);
             return;
         }
         
         if (!this.scarlet.vrc.unbanFromGroup(id))
         {
-            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "Failed to unban user", name, Color.PINK);
+            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.failedUnbanUser"), name, Color.PINK);
             return;
         }
         
-        this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "Unbanned user", name);
+        this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.unbannedUser"), name);
     }
 
     private void tryInvite(String id, String name)
     {
+        if (isTrainingId(id))
+        {
+            // Training rows never touch the real VRChat API — but the drill should feel
+            // real, so show the same success feedback a live action gives on success.
+            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.invitedToGroup"), name);
+            return;
+        }
 
         ScarletUI.this.scarlet.execModal.execute(() ->
         {
@@ -3315,35 +3572,35 @@ public class ScarletUI implements IScarletUI
             if (!this.scarlet.staffMode)
             if (ownerId == null)
             {
-                this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "Internal error", "Group owner id missing", Color.PINK);
+                this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.internalError"), I18n.tr("ui.groupOwnerIdMissing"), Color.PINK);
                 return;
             }
             
             GroupMemberStatus status = this.scarlet.vrc.getGroupMembershipStatus(this.scarlet.vrc.groupId, id);
             
-            String question = "Are you sure you want to invite "+name+"?",
-                   subquestion = "Confirm invite";
+            String question = I18n.tr("ui.confirmInviteMsg", name),
+                   subquestion = I18n.tr("ui.confirmInviteTitle");
             boolean respond = false;
             if (status != null) switch (status)
             {
             case BANNED:
-                this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "User is currently banned", name);
+                this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.userCurrentlyBanned"), name);
                 return;
             case INACTIVE:
                 break;
             case INVITED:
-                this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "User is already invited", name);
+                this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.userAlreadyInvited"), name);
                 return;
             case MEMBER:
-                this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "User is already a member", name);
+                this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.userAlreadyMember"), name);
                 return;
             case REQUESTED:
                 respond = true;
-                question = "Are you sure you want to accept "+name+"'s group join request?";
-                subquestion = "Confirm accept group join request";
+                question = I18n.tr("ui.confirmAcceptJoinMsg", name);
+                subquestion = I18n.tr("ui.confirmAcceptJoinTitle");
                 break;
             case USERBLOCKED:
-                question = "Are you sure you want to invite "+name+"? (User is currently blocked)";
+                question = I18n.tr("ui.confirmInviteBlockedMsg", name);
                 break;
             }
             
@@ -3354,21 +3611,21 @@ public class ScarletUI implements IScarletUI
                 {
                     if (!this.scarlet.vrc.respondToGroupJoinRequest(id, GroupJoinRequestAction.ACCEPT, null))
                     {
-                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "Failed to accept group join request", name, Color.PINK);
+                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.failedAcceptJoin"), name, Color.PINK);
                         return;
                     }
                     
-                    this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "Accepted group join request", name);
+                    this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.acceptedJoin"), name);
                 }
                 else
                 {
                     if (!this.scarlet.vrc.inviteToGroup(id, Boolean.TRUE))
                     {
-                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "Failed to invite to group", name, Color.PINK);
+                        this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.failedInviteGroup"), name, Color.PINK);
                         return;
                     }
                     
-                    this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "Invited to group", name);
+                    this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.invitedToGroup"), name);
                 }
             }
         });
@@ -3377,7 +3634,7 @@ public class ScarletUI implements IScarletUI
         if (!this.scarlet.staffMode)
         if (ownerId == null)
         {
-            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "Internal error", "Group owner id missing", Color.PINK);
+            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.internalError"), I18n.tr("ui.groupOwnerIdMissing"), Color.PINK);
             return;
         }
         
@@ -3385,24 +3642,24 @@ public class ScarletUI implements IScarletUI
         
         if (status != GroupMemberStatus.BANNED)
         {
-            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "User not banned", name);
+            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.userNotBanned"), name);
             return;
         }
 
         if (!this.scarlet.staffMode)
         if (this.scarlet.pendingModActions.addPending(GroupAuditType.USER_UNBAN, id, ownerId) != null)
         {
-            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "User unban pending", name, Color.CYAN);
+            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.userUnbanPending"), name, Color.CYAN);
             return;
         }
         
         if (!this.scarlet.vrc.unbanFromGroup(id))
         {
-            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "Failed to unban user", name, Color.PINK);
+            this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.failedUnbanUser"), name, Color.PINK);
             return;
         }
         
-        this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, "Unbanned user", name);
+        this.scarlet.splash.queueFeedbackPopup(this.jframe, 2_000L, I18n.tr("ui.unbannedUser"), name);
     }
 
     @Override
@@ -3424,8 +3681,11 @@ public class ScarletUI implements IScarletUI
     private static final String[][] SETTINGS_SECTIONS = {
         // Section label, then setting IDs that belong to it
 
+        { "Training",
+          "training_mode_enabled" },
+
         { "Appearance",
-          "Theme preset", "Accent colour", "UI scale" },
+          "Theme preset", "Accent colour", "UI scale", "ui_left_player_dim_percent" },
 
         { "Interface",
           "ui_confirm_group_invite", "ui_alert_update", "ui_alert_update_preview",
@@ -3630,7 +3890,7 @@ public class ScarletUI implements IScarletUI
         apigbc.anchor = GridBagConstraints.WEST;
         apigbc.weightx = 1.0;
         apigbc.insets = new Insets(0, 0, 8, 0);
-        JLabel apiTitle = new JLabel("VRCHAT API".toUpperCase());
+        JLabel apiTitle = new JLabel(I18n.tr("ui.vrchatApi").toUpperCase());
         apiTitle.setFont(apiTitle.getFont().deriveFont(java.awt.Font.BOLD, 10f));
         apiTitle.setForeground(CARD_HDR_FG);
         vrchatApiCard.add(apiTitle, apigbc);
@@ -3712,22 +3972,19 @@ public class ScarletUI implements IScarletUI
         mgbc.anchor = GridBagConstraints.WEST;
         mgbc.weightx = 1.0;
         mgbc.insets = new Insets(0, 0, 8, 0);
-        JLabel migrationTitle = new JLabel("BACKUP & MIGRATION");
+        JLabel migrationTitle = new JLabel(I18n.tr("ui.backupMigration"));
         migrationTitle.setFont(migrationTitle.getFont().deriveFont(java.awt.Font.BOLD, 10f));
         migrationTitle.setForeground(CARD_HDR_FG);
         migrationCard.add(migrationTitle, mgbc);
 
         mgbc.gridy++;
         mgbc.insets = new Insets(2, 0, 10, 0);
-        JLabel migrationDesc = new JLabel("<html>Move Scarlet to another PC or operating system. <b>Export</b> bundles your"
-            + " credentials, bot config and data into one file; <b>Import</b> lets you choose data/config,"
-            + " secure credentials, or both, after making an automatic local backup, then quits so you can start it again cleanly."
-            + " Keep both files private — they contain your sign-ins.</html>");
+        JLabel migrationDesc = new JLabel(I18n.tr("ui.migrationDesc"));
         migrationDesc.setForeground(LABEL_FG);
         migrationCard.add(migrationDesc, mgbc);
 
-        JButton migrationExport = new JButton("Export bundle...");
-        JButton migrationImport = new JButton("Import bundle...");
+        JButton migrationExport = new JButton(I18n.tr("ui.exportBundle"));
+        JButton migrationImport = new JButton(I18n.tr("ui.importBundle"));
         migrationExport.addActionListener($ -> this.uiExportMigrationBundle());
         migrationImport.addActionListener($ -> this.uiImportMigrationBundle());
         JPanel migrationButtons = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
@@ -3817,7 +4074,7 @@ public class ScarletUI implements IScarletUI
             cgbc.fill = GridBagConstraints.HORIZONTAL;
             cgbc.anchor = GridBagConstraints.WEST;
             cgbc.weightx = 1.0;
-            JLabel cardTitle = new JLabel(sectionLabel.toUpperCase());
+            JLabel cardTitle = new JLabel(sectionTitle(sectionLabel).toUpperCase());
             cardTitle.setFont(cardTitle.getFont().deriveFont(java.awt.Font.BOLD, 10f));
             cardTitle.setForeground(CARD_HDR_FG);
             card.add(cardTitle, cgbc);
@@ -3832,7 +4089,7 @@ public class ScarletUI implements IScarletUI
             {
                 cgbc.gridx = 0;
                 cgbc.anchor = GridBagConstraints.EAST;
-                JLabel lbl = new JLabel(s.name() + ":", JLabel.RIGHT);
+                JLabel lbl = new JLabel(settingLabel(s) + ":", JLabel.RIGHT);
                 lbl.setForeground(LABEL_FG);
                 card.add(lbl, cgbc);
                 cgbc.gridx = 1;
@@ -3854,7 +4111,7 @@ public class ScarletUI implements IScarletUI
             // Track for search filtering
             StringBuilder searchText = new StringBuilder(sectionLabel.toLowerCase());
             for (GUISetting<?> s : sectionSettings)
-                searchText.append(' ').append(s.name().toLowerCase());
+                searchText.append(' ').append(settingLabel(s).toLowerCase());
             this.settingsCardPanels.add(card);
             this.settingsCardSearchText.add(searchText.toString());
         }
@@ -3915,7 +4172,7 @@ public class ScarletUI implements IScarletUI
             cgbc.fill = GridBagConstraints.HORIZONTAL;
             cgbc.anchor = GridBagConstraints.WEST;
             cgbc.weightx = 1.0;
-            JLabel cardTitle = new JLabel("OTHER");
+            JLabel cardTitle = new JLabel(I18n.tr("ui.other"));
             cardTitle.setFont(cardTitle.getFont().deriveFont(java.awt.Font.BOLD, 10f));
             cardTitle.setForeground(CARD_HDR_FG);
             card.add(cardTitle, cgbc);
@@ -3927,7 +4184,7 @@ public class ScarletUI implements IScarletUI
             for (GUISetting<?> s : ungrouped)
             {
                 cgbc.gridx = 0; cgbc.anchor = GridBagConstraints.EAST;
-                JLabel lbl = new JLabel(s.name() + ":", JLabel.RIGHT);
+                JLabel lbl = new JLabel(settingLabel(s) + ":", JLabel.RIGHT);
                 lbl.setForeground(LABEL_FG);
                 card.add(lbl, cgbc);
                 cgbc.gridx = 1; cgbc.anchor = GridBagConstraints.WEST;
@@ -3940,7 +4197,7 @@ public class ScarletUI implements IScarletUI
             // Track ungrouped card for search filtering
             StringBuilder ungroupedSearch = new StringBuilder("other");
             for (GUISetting<?> s : ungrouped)
-                ungroupedSearch.append(' ').append(s.name().toLowerCase());
+                ungroupedSearch.append(' ').append(settingLabel(s).toLowerCase());
             this.settingsCardPanels.add(card);
             this.settingsCardSearchText.add(ungroupedSearch.toString());
         }
@@ -3963,7 +4220,7 @@ public class ScarletUI implements IScarletUI
         gbc.insets = new Insets(8, 12, 10, 6);
         gbc.gridx = 0;
         gbc.anchor = GridBagConstraints.EAST;
-        JButton save = new JButton("Save Settings");
+        JButton save = new JButton(I18n.tr("ui.saveSettings"));
         this.jpanel_settings.add(save, gbc);
         save.addActionListener($ -> this.saveSettings(true));
 
@@ -4008,6 +4265,40 @@ public class ScarletUI implements IScarletUI
             // Inject the theme-preset combo (not backed by a FileValued setting)
             new ThemePresetSetting();
             this.readSettingUI();
+            // Training mode gates the event simulator; grey the menu item when off and
+            // follow the toggle live (closing an open simulator dialog when disabled).
+            if (this.scarlet.trainingMode != null && this.simMenuItem != null)
+            {
+                boolean training = this.scarlet.trainingMode.get();
+                this.simMenuItem.setEnabled(training);
+                this.simMenuItem.setToolTipText(training ? null : I18n.tr("sim.menuDisabledTooltip"));
+                if (training)
+                    this.enterTrainingView();
+                this.scarlet.trainingMode.listeners.register("ui-sim", 0, true, (prev, next, valid, source) ->
+                {
+                    if (!valid || next == null)
+                        return;
+                    boolean enabled = next.booleanValue();
+                    SwingUtilities.invokeLater(() ->
+                    {
+                        this.simMenuItem.setEnabled(enabled);
+                        this.simMenuItem.setToolTipText(enabled ? null : I18n.tr("sim.menuDisabledTooltip"));
+                        if (enabled)
+                        {
+                            this.enterTrainingView();
+                        }
+                        else
+                        {
+                            this.exitTrainingView();
+                            if (this.simDialog != null && this.simDialog.isShowing())
+                            {
+                                this.simDialog.dispose();
+                                this.simDialog = null;
+                            }
+                        }
+                    });
+                });
+            }
             // Apply persisted CLI-tab visibility now that the settings block is initialized.
             if (this.scarlet.showCliTab != null && this.cliTabMenuItem != null)
             {
@@ -4448,6 +4739,23 @@ public class ScarletUI implements IScarletUI
         EnumSetting(ScarletSettings.FileValued<E> setting)
         {
             super(setting, new JComboBox<>(setting.ifNull.get().getDeclaringClass().getEnumConstants()));
+            // Translate enum choices (e.g. Disabled, CRITICAL) by their stable name(),
+            // keeping the underlying enum value intact for logic/persistence.
+            this.render.setRenderer(new javax.swing.DefaultListCellRenderer()
+            {
+                private static final long serialVersionUID = 1L;
+                @Override
+                public java.awt.Component getListCellRendererComponent(javax.swing.JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus)
+                {
+                    Object shown = value;
+                    if (value instanceof Enum)
+                    {
+                        String k = "enum." + ((Enum<?>) value).name();
+                        shown = I18n.has(I18n.getLocale(), k) ? I18n.tr(k) : value.toString();
+                    }
+                    return super.getListCellRendererComponent(list, shown, index, isSelected, cellHasFocus);
+                }
+            });
             // Show the SAVED value, not the default. Using ifNull.get() here reset the
             // dropdown to its default every time the Settings tab was rebuilt, so a saved
             // value (e.g. mobile severity "Critical") looked like it hadn't saved — and
@@ -4498,12 +4806,62 @@ public class ScarletUI implements IScarletUI
      * suppliers which call into not-yet-initialised services (like TTS voice
      * enumeration) don't fail at startup.
      */
+    /**
+     * Friendly display for a string-choice value. Language codes render as their native
+     * name (endonym) so a speaker can find their own language; "system" becomes a
+     * localized label; anything else (e.g. a TTS voice name) is returned unchanged.
+     */
+    static String choiceDisplay(String value)
+    {
+        if (value == null || value.isEmpty())
+            return "";
+        if ("system".equalsIgnoreCase(value))
+            return I18n.tr("setting.lang.system");
+        switch (value)
+        {
+        case "en": return "English";
+        case "de": return "Deutsch";
+        case "es": return "Español";
+        case "id": return "Bahasa Indonesia";
+        case "ru": return "Русский";
+        case "ko": return "한국어";
+        case "ja": return "日本語";
+        case "pl": return "Polski";
+        case "fr": return "Français";
+        case "pt": return "Português";
+        default: break;
+        }
+        // Unknown 2-letter code: fall back to the JDK's display name in the active locale.
+        if (value.matches("[a-z]{2}"))
+        {
+            try
+            {
+                String name = new java.util.Locale(value).getDisplayLanguage(I18n.getLocale());
+                if (name != null && !name.isEmpty() && !name.equalsIgnoreCase(value))
+                    return Character.toUpperCase(name.charAt(0)) + name.substring(1) + " (" + value + ")";
+            }
+            catch (RuntimeException ignored) {}
+        }
+        return value;
+    }
     private class StringChoiceSetting extends ASetting<String, JComboBox<String>>
     {
         StringChoiceSetting(ScarletSettings.FileValued<String> setting,
                             Supplier<Collection<String>> validValues)
         {
             super(setting, new JComboBox<>());
+            // Show friendly language names (endonyms) for the language picker while the
+            // combo model still stores the raw code; other choice settings pass through.
+            this.render.setRenderer(new javax.swing.DefaultListCellRenderer()
+            {
+                private static final long serialVersionUID = 1L;
+                @Override
+                public java.awt.Component getListCellRendererComponent(javax.swing.JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus)
+                {
+                    Object shown = value == null ? null : choiceDisplay(value.toString());
+                    return super.getListCellRendererComponent(list, shown, index, isSelected, cellHasFocus);
+                }
+            });
             this.validValues = validValues;
 
             // Populate the combo box now; if the supplier returns nothing yet
@@ -4589,12 +4947,85 @@ public class ScarletUI implements IScarletUI
         }
     }
 
+    /**
+     * Maps a Void action setting's stable English id (also referenced in
+     * {@link #SETTINGS_SECTIONS}) to its i18n key, so the visible row label and
+     * button translate without changing the identifier used for section
+     * placement and persistence. Unmapped ids fall back to their English text.
+     */
+    private static final java.util.Map<String, String> VOID_SETTING_KEYS = new java.util.HashMap<>();
+    static
+    {
+        VOID_SETTING_KEYS.put("Add alternate credentials",    "setting.addAltCreds");
+        VOID_SETTING_KEYS.put("Remove alternate credentials", "setting.removeAltCreds");
+        VOID_SETTING_KEYS.put("List alternate credentials",   "setting.listAltCreds");
+        VOID_SETTING_KEYS.put("Reset VRChat credentials",     "setting.clearCreds");
+        VOID_SETTING_KEYS.put("UI scale",                     "setting.uiScale");
+        VOID_SETTING_KEYS.put("Accent colour",                "setting.accentColor");
+        VOID_SETTING_KEYS.put("Run cache cleanup now",        "setting.runCacheCleanup");
+        VOID_SETTING_KEYS.put("Edit good_pronoun.json",       "setting.editGoodPronouns");
+        VOID_SETTING_KEYS.put("Edit bad_pronoun.json",        "setting.editBadPronouns");
+        VOID_SETTING_KEYS.put("Reload pronoun lists",         "setting.reloadPronounLists");
+        VOID_SETTING_KEYS.put("Install Linux TTS voices",     "setting.installLinuxTts");
+        VOID_SETTING_KEYS.put("Run CLI command",              "setting.runCliCommand");
+        VOID_SETTING_KEYS.put("Evidence root folder",         "setting.evidenceRootFolder");
+        VOID_SETTING_KEYS.put("Avatar search providers",      "setting.avatarSearchProviders");
+        VOID_SETTING_KEYS.put("Discord bot token",            "setting.discordBotToken");
+        VOID_SETTING_KEYS.put("Discord guild snowflake",      "setting.discordGuildSnowflake");
+        VOID_SETTING_KEYS.put("Create mobile pairing QR",     "setting.createMobileQr");
+        VOID_SETTING_KEYS.put("Send mobile test notification","setting.sendMobileTest");
+        VOID_SETTING_KEYS.put("Send desktop test notification","setting.sendDesktopTest");
+    }
+    /**
+     * The translated display label for a settings row. Keyed settings translate by their
+     * stable id ({@code setting.<id>}); anything without such a key (e.g. Void action rows,
+     * whose id contains spaces) falls back to {@link GUISetting#name()} — which for Void
+     * rows is already translated via {@link #VOID_SETTING_KEYS}. Resolved at render time so
+     * it honours the active language even for settings constructed before the locale is set.
+     */
+    private static String settingLabel(GUISetting<?> s)
+    {
+        String key = "setting." + s.id();
+        return I18n.has(I18n.getLocale(), key) ? I18n.tr(key) : s.name();
+    }
+    /** Maps a settings section's stable English title to its i18n key (display only). */
+    private static final java.util.Map<String, String> SECTION_TITLE_KEYS = new java.util.HashMap<>();
+    static
+    {
+        SECTION_TITLE_KEYS.put("Training",                       "setting.section.training");
+        SECTION_TITLE_KEYS.put("Appearance",                     "setting.section.appearance");
+        SECTION_TITLE_KEYS.put("Interface",                      "setting.section.interface");
+        SECTION_TITLE_KEYS.put("Instance Enforcement",           "setting.section.instanceEnforcement");
+        SECTION_TITLE_KEYS.put("Moderation",                     "setting.section.moderation");
+        SECTION_TITLE_KEYS.put("Advisories",                     "setting.section.advisories");
+        SECTION_TITLE_KEYS.put("Text-to-Speech",                 "setting.section.tts");
+        SECTION_TITLE_KEYS.put("Desktop Notifications",          "setting.section.desktopNotifications");
+        SECTION_TITLE_KEYS.put("Mobile Companion",               "setting.section.mobileCompanion");
+        SECTION_TITLE_KEYS.put("Discord",                        "setting.section.discord");
+        SECTION_TITLE_KEYS.put("Verification",                   "setting.section.verification");
+        SECTION_TITLE_KEYS.put("Discord — Outstanding Moderation","setting.section.discordOutstanding");
+        SECTION_TITLE_KEYS.put("Evidence",                       "setting.section.evidence");
+        SECTION_TITLE_KEYS.put("VRChat Reports",                 "setting.section.vrchatReports");
+        SECTION_TITLE_KEYS.put("Avatar Search",                  "setting.section.avatarSearch");
+        SECTION_TITLE_KEYS.put("Cache Cleanup",                  "setting.section.cacheCleanup");
+        SECTION_TITLE_KEYS.put("Pronouns",                       "setting.section.pronouns");
+        SECTION_TITLE_KEYS.put("VRChat Credentials",             "setting.section.vrchatCredentials");
+        SECTION_TITLE_KEYS.put("CLI",                            "setting.section.cli");
+    }
+    /** Translates a settings section title by its stable English text, falling back to English. */
+    private static String sectionTitle(String englishLabel)
+    {
+        String k = SECTION_TITLE_KEYS.get(englishLabel);
+        return k != null ? I18n.tr(k) : englishLabel;
+    }
     private class VoidSetting implements GUISetting<Void>
     {
         protected VoidSetting(ScarletSettings.FileValued<Void> setting, Runnable buttonPressed)
         {
-            this.name = setting.id;
-            this.render = new JButton(setting.name);
+            this.settingId = setting.id; // stable English id — used for section placement/persistence
+            String vk = VOID_SETTING_KEYS.get(setting.id);
+            this.name = vk != null ? I18n.tr(vk) : setting.id; // translated display label
+            this.render = new JButton(vk != null ? I18n.tr(vk + ".btn") : setting.name);
             this.render.addActionListener($ ->
             {
                 try
@@ -4603,17 +5034,18 @@ public class ScarletUI implements IScarletUI
                 }
                 catch (Exception ex)
                 {
-                    LOG.error("Exception handling in runnable setting "+name, ex);
+                    LOG.error("Exception handling in runnable setting "+settingId, ex);
                 }
             });
             ScarletUI.this.ssettings.add(this);
         }
+        final String settingId;
         final String name;
         final JButton render;
         @Override
         public final String id()
         {
-            return this.name;
+            return this.settingId;
         }
         @Override
         public final String name()
@@ -4646,6 +5078,24 @@ public class ScarletUI implements IScarletUI
      * theme instantly, without requiring the user to open the colour picker.
      * Selecting "Custom" is a no-op (the user's manually chosen colour stays).
      */
+    /** Maps a theme preset's stable English name (the combo's stored value) to its i18n key. */
+    private static final java.util.Map<String, String> THEME_PRESET_KEYS = new java.util.HashMap<>();
+    static
+    {
+        THEME_PRESET_KEYS.put("Custom",            "theme.custom");
+        THEME_PRESET_KEYS.put("Crimson (default)", "theme.crimson");
+        THEME_PRESET_KEYS.put("Cobalt",            "theme.cobalt");
+        THEME_PRESET_KEYS.put("Forest",            "theme.forest");
+        THEME_PRESET_KEYS.put("Amber",             "theme.amber");
+        THEME_PRESET_KEYS.put("Slate",             "theme.slate");
+        THEME_PRESET_KEYS.put("Violet",            "theme.violet");
+        THEME_PRESET_KEYS.put("Rose",              "theme.rose");
+    }
+    private static String themeDisplay(String name)
+    {
+        String k = name == null ? null : THEME_PRESET_KEYS.get(name);
+        return k != null ? I18n.tr(k) : name;
+    }
     private class ThemePresetSetting implements GUISetting<String>
     {
         // { display name, R, G, B }
@@ -4668,6 +5118,17 @@ public class ScarletUI implements IScarletUI
             for (int i = 0; i < PRESETS.length; i++)
                 names[i + 1] = PRESETS[i][0];
             this.combo = new JComboBox<>(names);
+            // Translate the visible preset names; the combo's stored value stays English.
+            this.combo.setRenderer(new javax.swing.DefaultListCellRenderer()
+            {
+                private static final long serialVersionUID = 1L;
+                @Override
+                public java.awt.Component getListCellRendererComponent(javax.swing.JList<?> list, Object value, int index, boolean isSelected, boolean cellHasFocus)
+                {
+                    Object shown = value == null ? null : themeDisplay(value.toString());
+                    return super.getListCellRendererComponent(list, shown, index, isSelected, cellHasFocus);
+                }
+            });
 
             // Pre-select whichever preset matches the current accent (if any)
             Color current = Swing.ACCENT;
@@ -4740,7 +5201,7 @@ public class ScarletUI implements IScarletUI
         }
 
         @Override public String id()           { return "Theme preset"; }
-        @Override public String name()         { return "Theme preset"; }
+        @Override public String name()         { return I18n.tr("setting.themePreset"); }
         @Override public String get()          { return (String) this.combo.getSelectedItem(); }
         @Override public String getDefault()   { return "Custom"; }
         @Override public void   set(String v)  { this.combo.setSelectedItem(v); }

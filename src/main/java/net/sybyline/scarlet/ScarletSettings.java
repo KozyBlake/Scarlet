@@ -1,6 +1,7 @@
 package net.sybyline.scarlet;
 
 import java.awt.GraphicsEnvironment;
+import net.sybyline.scarlet.util.FileBackups;
 import java.awt.Rectangle;
 import java.io.Console;
 import java.io.File;
@@ -947,7 +948,7 @@ public class ScarletSettings
             return;
         if (!this.settingsFile.getParentFile().isDirectory())
             this.settingsFile.getParentFile().mkdirs();
-        try (Writer w = MiscUtils.writer(this.settingsFile))
+        try (Writer w = FileBackups.writer(this.settingsFile))
         {
             Scarlet.GSON_PRETTY.toJson(json, JsonObject.class, w);
         }

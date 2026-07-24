@@ -24,6 +24,15 @@ import net.sybyline.scarlet.util.VersionedFile;
 public interface ScarletDiscord extends Closeable
 {
 
+    /**
+     * Posts an operational health alert (auth lost/recovered, log tailer stalled,
+     * hard rate limiting, updates available) to the configured staff ops channel,
+     * if one is configured. No-op otherwise: ops alerts are best-effort and must
+     * never affect the pipeline that raised them.
+     */
+    default void emitOpsAlert(String title, String detail, int color) {}
+
+
     // U+2727 White Four Pointed Star (the character separating the footer and timestamp differs by client platform...)
     String FOOTER_PREFIX = String.format("%s %s \u2727 ", Scarlet.APP_NAME, Scarlet.VERSION);
 

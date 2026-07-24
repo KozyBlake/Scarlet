@@ -1,6 +1,7 @@
 package net.sybyline.scarlet;
 
 import java.awt.BorderLayout;
+import net.sybyline.scarlet.util.FileBackups;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Graphics2D;
@@ -1010,7 +1011,7 @@ public class ScarletMobile implements Closeable
             File parent = this.devicesFile.getParentFile();
             if (parent != null && !parent.isDirectory())
                 parent.mkdirs();
-            try (FileWriter writer = new FileWriter(this.devicesFile))
+            try (java.io.Writer writer = FileBackups.writer(this.devicesFile))
             {
                 Scarlet.GSON_PRETTY.toJson(this.state, State.class, writer);
             }

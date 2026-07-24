@@ -1,6 +1,7 @@
 package net.sybyline.scarlet;
 
 import java.awt.Color;
+import net.sybyline.scarlet.util.FileBackups;
 import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
@@ -267,7 +268,7 @@ public class ScarletWatchedGroups
     public boolean save()
     {
         WatchedGroup[] watchedGroupsArray = this.watchedGroups.values().toArray(new WatchedGroup[0]);
-        try (FileWriter fw = new FileWriter(this.watchedGroupsFile))
+        try (java.io.Writer fw = FileBackups.writer(this.watchedGroupsFile))
         {
             Scarlet.GSON_PRETTY.toJson(watchedGroupsArray, WatchedGroup[].class, fw);
         }

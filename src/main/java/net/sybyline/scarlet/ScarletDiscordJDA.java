@@ -1,6 +1,7 @@
 package net.sybyline.scarlet;
 
 import java.awt.BorderLayout;
+import net.sybyline.scarlet.util.FileBackups;
 import java.awt.GraphicsEnvironment;
 import java.io.BufferedInputStream;
 import java.io.File;
@@ -453,7 +454,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
     public JDA jda() { return this.jda; }
     final ScarletLivePlayerlist livePlayerlist;
     final ScarletSettings.RegistryStringEncrypted token;
-    String guildSf, audioChannelSf, discordActionLogChannelSf, evidenceRoot,
+    String guildSf, audioChannelSf, discordActionLogChannelSf, opsAlertChannelSf, trainingChannelSf, evidenceRoot,
            ticketToolCategorySf, ticketToolChannelNameRegex, ticketToolNotifyRoleSf, ticketToolAgeVerificationMessage;
     boolean ticketToolAutoResponseEnabled;
     int discordAccountAgeAlertMinutes;
@@ -712,6 +713,12 @@ public class ScarletDiscordJDA implements ScarletDiscord
     void resetAvatarSearchProviders()
     {
         this.avatarSearchProviders.set(null, "discord");
+    }
+
+    /** Human-readable Discord connection status for the diagnostics view. */
+    public String connectionStatus()
+    {
+        return this.jda == null ? "not started" : String.valueOf(this.jda.getStatus());
     }
 
     /**
@@ -1109,6 +1116,8 @@ public class ScarletDiscordJDA implements ScarletDiscord
         public String guildSf = null,
                       audioChannelSf = null,
                       discordActionLogChannelSf = null,
+                      opsAlertChannelSf = null,
+                      trainingChannelSf = null,
                       evidenceRoot = null,
                       ticketToolCategorySf = null,
                       ticketToolChannelNameRegex = DEFAULT_TICKET_TOOL_CHANNEL_NAME_REGEX,
@@ -1185,6 +1194,8 @@ public class ScarletDiscordJDA implements ScarletDiscord
         this.guildSf = spec.guildSf;
         this.audioChannelSf = spec.audioChannelSf;
         this.discordActionLogChannelSf = spec.discordActionLogChannelSf;
+        this.opsAlertChannelSf = spec.opsAlertChannelSf;
+        this.trainingChannelSf = spec.trainingChannelSf;
         this.evidenceRoot = spec.evidenceRoot;
         this.ticketToolAutoResponseEnabled = spec.ticketToolAutoResponseEnabled;
         this.ticketToolCategorySf = nonBlankOrNull(spec.ticketToolCategorySf);
@@ -1230,6 +1241,8 @@ public class ScarletDiscordJDA implements ScarletDiscord
         spec.guildSf = this.guildSf;
         spec.audioChannelSf = this.audioChannelSf;
         spec.discordActionLogChannelSf = this.discordActionLogChannelSf;
+        spec.opsAlertChannelSf = this.opsAlertChannelSf;
+        spec.trainingChannelSf = this.trainingChannelSf;
         spec.evidenceRoot = this.evidenceRoot;
         spec.ticketToolAutoResponseEnabled = this.ticketToolAutoResponseEnabled;
         spec.ticketToolCategorySf = this.ticketToolCategorySf;
@@ -1253,7 +1266,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
     }
     void save(JDASettingsSpec spec)
     {
-        try (FileWriter fw = new FileWriter(this.discordBotFile))
+        try (java.io.Writer fw = FileBackups.writer(this.discordBotFile))
         {
             Scarlet.GSON_PRETTY.toJson(spec, JDASettingsSpec.class, fw);
         }
@@ -1690,6 +1703,71 @@ public class ScarletDiscordJDA implements ScarletDiscord
             LOG.info("Unsetting Discord action log channel");
         }
         this.save();
+    }
+
+    public void setOpsAlertChannel(Channel channel)
+    {
+        if (channel != null)
+        {
+            this.opsAlertChannelSf = channel.getId();
+            LOG.info("Setting ops alert channel to "+channel.getName()+" ("+channel.getId()+")");
+        }
+        else
+        {
+            this.opsAlertChannelSf = null;
+            LOG.info("Removing ops alert channel");
+        }
+        this.save();
+    }
+
+    public void setTrainingChannel(Channel channel)
+    {
+        if (channel != null)
+        {
+            this.trainingChannelSf = channel.getId();
+            LOG.info("Setting training channel to "+channel.getName()+" ("+channel.getId()+")");
+        }
+        else
+        {
+            this.trainingChannelSf = null;
+            LOG.info("Removing training channel");
+        }
+        this.save();
+    }
+
+    TextChannel getOpsAlertChannel()
+    {
+        if (this.jda == null || this.opsAlertChannelSf == null || this.opsAlertChannelSf.trim().isEmpty())
+            return null;
+        Guild guild = this.jda.getGuildById(this.guildSf);
+        return guild == null ? null : guild.getTextChannelById(this.opsAlertChannelSf);
+    }
+
+    @Override
+    public void emitOpsAlert(String title, String detail, int color)
+    {
+        try
+        {
+            TextChannel channel = this.getOpsAlertChannel();
+            if (channel == null)
+                return;
+            EmbedBuilder embed = new EmbedBuilder()
+                .setTitle(MiscUtils.maybeEllipsis(256, title))
+                .setColor(color)
+                .setTimestamp(OffsetDateTime.now(ZoneOffset.UTC));
+            if (detail != null && !detail.trim().isEmpty())
+                embed.setDescription(MiscUtils.maybeEllipsis(4096, detail.trim()));
+            embed.setFooter("Scarlet health");
+            channel.sendMessageEmbeds(embed.build()).queue(
+                $ -> {},
+                error -> LOG.warn("Failed to emit ops alert to {}: {}", this.opsAlertChannelSf, error.getMessage())
+            );
+        }
+        catch (Exception ex)
+        {
+            // Ops alerts are best-effort; never let them break the caller.
+            LOG.warn("Exception emitting ops alert", ex);
+        }
     }
 
     TextChannel getDiscordActionLogChannel()
@@ -2227,17 +2305,33 @@ public class ScarletDiscordJDA implements ScarletDiscord
     }
     void condEmitEx(GroupAuditTypeEx auditExType, boolean log, boolean isSecretStaff, String location, CondEmit condEmit)
     {
+        this.condEmitEx(false, auditExType, log, isSecretStaff, location, condEmit);
+    }
+
+    void condEmitEx(boolean training, GroupAuditTypeEx auditExType, boolean log, boolean isSecretStaff, String location, CondEmit condEmit)
+    {
         if (this.jda == null)
             return;
         if (auditExType == null)
             return;
-        String channelSf = isSecretStaff ? this.auditExType2secretChannelSf.get(auditExType.id)
-                                         : this.auditExType2channelSf.get(auditExType.id);
+        String channelSf;
+        if (training)
+        {
+            // Simulated (training) events go only to the dedicated training channel, so
+            // drills never mix into the real moderation log. If no training channel is
+            // configured, drop silently rather than spilling into a real audit channel.
+            channelSf = this.trainingChannelSf;
+        }
+        else
+        {
+            channelSf = isSecretStaff ? this.auditExType2secretChannelSf.get(auditExType.id)
+                                      : this.auditExType2channelSf.get(auditExType.id);
+        }
         String guildSf = this.guildSf;
-        if (channelSf == null)
+        if (channelSf == null || channelSf.trim().isEmpty())
             return;
         String threadSf = null;
-        if (location != null)
+        if (!training && location != null)
         {
             ScarletData.InstanceEmbedMessage instanceEmbedMessage = this.scarlet.data.liveInstancesMetadata_getLocationInstanceEmbedMessage(location, false);
             if (instanceEmbedMessage != null && Objects.equals(channelSf, instanceEmbedMessage.channelSnowflake))
@@ -2920,9 +3014,10 @@ public class ScarletDiscordJDA implements ScarletDiscord
         // Update live player list
         OffsetDateTime joinedAt = timestamp == null ? OffsetDateTime.now(ZoneOffset.UTC)
             : timestamp.atOffset(ZoneOffset.UTC);
-        this.livePlayerlist.onPlayerJoin(location, userId, displayName, joinedAt);
+        if (!ScarletSimulation.isTrainingId(userId)) // training users never enter the live instance roster
+            this.livePlayerlist.onPlayerJoin(location, userId, displayName, joinedAt);
 
-        this.condEmitEx(GroupAuditTypeEx.USER_JOIN, false, false, location, (channelSf, guild, channel) ->
+        this.condEmitEx(ScarletSimulation.isTrainingId(userId), GroupAuditTypeEx.USER_JOIN, false, false, location, (channelSf, guild, channel) ->
         {
             return channel.sendMessageEmbeds(new EmbedBuilder()
                     .setDescription(String.format("### [%s](https://vrchat.com/home/user/%s) joined [a group instance](https://vrchat.com/home/launch?worldId=%s)",
@@ -2946,9 +3041,10 @@ public class ScarletDiscordJDA implements ScarletDiscord
     public void emitExtendedUserLeave(Scarlet scarlet, LocalDateTime timestamp, String location, String userId, String displayName)
     {
         // Update live player list
-        this.livePlayerlist.onPlayerLeave(location, userId, displayName);
+        if (!ScarletSimulation.isTrainingId(userId))
+            this.livePlayerlist.onPlayerLeave(location, userId, displayName);
 
-        this.condEmitEx(GroupAuditTypeEx.USER_LEAVE, false, false, location, (channelSf, guild, channel) ->
+        this.condEmitEx(ScarletSimulation.isTrainingId(userId), GroupAuditTypeEx.USER_LEAVE, false, false, location, (channelSf, guild, channel) ->
         {
             return channel.sendMessageEmbeds(new EmbedBuilder()
                     .setDescription(String.format("### [%s](https://vrchat.com/home/user/%s) left [a group instance](https://vrchat.com/home/launch?worldId=%s)",
@@ -2973,9 +3069,10 @@ public class ScarletDiscordJDA implements ScarletDiscord
     {
         // Update live player list — pass first resolved ID if available
         String firstId = (potentialIds0 != null && potentialIds0.length > 0) ? potentialIds0[0] : null;
-        this.livePlayerlist.onPlayerAvatar(location, userId, avatarDisplayName, firstId);
+        if (!ScarletSimulation.isTrainingId(userId))
+            this.livePlayerlist.onPlayerAvatar(location, userId, avatarDisplayName, firstId);
 
-        this.condEmitEx(GroupAuditTypeEx.USER_AVATAR, false, false, location, (channelSf, guild, channel) ->
+        this.condEmitEx(ScarletSimulation.isTrainingId(userId), GroupAuditTypeEx.USER_AVATAR, false, false, location, (channelSf, guild, channel) ->
         {
             String[] potentialIds = potentialIds0;
             EmbedBuilder builder = new EmbedBuilder()
@@ -3045,7 +3142,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
     @Override
     public void emitExtendedVtkInitiated(Scarlet scarlet, LocalDateTime timestamp, String location, String userId, String displayName, String optActorId, String optActorDisplayName)
     {
-        this.condEmitEx(GroupAuditTypeEx.VTK_START, true, false, location, (channelSf, guild, channel) ->
+        this.condEmitEx(ScarletSimulation.isTrainingId(userId), GroupAuditTypeEx.VTK_START, true, false, location, (channelSf, guild, channel) ->
         {
             EmbedBuilder builder = new EmbedBuilder()
                     .setDescription(String.format("### [%s](https://vrchat.com/home/user/%s) was targeted by a vote-to-kick in [a group instance](https://vrchat.com/home/launch?worldId=%s)",
@@ -3295,7 +3392,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
                 StringBuilder sb = new StringBuilder();
                 for (String userId : scarlet.eventListener.clientLocation_userIdsJoinOrder)
                 {
-                    String displayName = scarlet.eventListener.clientLocation_userId2userDisplayName.getOrDefault(userId, userId);
+                    String displayName = scarlet.eventListener.roster.displayNameOr(userId, userId);
                     OffsetDateTime joinedAt = scarlet.eventListener.getJoinedOrNull(userId);
                     String joinedEpoch = joinedAt == null ? "0" : Long.toUnsignedString(joinedAt.toEpochSecond());
                     String avatarName = scarlet.eventListener.clientLocation_userDisplayName2avatarDisplayName.get(displayName);

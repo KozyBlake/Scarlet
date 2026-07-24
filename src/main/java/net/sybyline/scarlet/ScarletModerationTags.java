@@ -1,6 +1,7 @@
 package net.sybyline.scarlet;
 
 import java.io.File;
+import net.sybyline.scarlet.util.FileBackups;
 import java.io.Reader;
 import java.io.Writer;
 import java.util.ArrayList;
@@ -76,7 +77,7 @@ public class ScarletModerationTags
             return;
         if (!this.moderationTagsFile.getParentFile().isDirectory())
             this.moderationTagsFile.getParentFile().mkdirs();
-        try (Writer w = MiscUtils.writer(this.moderationTagsFile))
+        try (Writer w = FileBackups.writer(this.moderationTagsFile))
         {
             Scarlet.GSON_PRETTY.toJson(tags, Tag.LISTOF.getType(), w);
         }
