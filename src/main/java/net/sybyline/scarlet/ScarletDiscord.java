@@ -56,6 +56,7 @@ public interface ScarletDiscord extends Closeable
                 entry.setActorDisplayName(actor.getDisplayName());
             }
         }
+        
         if (scarlet.vrc.currentUserId == null || Objects.equals(scarlet.vrc.currentUserId, entry.getActorId()))
         {
             String pendingActorId = scarlet.pendingModActions.pollPending(latype, entry.getTargetId());
@@ -73,6 +74,7 @@ public interface ScarletDiscord extends Closeable
                 }
             }
         }
+        
         try
         {
             switch (latype)
@@ -164,20 +166,24 @@ public interface ScarletDiscord extends Closeable
                //actorDisplayName = entryMeta.entry.getActorDisplayName(),
                targetId = entryMeta.entry.getTargetId();
         OffsetDateTime createdAt = entryMeta.entry.getCreatedAt();
+        
         if (entryMeta.hasAuxActor())
         {
             actorId = entryMeta.auxActorId;
         }
+        
         ScarletData.UserMetadata actorMeta = scarlet.data.userMetadata(actorId),
                                  targetMeta = scarlet.data.userMetadata(targetId);
         User actor = scarlet.vrc.getUser(actorId),
              target = scarlet.vrc.getUser(targetId);
+        
         if (targetMeta == null)
             targetMeta = new ScarletData.UserMetadata();
         List<ScarletData.AuditEntryMetadata> auditEntryMetas = null;
         String[] auditEntryIds = targetMeta.auditEntryIds;
         targetMeta.addAuditEntryId(auditId);
         scarlet.data.userMetadata(targetId, targetMeta);
+        
         if (auditEntryIds != null)
         {
             for (String auditEntryId : auditEntryIds)
@@ -197,6 +203,7 @@ public interface ScarletDiscord extends Closeable
                 }
             }
         }
+        
         String history = null, recent = null;
         boolean reactiveKickFromBan = false;
         ScarletData.AuditEntryMetadata parentEntryMeta = null;
