@@ -56,7 +56,7 @@ public interface ScarletDiscord extends Closeable
                 entry.setActorDisplayName(actor.getDisplayName());
             }
         }
-        
+
         if (scarlet.vrc.currentUserId == null || Objects.equals(scarlet.vrc.currentUserId, entry.getActorId()))
         {
             String pendingActorId = scarlet.pendingModActions.pollPending(latype, entry.getTargetId());
@@ -74,7 +74,7 @@ public interface ScarletDiscord extends Closeable
                 }
             }
         }
-        
+
         try
         {
             switch (latype)
@@ -83,7 +83,7 @@ public interface ScarletDiscord extends Closeable
 //            case INSTANCE_MUTE:
             case INSTANCE_KICK:
             case MEMBER_REMOVE:
-            case USER_BAN: 
+            case USER_BAN:
             case USER_UNBAN: {
                 LOG.info(String.format("Moderation event %s: %s (%s)", entry.getEventType(), entry.getDescription(), entry.getCreatedAt()));
                 this.processUserModeration(scarlet, entryMeta);
@@ -105,6 +105,9 @@ public interface ScarletDiscord extends Closeable
             } break;
             case POST_CREATE: {
                 this.processPostCreate(scarlet, entryMeta);
+            } break;
+            case ANNOUNCEMENT: {
+                this.processAnnouncement(scarlet, entryMeta);
             } break;
             case MEMBER_ROLE_ASSIGN: {
                 this.processMemberRoleAssign(scarlet, entryMeta);
@@ -163,24 +166,24 @@ public interface ScarletDiscord extends Closeable
                //actorDisplayName = entryMeta.entry.getActorDisplayName(),
                targetId = entryMeta.entry.getTargetId();
         OffsetDateTime createdAt = entryMeta.entry.getCreatedAt();
-        
+
         if (entryMeta.hasAuxActor())
         {
             actorId = entryMeta.auxActorId;
         }
-        
+
         ScarletData.UserMetadata actorMeta = scarlet.data.userMetadata(actorId),
                                  targetMeta = scarlet.data.userMetadata(targetId);
         User actor = scarlet.vrc.getUser(actorId),
              target = scarlet.vrc.getUser(targetId);
-        
+
         if (targetMeta == null)
             targetMeta = new ScarletData.UserMetadata();
         List<ScarletData.AuditEntryMetadata> auditEntryMetas = null;
         String[] auditEntryIds = targetMeta.auditEntryIds;
         targetMeta.addAuditEntryId(auditId);
         scarlet.data.userMetadata(targetId, targetMeta);
-        
+
         if (auditEntryIds != null)
         {
             for (String auditEntryId : auditEntryIds)
@@ -200,7 +203,7 @@ public interface ScarletDiscord extends Closeable
                 }
             }
         }
-        
+
         String history = null, recent = null;
         boolean reactiveKickFromBan = false;
         ScarletData.AuditEntryMetadata parentEntryMeta = null;
@@ -335,6 +338,22 @@ public interface ScarletDiscord extends Closeable
     {
         GroupAuditType.PostCreateComponent post = entryMeta.getData(GroupAuditType.PostCreateComponent.class);
         this.emitPostCreate(scarlet, entryMeta, post);
+    }
+
+    public void emitAnnouncement(
+        Scarlet scarlet,
+        ScarletData.AuditEntryMetadata entryMeta,
+        GroupAuditType.AnnouncementComponent announcement
+    );
+
+    public default void processAnnouncement(
+        Scarlet scarlet,
+        ScarletData.AuditEntryMetadata entryMeta
+    ) {
+        GroupAuditType.AnnouncementComponent announcement = entryMeta.getData(
+            GroupAuditType.AnnouncementComponent.class
+        );
+        this.emitAnnouncement(scarlet, entryMeta, announcement);
     }
 
     public void emitMemberRoleAssign(Scarlet scarlet, ScarletData.AuditEntryMetadata entryMeta, User target, GroupAuditType.RoleRefComponent role);

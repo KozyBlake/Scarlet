@@ -536,7 +536,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
             }
             throw new RuntimeException("Awaiting JDA", ex);
         }
-        
+
         // Calling getGuildById fixes bot sometimes not rejoining voice channel on start
         Guild guild = ScarletDiscordJDA.this.jda.getGuildById(this.guildSf);
         if (guild == null)
@@ -545,10 +545,10 @@ public class ScarletDiscordJDA implements ScarletDiscord
         }
         else
         {
-            LOG.warn("Guild "+this.guildSf+": "+guild.getName()); 
+            LOG.warn("Guild "+this.guildSf+": "+guild.getName());
             this.refreshGuildInviteCache(guild);
         }
-        
+
         this.jda.retrieveCommands().queue($ ->
         {
             this.setCurrentCommands($);
@@ -588,7 +588,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
                 this.currentCommands,
                 datas,
                 (     data) -> this.jda.upsertCommand(data).queue($ ->                      LOG.info("Upserted "+ $.getType()+" command "+  $.getName())),
-                (cmd      ) -> this.jda.deleteCommandById(cmd.getId()).queue($ ->           LOG.info("Deleted "+cmd.getType()+" command "+cmd.getName())), 
+                (cmd      ) -> this.jda.deleteCommandById(cmd.getId()).queue($ ->           LOG.info("Deleted "+cmd.getType()+" command "+cmd.getName())),
                 (cmd, data) -> this.jda.editCommandById(cmd.getType(), cmd.getId()).apply(data).queue($ -> LOG.info("Edited "+   $.getType()+" command "+  $.getName())),
                 (cmd, data) -> {}
             );
@@ -1018,7 +1018,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
                    audioChannelSf = ScarletDiscordJDA.this.audioChannelSf;
             Guild guild = ScarletDiscordJDA.this.jda.getGuildById(guildSf);
             AudioManager audioManager = this.audioManager;
-            LOG.info("TTS Audio: updateChannel called - guildSf={}, audioChannelSf={}, audioManager={}, guild={}", 
+            LOG.info("TTS Audio: updateChannel called - guildSf={}, audioChannelSf={}, audioManager={}, guild={}",
                 guildSf, audioChannelSf, audioManager != null ? "present" : "null", guild != null ? "found" : "null");
             if (audioChannelSf == null)
             {
@@ -1139,12 +1139,12 @@ public class ScarletDiscordJDA implements ScarletDiscord
         {
             LOG.error("Exception loading discord bot settings", ex);
         }
-        
+
         if (spec == null)
             spec = new JDASettingsSpec();
-        
+
         boolean save = false;
-        
+
         String token0 = normalizeDiscordBotToken(spec.token);
         if (token0 == null)
         {
@@ -1159,27 +1159,27 @@ public class ScarletDiscordJDA implements ScarletDiscord
                 save = true;
             }
         }
-        this.scarlet.settings.new FileValuedVoid("Discord bot token", "Reset", () -> 
+        this.scarlet.settings.new FileValuedVoid("Discord bot token", "Reset", () ->
             this.scarlet.settings.requireConfirmYesNoAsync("Are you sure you want to reset the bot token?", "Reset bot token", () -> {
                 this.token.set(normalizeDiscordBotToken(this.scarlet.settings.requireInput("Discord bot token (leave empty for staff mode)", true)));
                 this.save();
             }, null)
         );
-        
+
         if (spec.guildSf == null)
         {
             spec.guildSf = this.scarlet.settings.requireInput("Discord guild snowflake (leave empty for staff mode)", false);
             save = true;
         }
-        this.scarlet.settings.new FileValuedVoid("Discord guild snowflake", "Reset", () -> 
+        this.scarlet.settings.new FileValuedVoid("Discord guild snowflake", "Reset", () ->
             this.scarlet.settings.requireConfirmYesNoAsync("Are you sure you want to reset the guild snowflake?", "Reset guild snowflake", () -> {
                 this.guildSf = this.scarlet.settings.requireInput("Discord guild snowflake (leave empty for staff mode)", false);
                 this.save();
             }, null)
         );
-        
+
         if (save) this.save(spec);
-        
+
         this.token.set(token0);
 //        this.token = spec.token;
         this.guildSf = spec.guildSf;
@@ -1365,7 +1365,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
         String displayName = null;
         String calendarEntryId = null;
         PerformanceRatings minimumAvatarPerformance = null;
-        
+
         boolean contentSettings_drones = true;
         boolean contentSettings_emoji = true;
         boolean contentSettings_props = true;
@@ -1610,7 +1610,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
     {
         return this.jda != null && auditTypeEx != null && this.auditExType2channelSf.get(auditTypeEx.id) != null;
     }
-    
+
     boolean shouldRedact(String infoId, String requesterSf)
     {
         return ScarletDiscordJDA.this.scarlet.secretStaffList.isSecretStaffId(infoId)
@@ -2218,7 +2218,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
         TextChannel channel = guild.getTextChannelById(channelSf);
         if (channel == null)
             return false;
-        
+
         entryMeta.guildSnowflake = this.guildSf;
         entryMeta.channelSnowflake = channelSf;
         Message message = condEmit.emit(channelSf, guild, channel);
@@ -2258,9 +2258,9 @@ public class ScarletDiscordJDA implements ScarletDiscord
             channelSf = threadSf;
         if (channel == null)
             return;
-        
+
         Message message = condEmit.emit(channelSf, guild, channel);
-        
+
         if (log)
         {
             LOG.info(String.format("%s (%s/%s/%s)", auditExType.id.replace('.', ' '), this.guildSf, channelSf, message == null ? null : message.getId()));
@@ -2372,7 +2372,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
                 }
             }
             this.userModerationLimiter.await();
-            
+
             if (reactiveKickFromBan && this.bundleModerations_instanceKick2userBan.get() && parentEntryMeta.threadSnowflake != null)
             {
                 ThreadChannel threadChannel = guild.getThreadChannelById(parentEntryMeta.threadSnowflake);
@@ -2395,14 +2395,14 @@ public class ScarletDiscordJDA implements ScarletDiscord
                     return message;
                 }
             }
-            
+
             EmbedBuilder embed = this.embed(entryMeta, true)
                 .setTitle(MarkdownSanitizer.escape(target.getDisplayName()), "https://vrchat.com/home/user/"+target.getId())
                 .setImage(MiscUtils.userImageUrl(target))
             ;
-            
+
             List<LimitedUserGroups> lugs = this.scarlet.vrc.snapshot(entryMeta);
-            
+
             if (target != null)
             {
                 String epochJoined = Long.toUnsignedString(target.getDateJoined().toEpochDay() * 86400L);
@@ -2429,13 +2429,13 @@ public class ScarletDiscordJDA implements ScarletDiscord
             }
             if (entryMeta.hasAuxActor())
                 embed.addField("Action taken through automation/assistance", "", false);
-            
+
             Message message = channel
                 .sendMessageEmbeds(embed.build())
                 .complete();
-            
+
             this.scarlet.exec.execute(() -> this.emitUserModeration_thread(scarlet, entryMeta, actor.getId(), message));
-            
+
             return message;
         });
         switch (entryMeta.entry.getEventType())
@@ -2469,13 +2469,13 @@ public class ScarletDiscordJDA implements ScarletDiscord
                     .completeAfter(1500L, TimeUnit.MILLISECONDS);
             }
         }
-        
+
         entryMeta.threadSnowflake = threadChannel.getId();
         scarlet.data.auditEntryMetadata(entryMeta.entry.getId(), entryMeta);
-        
+
         ThreadChannel threadChannel0 = threadChannel;
         this.scarlet.exec.execute(() -> this.emitUserModeration_auxMessage(scarlet, entryMeta, actorId, threadChannel0));
-        
+
         return threadChannel;
     }
     Message emitUserModeration_auxMessage(Scarlet scarlet, ScarletData.AuditEntryMetadata entryMeta, String actorId, ThreadChannel threadChannel)
@@ -2486,7 +2486,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
             if (auxMessage != null)
                 return auxMessage;
         }
-        
+
         boolean mention;
         String contentExtra = "\nUnclaimed";
         switch (GroupAuditType.of(entryMeta.entry.getEventType()))
@@ -2514,9 +2514,9 @@ public class ScarletDiscordJDA implements ScarletDiscord
         case USER_UNBAN:    mention = this.pingOnModeration_userUnban   .get(); break;
         default:            mention = false;                                    break;
         }
-        
+
         String timeext = entryMeta.getAuxData("targetJoined", "", $->':'+Long.toUnsignedString($.getAsLong()));
-        
+
         ScarletData.UserMetadata actorMeta = scarlet.data.userMetadata(actorId);
         String content = actorMeta == null || actorMeta.userSnowflake == null
                 ? ScarletDiscordJDA.this.linkedIdsInfo(entryMeta)
@@ -2543,10 +2543,10 @@ public class ScarletDiscordJDA implements ScarletDiscord
                 Button.secondary("event-unredact:"+entryMeta.entry.getId(), "Unredact event")
             ))
             .completeAfter(1500L, TimeUnit.MILLISECONDS);
-        
+
         entryMeta.auxMessageSnowflake = auxMessage.getId();
         scarlet.data.auditEntryMetadata(entryMeta.entry.getId(), entryMeta);
-        
+
         return auxMessage;
     }
 
@@ -2591,7 +2591,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
         String worldImageUrl = this.getLocationImage(location),
                worldName = this.getLocationName(location);
         Location locationModel = Location.of(location);
-        
+
         scarlet.data.liveInstancesMetadata_setLocationAudit(location, entryMeta.entry.getId());
         this.condEmitEx(GroupAuditTypeEx.INSTANCE_MONITOR, false, false, null, (channelSf, guild, channel) ->
         {
@@ -2660,7 +2660,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
     public void emitInstanceClose(Scarlet scarlet, AuditEntryMetadata entryMeta, String location)
     {
         String worldImageUrl = this.getLocationImage(location);
-        
+
         String prevAuditEntryId = scarlet.data.liveInstancesMetadata_getLocationAudit(location, false);
         AuditEntryMetadata prevEntryMeta = prevAuditEntryId == null ? null : scarlet.data.auditEntryMetadata(prevAuditEntryId);
         ScarletData.InstanceEmbedMessage instanceEmbedMessage = scarlet.data.liveInstancesMetadata_getLocationInstanceEmbedMessage(location, false);
@@ -2671,7 +2671,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
         // Finalise the live player list
         final String loc = location;
         scarlet.exec.execute(() -> this.livePlayerlist.onInstanceClose(loc));
-        
+
         this.condEmit(entryMeta, (channelSf, guild, channel) ->
         {
             boolean hasPrev = prevEntryMeta != null && prevEntryMeta.hasMessage();
@@ -2703,6 +2703,26 @@ public class ScarletDiscordJDA implements ScarletDiscord
     public void emitMemberLeave(Scarlet scarlet, AuditEntryMetadata entryMeta)
     {
         this.condEmitEmbed(entryMeta, true, "Member Leave", "https://vrchat.com/home/user/"+entryMeta.entry.getTargetId(), null, null);
+    }
+
+    @Override
+    public void emitAnnouncement(
+        Scarlet scarlet,
+        AuditEntryMetadata entryMeta,
+        GroupAuditType.AnnouncementComponent announcement
+    ) {
+        this.condEmitEmbed(
+            entryMeta,
+            false,
+            MarkdownSanitizer.escape(announcement.title),
+            "https://vrchat.com/home/user/" + entryMeta.entry.getActorId(),
+            null,
+            embed -> {
+                embed
+                    .setDescription(announcement.message)
+                    .setTimestamp(OffsetDateTime.now(ZoneOffset.UTC));
+            }
+        );
     }
 
     @Override
@@ -3125,7 +3145,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
     {
         this.condEmitEx(GroupAuditTypeEx.SPAWN_PRINT, false, false, location, (channelSf, guild, channel) ->
         {
-            
+
             String fileId = print.getFiles().getFileId(),
                    image = print.getFiles().getImage();
             return channel.sendMessageEmbeds(new EmbedBuilder()
@@ -3260,11 +3280,11 @@ public class ScarletDiscordJDA implements ScarletDiscord
                 TextChannel channel = guild.getTextChannelById(instanceEmbedMessage.channelSnowflake);
                 if (channel == null)
                     return;
-                
+
                 String worldImageUrl = this.getLocationImage(location),
                        worldName = this.getLocationName(location);
                 Location locationModel = Location.of(location);
-                
+
                 EmbedBuilder embed = new EmbedBuilder()
                     .setTitle(MarkdownSanitizer.escape(worldName)+" ("+MarkdownSanitizer.escape(locationModel.name)+")", "https://vrchat.com/home/launch?worldId="+location.replaceFirst(":", "&instanceId="))
                     .setImage(worldImageUrl)
@@ -3283,15 +3303,15 @@ public class ScarletDiscordJDA implements ScarletDiscord
                         .append("<t:").append(joinedEpoch).append(":D> (<t:").append(joinedEpoch).append(":R>): ")
                         .append(avatarName).append("\n");
                 }
-                
+
                 if (sb.length() > 4096)
                 {
                     channel.editMessageEmbedsById(instanceEmbedMessage.messageSnowflake, embed.setDescription("See `players.txt` for connected users").build()).setAttachments(AttachedFile.fromData(sb.toString().getBytes(StandardCharsets.UTF_8), "players.txt"));
                     return;
                 }
-                
+
                 MessageEmbed[] embeds = {embed.setDescription(sb).build()};// Stream.concat(Stream.of(embed.build()), MiscUtils.paginateOnLines(sb, 4000).stream().limit(9L).map($ -> new EmbedBuilder().setDescription($).build())).toArray(MessageEmbed[]::new);
-                
+
                 channel.editMessageEmbedsById(instanceEmbedMessage.messageSnowflake, embeds).setAttachments().complete();
             }
         }
@@ -3324,12 +3344,12 @@ public class ScarletDiscordJDA implements ScarletDiscord
     <MCR extends MessageCreateRequest<MCR> & FluentRestAction<Message, MCR>> Message emitModSummary(Scarlet scarlet, OffsetDateTime endOfDay, long hoursBack, Function<MessageEmbed, MCR> mca)
     {
         OffsetDateTime startOfDay = endOfDay.minusHours(hoursBack);
-        
+
         String epochStart = Long.toUnsignedString(startOfDay.toEpochSecond()),
                epochEnd = Long.toUnsignedString(endOfDay.toEpochSecond());
-        
+
         List<GroupAuditLogEntry> entries = this.scarlet.vrc.auditQuery(startOfDay, endOfDay, null, "group.instance.kick,group.instance.warn,group.user.ban,group.invite.create", null);
-        
+
         if (entries == null)
         {
             return mca.apply(new EmbedBuilder()
@@ -3340,10 +3360,10 @@ public class ScarletDiscordJDA implements ScarletDiscord
                     .setTimestamp(endOfDay)
                     .build()).complete();
         }
-        
+
         String[] exJoinEventIds = this.scarlet.data.customEvent_filter(GroupAuditTypeEx.STAFF_JOIN, startOfDay, endOfDay);
 
-        
+
         Map<String, List<GroupAuditType>> map = new HashMap<>();
         Map<String, String> displayNames = new HashMap<>();
         Map<String, int[]> staffJoins = new HashMap<>();
@@ -3367,8 +3387,8 @@ public class ScarletDiscordJDA implements ScarletDiscord
                 }
             }
         }
-        
-        
+
+
         StringBuilder sb = new StringBuilder();
         {
             List<GroupAuditLogEntry> entries2 = this.scarlet.vrc.auditQuery(startOfDay, endOfDay, null, "group.member.join,group.member.leave,group.member.remove", null);
@@ -3463,7 +3483,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
             sb.append(String.format("(skipped %d for inactivity)\n", skippedForInactivity));
         }
         sb.append(String.format("Staff totals: %d / %d / %d / %d / %d\n", twarns, tkicks, tbans, tinvites, tjoins));
-        
+
         Message message = mca.apply(new EmbedBuilder()
             .setTitle("Moderation Summary")
             .setDescription("Spanning <t:"+epochStart+":f> through <t:"+epochEnd+":f>")
@@ -3495,15 +3515,15 @@ public class ScarletDiscordJDA implements ScarletDiscord
         if (list.isEmpty())
             return null;
         OffsetDateTime startOfDay = endOfDay.minusHours(hoursBack);
-        
+
         String epochStart = Long.toUnsignedString(startOfDay.toEpochSecond()),
                epochEnd = Long.toUnsignedString(endOfDay.toEpochSecond());
-        
+
         List<GroupAuditLogEntry> entries = this.scarlet.vrc.auditQuery(startOfDay, endOfDay, null, list.stream().collect(Collectors.joining(",")), null);
-        
+
         if (entries == null)
             return null;
-        
+
         Message message = mca.apply(new EmbedBuilder()
             .setTitle("Outstanding Moderation")
             .setDescription("Spanning <t:"+epochStart+":f> through <t:"+epochEnd+":f>")
@@ -3511,7 +3531,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
             .setFooter(ScarletDiscord.FOOTER_PREFIX+"Extended event")
             .setTimestamp(endOfDay)
             .build()).complete();
-        
+
         this.scarlet.exec.submit(() ->
         {
             Map<String, List<ScarletData.AuditEntryMetadata>> map = new HashMap<>();
@@ -3530,13 +3550,13 @@ public class ScarletDiscordJDA implements ScarletDiscord
                 if (entryMeta != null && (!entryMeta.hasTags() || entryMeta.hasDescription()))
                     map.computeIfAbsent(actorId, $ -> new ArrayList<>()).add(entryMeta);
             }
-            
+
             MessageChannel messageChannel = message.getChannel().getType().isThread()
                 ? message.getChannel().asThreadChannel()
                 : message.isEphemeral()
                     ? message.getChannel()
                     : message.createThreadChannel("Outstanding Moderation as of "+endOfDay).completeAfter(1000L, TimeUnit.MILLISECONDS);
-            
+
             map.forEach((actorId, metas) ->
             {
                 StringBuilder sb = new StringBuilder();
@@ -3566,7 +3586,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
                 }
             });
         });
-        
+
         return message;
     }
 
