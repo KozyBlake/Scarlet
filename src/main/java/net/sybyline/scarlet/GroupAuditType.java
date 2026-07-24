@@ -32,7 +32,7 @@ public enum GroupAuditType implements DEnum.DEnumString<GroupAuditType>
     MEMBER_ROLE_UNASSIGN("group.member.role.unassign", "Member Role Unassign", 0x00_FF007F), // RoleRefComponent
 //    MEMBER_UPDATE       ("group.member.update"       , "Member Update"       , 0x00_007F7F), // Map<String, UpdateSubComponent>
     MEMBER_USER_UPDATE  ("group.member.user.update"  , "Member User Update"  , 0x00_007F7F), // Map<String, UpdateSubComponent>
-    ANNOUNCEMENT ("group.instance.announcement", "Announcement", 0x00_00FF7F), // AnnouncementComponent
+    ANNOUNCEMENT        ("group.announcement"        , "Announcement"        , 0x00_00FF7F), // AnnouncementComponent
     POST_CREATE         ("group.post.create"         , "Post Create"         , 0x00_00FF7F), // PostCreateComponent
     POST_DELETE         ("group.post.delete"         , "Post Delete"         , 0x00_7FFF7F), // PostDeleteComponent
     POST_UPDATE         ("group.post.update"         , "Post Update"         , 0x00_00FF7F), // Map<String, UpdateSubComponent>
@@ -154,7 +154,7 @@ public enum GroupAuditType implements DEnum.DEnumString<GroupAuditType>
         public String authorId;
         public String imageId;
         public boolean sendNotification;
-        public String message;
+        public String text;
         public String title;
     }
     public static class PostBaseComponent

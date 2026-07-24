@@ -2706,26 +2706,6 @@ public class ScarletDiscordJDA implements ScarletDiscord
     }
 
     @Override
-    public void emitAnnouncement(
-        Scarlet scarlet,
-        AuditEntryMetadata entryMeta,
-        GroupAuditType.AnnouncementComponent announcement
-    ) {
-        this.condEmitEmbed(
-            entryMeta,
-            false,
-            MarkdownSanitizer.escape(announcement.title),
-            "https://vrchat.com/home/user/" + entryMeta.entry.getActorId(),
-            null,
-            embed -> {
-                embed
-                    .setDescription(announcement.message)
-                    .setTimestamp(OffsetDateTime.now(ZoneOffset.UTC));
-            }
-        );
-    }
-
-    @Override
     public void emitPostCreate(Scarlet scarlet, AuditEntryMetadata entryMeta, GroupAuditType.PostCreateComponent post)
     {
         this.condEmitEmbed(entryMeta, false, MarkdownSanitizer.escape(post.title), "https://vrchat.com/home/group/"+entryMeta.entry.getGroupId()+"/posts", null, embed ->
