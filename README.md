@@ -43,199 +43,354 @@ Since there is no automatic synchronization of data between groups running Scarl
 
 ### Discord Commands
 
+Arguments in `<>` are required and `[]` optional. Most commands require staff permissions and act on the configured VRChat group. Entity IDs look like `usr_…` (user), `grp_…` (group), and `avtr_…` (avatar).
+
 #### Moderation Commands
 
-- **`create-or-update-moderation-tag <value:string> <label:string?> <description:string?>`**  
-  Adds or updates a custom moderation tag (max of 125).  
-  Example: `/create-or-update-moderation-tag "trolling" "Trolling" "Provocative or mocking behavior intended to antagonize someone"`
+- **`moderation-tags list [entries-per-page:int?]`**  
+  Lists your custom moderation tags (up to 125 tags).  
+  Example: `/moderation-tags list`
 
-- **`delete-moderation-tag <value:string>`**  
-  Removes a custom moderation tag (max of 125).  
-  Example: `/delete-moderation-tag "trolling"`
+- **`moderation-tags add <value:string> <label:string?> <description:string?>`**  
+  Adds or updates a custom moderation tag. (Replaces the old `create-or-update-moderation-tag`.)  
+  Example: `/moderation-tags add "trolling" "Trolling" "Provocative or mocking behaviour intended to antagonise someone"`
 
-- **`watched-user`**  
-  Configures watched users.  
-  Example: `/watched-user add-tag "usr_00000000-0000-0000-0000-000000000000" "inappropriate_behaviour"`
-
-- **`watched-group`**  
-  Configures watched groups.  
-  Example: `/watched-group add-tag "grp_00000000-0000-0000-0000-000000000000" "trolling"`
-
-- **`watched-avatar`**  
-  Configures watched avatars.  
-  Example: `/watched-avatar add-tag "avtr_00000000-0000-0000-0000-000000000000" "missing_content_tags"`
-
-- **`vrchat-user-ban <vrchat-user:string>`**  
-  Ban a specific VRChat user.  
-  Example: `/vrchat-user-ban "usr_00000000-0000-0000-0000-000000000000"`
-
-- **`vrchat-user-ban-multi`**  
-  Ban several VRChat users.  
-  Example: `/vrchat-user-ban-multi`
-
-- **`vrchat-user-unban <vrchat-user:string>`**  
-  Unban a specific VRChat user.  
-  Example: `/vrchat-user-unban "usr_00000000-0000-0000-0000-000000000000"`
-
-- **`vrchat-user-unban-multi`**  
-  Unban several VRChat users.  
-  Example: `/vrchat-user-unban-multi`
+- **`moderation-tags delete <value:string>`**  
+  Removes a custom moderation tag. (Replaces the old `delete-moderation-tag`.)  
+  Example: `/moderation-tags delete "trolling"`
 
 - **`vrchat-user-info <vrchat-user:string>`**  
   Lists internal and audit information for a specific VRChat user.  
   Example: `/vrchat-user-info "usr_00000000-0000-0000-0000-000000000000"`
 
-- **`vrchat-group`**  
-  Manages group operations such as member search, ban/invite/request lists, posts, announcements, audit-type discovery, instance tools, role assignment, and owner-level transfer checks. Instance creation includes queue, age gate, content, and avatar performance gate presets.  
-  Examples: `/vrchat-group search-members "display name"`, `/vrchat-group list-bans`, `/vrchat-group audit-types`, `/vrchat-group create-post`
+- **`vrchat-user-ban <vrchat-user:string> [tag-immediately:bool?]`**  
+  Bans a specific VRChat user from the group, optionally opening the tag prompt straight away.  
+  Example: `/vrchat-user-ban "usr_00000000-0000-0000-0000-000000000000"`
 
-- **Desktop instance wizard**  
-  Use **Create Instance** in Scarlet's top action bar, or **File -> Create VRChat group instance...**, to create a group instance from a world URL/id and optionally open it in the VRChat client in VR or Desktop mode.
+- **`vrchat-user-ban-multi`** / **`vrchat-user-unban-multi`**  
+  Bans or unbans several VRChat users at once via a follow-up prompt.  
+  Example: `/vrchat-user-ban-multi`
+
+- **`vrchat-user-unban <vrchat-user:string>`**  
+  Unbans a specific VRChat user.  
+  Example: `/vrchat-user-unban "usr_00000000-0000-0000-0000-000000000000"`
 
 - **`discord-user-info <discord-user:user>`**  
   Lists internal information for a specific Discord user.  
   Example: `/discord-user-info <@123456789123456789>`
 
 - **`discord-warn <discord-user:user> <reason:string?>`**  
-  Sends a warning DM to a Discord server member and records it in the configured action log channel.  
+  Sends a warning DM to a Discord member and records it in the configured action-log channel.  
   Example: `/discord-warn <@123456789123456789> "Stop spamming chat"`
 
-- **`discord-kick <discord-user:user> <reason:string?>`**  
-  Kicks a Discord server member after confirmation and records the result in the configured action log channel.  
-  Example: `/discord-kick <@123456789123456789> "Repeated spam"`
-
-- **`discord-ban <discord-user:user> <reason:string?>`**  
-  Bans a Discord server member after confirmation and records the result in the configured action log channel.  
+- **`discord-kick <discord-user:user> <reason:string?>`** / **`discord-ban <discord-user:user> <reason:string?>`**  
+  Kicks or bans a Discord member after confirmation, recording the result in the action-log channel.  
   Example: `/discord-ban <@123456789123456789> "Raid account"`
 
-- **`submit-evidence <evidence-submission:attachment> <evidence-submission-2:attachment?> ...`**  
-  Submit attachments for evidence.  
+- **`submit-evidence <evidence-submission:attachment> [evidence-submission-2 … -5:attachment?]`**  
+  Submits up to five attachments as evidence.  
   Example: `/submit-evidence <(attached file)>`
+
+#### Watched Entities
+
+`watched-group`, `watched-user`, and `watched-avatar` share the same set of subcommands, differing only in the ID they take (`grp_…`, `usr_…`, or `avtr_…`). The examples below use `watched-group`; substitute `watched-user` or `watched-avatar` as needed.
+
+- **`watched-group add <vrchat-group:string> [type] [tags] [priority] [message]`**  
+  Starts watching an entity, optionally setting its watch type, tags, priority, and TTS announcement message up front.  
+  Example: `/watched-group add "grp_00000000-0000-0000-0000-000000000000"`
+
+- **`watched-group view <vrchat-group:string>`**  
+  Shows an entity's stored watch information.  
+  Example: `/watched-group view "grp_00000000-0000-0000-0000-000000000000"`
+
+- **`watched-group remove <vrchat-group:string>`**  
+  Stops watching an entity.  
+  Example: `/watched-group remove "grp_00000000-0000-0000-0000-000000000000"`
+
+- **`watched-group list [entries-per-page:int?]`** / **`export`** / **`import <import-file:attachment>`**  
+  Lists all watched entities of that kind, exports them as a JSON file, or imports them from an attached JSON file.  
+  Example: `/watched-group export`
+
+- **`watched-group add-tag <vrchat-group:string> <tag:string>`** / **`remove-tag <vrchat-group:string> <tag:string>`**  
+  Adds or removes a single moderation tag on the entity.  
+  Example: `/watched-group add-tag "grp_00000000-0000-0000-0000-000000000000" "trolling"`
+
+- **`watched-group set-critical` / `set-silent` / `set-type` / `set-priority` / `set-message` / `set-notes` / `set-tags <vrchat-group:string> <value>`**  
+  Sets a single property of the watch entry — the critical flag, silent flag, watch type, priority, TTS announcement message, notes, or the full tag set respectively.  
+  Example: `/watched-group set-critical "grp_00000000-0000-0000-0000-000000000000" true`
+
+#### VRChat Group Management
+
+Subcommands of **`vrchat-group`** for operating the group itself.
+
+- **`vrchat-group audit-types`**  
+  Lists the audit event types currently present in the group (useful when configuring audit channels).  
+  Example: `/vrchat-group audit-types`
+
+- **`vrchat-group search-members <member-search:string> [result-limit:int?] [entries-per-page:int?]`**  
+  Searches the group's members by display name.  
+  Example: `/vrchat-group search-members "display name"`
+
+- **`vrchat-group list-bans [result-limit:int?] [entries-per-page:int?]`**  
+  Lists banned users in the group.  
+  Example: `/vrchat-group list-bans`
+
+- **`vrchat-group list-invites [result-limit:int?] [entries-per-page:int?]`**  
+  Lists pending invites the group has sent.  
+  Example: `/vrchat-group list-invites`
+
+- **`vrchat-group list-join-requests [blocked-requests:bool?] [result-limit:int?] [entries-per-page:int?]`**  
+  Lists pending join requests, or blocked ones when `blocked-requests` is set.  
+  Example: `/vrchat-group list-join-requests`
+
+- **`vrchat-group view-announcement`**  
+  Shows the group's current announcement.  
+  Example: `/vrchat-group view-announcement`
+
+- **`vrchat-group create-announcement <title:string> <text:string> [send-notification:bool?] [image-file-id:string?]`**  
+  Creates or replaces the group announcement, optionally notifying members and attaching an uploaded image.  
+  Example: `/vrchat-group create-announcement "Event tonight" "Doors open at 7pm CT."`
+
+- **`vrchat-group delete-announcement <confirm-delete:bool>`**  
+  Deletes the current group announcement.  
+  Example: `/vrchat-group delete-announcement true`
+
+- **`vrchat-group list-posts [public-only:bool?] [result-limit:int?] [entries-per-page:int?]`**  
+  Lists recent group posts.  
+  Example: `/vrchat-group list-posts`
+
+- **`vrchat-group create-post <title:string> <text:string> [visibility] [send-notification:bool?] [image-file-id:string?] [role:string?]`**  
+  Creates a group post, optionally restricted to a role and/or with an image.  
+  Example: `/vrchat-group create-post "Rules update" "Please re-read the group rules."`
+
+- **`vrchat-group delete-post <post-id:string> <confirm-delete:bool>`**  
+  Deletes a group post by ID.  
+  Example: `/vrchat-group delete-post "<post id>" true`
+
+- **`vrchat-group open-instance <vrchat-world:string>`**  
+  Opens a group instance for the given world.  
+  Example: `/vrchat-group open-instance "wrld_00000000-0000-0000-0000-000000000000"`
+
+- **`vrchat-group close-instance <vrchat-location:string> [close-hard:bool?] [close-in-minutes:int?]`**  
+  Closes an instance, optionally hard-closing (kicking everyone) or scheduling the close after N minutes.  
+  Example: `/vrchat-group close-instance "wrld_…:12345~group(grp_…)"`
+
+- **`vrchat-group add-role <vrchat-user:string> <vrchat-role:string>`** / **`remove-role <vrchat-user:string> <vrchat-role:string>`**  
+  Grants or removes a VRChat group role for a user.  
+  Example: `/vrchat-group add-role "usr_00000000-0000-0000-0000-000000000000" "<role id>"`
+
+- **`vrchat-group transfer-check <vrchat-user:string>`**  
+  Checks whether a user is eligible to receive group ownership.  
+  Example: `/vrchat-group transfer-check "usr_00000000-0000-0000-0000-000000000000"`
+
+- **`vrchat-group transfer-start <vrchat-user:string> <confirm-group-id:string>`** / **`transfer-cancel <confirm-group-id:string>`**  
+  Starts (or accepts) a group-ownership transfer, or cancels an active one. The group ID must be re-typed to confirm.  
+  Example: `/vrchat-group transfer-start "usr_00000000-0000-0000-0000-000000000000" "grp_00000000-0000-0000-0000-000000000000"`
+
+- **Desktop instance wizard**  
+  Use **Create Instance** in Scarlet's top action bar, or **File -> Create VRChat group instance...**, to create a group instance from a world URL/id and optionally open it in the VRChat client in VR or Desktop mode.
+
+#### Event Scheduling
+
+Subcommands of **`schedule`** manage recurring VRChat group events (each stored as a "spec" with an ID). Scarlet posts upcoming events ahead of time and can mirror them as Discord events.
+
+- **`schedule list [entries-per-page:int?]`**  
+  Lists all configured event schedules.  
+  Example: `/schedule list`
+
+- **`schedule add <event-id> <title> <description> <date> <time-zone-id> <time-of-day> <duration> <frequency> <category>`**  
+  Creates a new event schedule.  
+  Example: `/schedule add "weekly-hangout" "Weekly Hangout" "Casual community meetup" "2026-08-01" "America/Chicago" "19:00" "120" "WEEKLY" "hangout"`
+
+- **`schedule remove <scarlet-event-spec:string>`**  
+  Deletes an event schedule.  
+  Example: `/schedule remove "weekly-hangout"`
+
+- **`schedule set-active <spec> <active:bool>`** / **`set-featured <spec> <featured:bool>`** / **`set-mirror-on-discord <spec> <value:bool>`** / **`set-notify-create <spec> <value:bool>`**  
+  Toggles a schedule's activation, featured flag, Discord-event mirroring, or create-time notification.  
+  Example: `/schedule set-active "weekly-hangout" true`
+
+- **`schedule set-max-pending <spec> <count:int>`** / **`set-host-join-early <spec> <minutes:int>`** / **`set-guest-join-early <spec> <minutes:int>`** / **`set-close-after <spec> <minutes:int>`**  
+  Sets how many future events to keep posted, how early hosts/guests may join, and how long after the end to auto-close the instance.  
+  Example: `/schedule set-host-join-early "weekly-hangout" "15"`
+
+- **`schedule set-title` / `set-description` / `set-date` / `set-time` / `set-duration` / `set-frequency` / `set-category` / `set-access` / `set-overflow` / `set-image <spec> <value>`**  
+  Sets an individual property of the schedule (title, description, start date, time-of-day + zone, duration, recurrence frequency, category, access level, overflow-instance handling, or banner image).  
+  Example: `/schedule set-time "weekly-hangout" "America/Chicago" "20:00"`
+
+- **`schedule set-tags` / `set-roles` / `set-platforms` / `set-languages <spec> <values…>`**  
+  Sets the multi-value properties: event tags, allowed roles, platforms, and languages.  
+  Example: `/schedule set-languages "weekly-hangout" "eng" "spa"`
+
+#### Staff Lists
+
+- **`staff-list list [entries-per-page:int?]`** / **`add <vrchat-user> [discord-user] [role]`** / **`delete <vrchat-user> [role]`**  
+  Lists, adds, or removes users on the public staff list (used for staff advisories and the `staff-list` display).  
+  Example: `/staff-list add "usr_00000000-0000-0000-0000-000000000000" <@123456789123456789>`
+
+- **`secret-staff-list list` / `add` / `delete`**  
+  The same operations for the secret staff list, whose members are tracked but not shown publicly.  
+  Example: `/secret-staff-list add "usr_00000000-0000-0000-0000-000000000000"`
 
 #### Audit and Logging Commands
 
-- **`query-target-history <vrchat-user:string> <days-back:int?>`**  
-  Queries audit events targeting a specific VRChat user.  
+- **`query-target-history <vrchat-user:string> [days-back:int?]`** / **`query-actor-history <vrchat-user:string> [days-back:int?]`**  
+  Queries audit events targeting, or performed by, a specific VRChat user.  
   Example: `/query-target-history "usr_00000000-0000-0000-0000-000000000000" "14"`
 
-- **`query-actor-history <vrchat-user:string> <days-back:int?>`**  
-  Queries audit events performed by a specific VRChat user.  
-  Example: `/query-actor-history "usr_00000000-0000-0000-0000-000000000000" "14"`
+- **`actor-moderation-summary <vrchat-user:string>`**  
+  Generates a summary of moderation actions performed by a specific staff member (a per-actor accountability view).  
+  Example: `/actor-moderation-summary "usr_00000000-0000-0000-0000-000000000000"`
 
-- **`set-audit-channel <audit-event-type:string> <discord-channel:channel?>`**  
-  Sets a given text channel as the channel certain audit event types use.  
-  Example: `/set-audit-channel "group.instance.kick" <#log-instance-kicks>`
-
-- **`set-audit-aux-webhooks <audit-event-type:string>`**  
-  Sets the given webhooks as the webhooks certain audit event types use.  
-  Example: `/set-audit-aux-webhooks "group.instance.kick"`
-
-- **`set-audit-ex-channel <audit-ex-event-type:string> <discord-channel:channel?>`**  
-  Sets a given text channel as the channel certain extended event types use.  
-  Example: `/set-audit-ex-channel "groupex.instance.vtk" <#log-instance-kicks>`
-
-- **`set-audit-secret-channel <audit-event-type:string> <discord-channel:channel?>`**  
-  Sets a given text channel as the secret channel certain audit event types use.  
-  Example: `/set-audit-secret-channel "group.instance.kick" <#log-instance-kicks>`
-
-- **`set-audit-ex-secret-channel <audit-ex-event-type:string> <discord-channel:channel?>`**  
-  Sets a given text channel as the secret channel certain extended event types use.  
-  Example: `/set-audit-ex-secret-channel "groupex.instance.vtk" <#log-instance-kicks>`
-
-- **`set-discord-action-log-channel <discord-text-channel:channel?>`**  
-  Sets the channel for Discord warn/kick/ban result logs and Discord member join invite logs. Omit the channel to disable this log. Invite tracking requires the bot to have Manage Server permission and the Discord member intent enabled; Discord does not expose member IP addresses to bots.  
-  Example: `/set-discord-action-log-channel <#discord-mod-log>`
-
-- **`set-ops-alert-channel <discord-text-channel:channel?>`**  
-  Sets a channel to receive Scarlet's operational health alerts — VRChat session lost/recovered, log tailer stalled/recovered, hard VRChat rate-limiting, a Scarlet update becoming available, and VRChat API version mismatches — so staff learn about problems in Discord instead of only from the desktop app. Omit the channel to disable.  
-  Example: `/set-ops-alert-channel <#scarlet-health>`
-
-- **`set-training-channel <discord-text-channel:channel?>`**  
-  Sets a channel to receive simulated `[TRAINING]` events from Training mode, keeping drills out of your real audit log. If unset, simulated events are not posted to Discord. Omit the channel to disable.  
-  Example: `/set-training-channel <#scarlet-training>`
-
-- **`set-discord-account-age-alert <days:int?>`**  
-  Sets a Discord account-age threshold; members whose account is newer are flagged in the join log. Omit to clear.  
-  Example: `/set-discord-account-age-alert "7"`
-
-- **`moderation-summary <hours-back:int?>`**  
-  Generates a summary of moderation actions.  
+- **`moderation-summary [hours-back:int?]`** / **`outstanding-moderation [hours-back:int?]`**  
+  Generates a summary of moderation actions, or a list of outstanding (unresolved) ones, over the given window.  
   Example: `/moderation-summary "48"`
 
-- **`outstanding-moderation <hours-back:int?>`**  
-  Generates a list of outstanding moderation actions.  
-  Example: `/outstanding-moderation "48"`
+- **`set-audit-channel <audit-event-type:string> [discord-text-channel:channel?]`**  
+  Routes an audit event type to a text channel. Omit the channel to unset.  
+  Example: `/set-audit-channel "group.instance.kick" <#log-instance-kicks>`
+
+- **`set-audit-ex-channel <audit-ex-event-type:string> [discord-text-channel:channel?]`**  
+  Routes an extended (Scarlet-derived) event type to a channel.  
+  Example: `/set-audit-ex-channel "groupex.instance.vtk" <#log-instance-kicks>`
+
+- **`set-audit-secret-channel <audit-event-type:string> [discord-text-channel:channel?]`** / **`set-audit-secret-ex-channel <audit-ex-event-type:string> [discord-text-channel:channel?]`**  
+  Routes an audit or extended event type to a *secret* channel (for staff-only, sensitive events).  
+  Example: `/set-audit-secret-channel "group.instance.kick" <#log-instance-kicks-secret>`
+
+- **`set-audit-aux-webhooks <audit-event-type:string>`**  
+  Sets the auxiliary webhooks certain audit event types mirror to.  
+  Example: `/set-audit-aux-webhooks "group.instance.kick"`
+
+- **`aux-webhooks list [entries-per-page:int?]`** / **`add <id> <url>`** / **`remove <id>`**  
+  Manages the named auxiliary webhooks referenced by `set-audit-aux-webhooks`.  
+  Example: `/aux-webhooks add "mirror-1" "https://discord.com/api/webhooks/…"`
+
+- **`set-discord-action-log-channel [discord-text-channel:channel?]`**  
+  Sets the channel for Discord warn/kick/ban result logs and member-join invite logs. Omit to disable. Invite tracking needs the bot's Manage Server permission and the member intent.  
+  Example: `/set-discord-action-log-channel <#discord-mod-log>`
+
+- **`set-ops-alert-channel [discord-text-channel:channel?]`**  
+  Sets a channel to receive Scarlet's operational health alerts — VRChat session lost/recovered, log-tailer stalled/recovered, hard VRChat rate-limiting, an available Scarlet update, and VRChat API version mismatches. Omit to disable.  
+  Example: `/set-ops-alert-channel <#scarlet-health>`
+
+- **`set-training-channel [discord-text-channel:channel?]`**  
+  Sets a channel to receive simulated `[TRAINING]` events from Training mode, keeping drills out of the real audit log. If unset, simulated events are not posted to Discord.  
+  Example: `/set-training-channel <#scarlet-training>`
+
+- **`set-discord-account-age-alert [days:int?]`**  
+  Flags Discord members whose account is newer than the threshold in the join log. Omit to clear.  
+  Example: `/set-discord-account-age-alert "7"`
+
+- **`export-log [file-name:string?]`**  
+  Attaches a Scarlet log file for download.  
+  Example: `/export-log`
 
 #### Configuration Commands
 
-- **`set-voice-channel <discord-channel:channel?>`**  
-  Sets a given voice channel as the channel in which to announce TTS messages.  
+- **`config-info`**  
+  Shows the current configuration, including which Discord roles are mapped to each Scarlet permission.  
+  Example: `/config-info`
+
+- **`settings edit <setting-id:string>`**  
+  Opens an editor for one of Scarlet's file-backed settings by ID (the same settings shown in the desktop Settings tab).  
+  Example: `/settings edit "audit_polling_interval"`
+
+- **`config-set moderation-summary time-of-day <time-zone-id> <time-of-day>`** / **`config-set outstanding-moderation time-of-day <time-zone-id> <time-of-day>`**  
+  Sets the daily time at which the moderation / outstanding-moderation summaries are generated.  
+  Example: `/config-set moderation-summary time-of-day "America/Chicago" "09:00"`
+
+- **`config-set outstanding-moderation period-days <days:int>`** / **`config-set suggested-moderation period-days <days:int>`** / **`config-set suggested-moderation kick-count <count:int>`**  
+  Tunes the outstanding-moderation lookback period, and the kick-count/period thresholds that drive suggested moderation.  
+  Example: `/config-set suggested-moderation kick-count "3"`
+
+- **`config-set report-template view` / `download` / `view-report-template-format` / `edit` / `upload <report-template:attachment>`**  
+  Views, downloads, inspects the parameters of, edits, or replaces the VRChat Help Desk report template used to pre-fill report forms.  
+  Example: `/config-set report-template download`
+
+- **`set-voice-channel [discord-voice-channel:channel?]`**  
+  Sets the voice channel Scarlet joins to speak TTS announcements.  
   Example: `/set-voice-channel <#staff-in-instance>`
 
 - **`set-tts-voice <voice-name:string>`**  
-  Sets the voice in which to announce TTS messages.  
+  Selects which installed TTS voice is used for announcements.  
   Example: `/set-tts-voice "Microsoft David Desktop"`
 
-- **`scarlet-permission <scarlet-permission:string> <discord-role:role?>`**  
-  Sets a given Scarlet-specific permission to be associated with certain Discord roles.  
-  Example: `/scarlet-permission add-to-role "event.set_tags" <@123456789123456789>`
+- **`set-verification-auto-invite <enabled:bool> [verified-role] [members-role] [vrchat-group-id]`**  
+  Configures auto-inviting newly verified members to a VRChat group.  
+  Example: `/set-verification-auto-invite true <@&VerifiedRole> <@&MembersRole> "grp_00000000-0000-0000-0000-000000000000"`
 
-- **`config-info`**  
-  Shows information about the current configuration.  
-  Example: `/config-info`
+- **`set-ticket-tool-auto-response <enabled:bool> [discord-category] [notify-role] [channel-name-regex]`**  
+  Configures the Ticket Tool age-verification auto-response (which ticket channels it fires in, and who to ping).  
+  Example: `/set-ticket-tool-auto-response true`
 
-- **`config-set`**  
-  Configures miscellaneous settings.  
-  Example: `/config-set mod-summary-time-of-day "-06:00"`
+- **`set-ticket-age-verify-message`**  
+  Sets (or resets) the message text used by the Ticket Tool age-verification auto-response.  
+  Example: `/set-ticket-age-verify-message`
 
-- **`link-vrchat-account` / `unlink-vrchat-account`**  
-  Lets a server member link (or unlink) their own Discord account to their VRChat account. Group staff can unlink another member with `unlink-vrchat-account-for`.  
+- **`server-restart restart-now`** / **`server-restart update-now [target-version:string?]`**  
+  Restarts the Scarlet application immediately, or updates it (optionally to a specific version) and restarts.  
+  Example: `/server-restart update-now`
+
+- **Scarlet permissions**  
+  Scarlet's own permissions (for example `event.set_tags`) are mapped to Discord roles in Scarlet's configuration; the current mapping is shown by `/config-info`. (There is no longer a standalone `scarlet-permission` command.)
+
+#### Account Linking
+
+- **`link-vrchat-account [vrchat-user:string]`** / **`unlink-vrchat-account`**  
+  Lets a server member link (or unlink) their own Discord account to their VRChat account.  
   Example: `/link-vrchat-account`
 
-- **`set-training-channel`, `set-ops-alert-channel`** — see the Audit and Logging section above.
+- **`unlink-vrchat-account-for [discord-user:user] [vrchat-user:string]`**  
+  Staff command to unlink another member's Discord/VRChat association, by Discord user and/or VRChat user.  
+  Example: `/unlink-vrchat-account-for <@123456789123456789>`
 
 #### Utility Commands
 
-- **`vrchat-search <world|user|group|avatar> <search-query:string>`**  
-  Search for VRChat content.  
+- **`vrchat-search <world|user|group|avatar> <search-query:string> [entries-per-page:int?]`**  
+  Searches VRChat worlds, users, groups, or avatars.  
   Example: `/vrchat-search user "Vinyarion"`
 
-- **`export-log <file-name:string?>`**  
-  Exports a Scarlet log file as an attachment.  
-  Example: `/export-log`
-
-- **`server-restart`**  
-  Restarts the Scarlet server application.  
-  Example: `/server-restart`
-
-- **`vrchat-animated-emoji`**  
-  Generates a VRChat animated emoji spritesheet from a gif.  
+- **`vrchat-animated-emoji from-url <gif-url:string>`** / **`from-file <gif-file:attachment>`**  
+  Generates a VRChat animated-emoji spritesheet from a GIF, given either a URL or an uploaded file.  
   Example: `/vrchat-animated-emoji from-url "https://tenor.com/view/rat-spin-gif-10300642414513246571"`
 
 ---
 
 ### CLI Commands
 
+Scarlet's CLI tab (and the IPC pipe below) accept these text commands:
+
+- **`info`, `help`**  
+  Prints Scarlet build/runtime information and the available commands.  
 - **`exit`, `halt`, `quit`, `stop`**  
   Shuts down the application.  
 - **`logout`**  
   Logs out of the VRChat account and shuts down the application.  
+- **`reboot`, `restart`**  
+  Restarts the application.  
 - **`explore`**  
-  Browses to the folder Scarlet uses to store data.  
+  Opens the folder Scarlet uses to store data.  
 - **`tts <message...>`**  
-  Queues a TTS message to be read in the Discord Voice channel, if connected.  
+  Queues a TTS message to be read in the Discord voice channel, if connected.  
 - **`link <vrcUserId> <discordUserSnowflake>`**  
   Associates a VRChat account with a Discord account.  
 - **`importgroups <file|url...>`**  
-  Imports a legacy CSV list of watched groups from a file or url.  
+  Imports a legacy CSV list of watched groups from a file or URL.  
 - **`importgroupsjson <file|url...>`**  
-  Imports a JSON list of watched groups from a file or url.  
+  Imports a JSON list of watched groups from a file or URL.  
 - **`simulate <kind> [name]`**  
   Fires a simulated training event (requires Training mode enabled). Kinds: `join`, `watched`, `wuser`, `new`, `mixed`, `pronouns`, `avatar`, `vtk`, `leave`.  
 - **`langlint`**  
   Validates the external `lang/messages_<lang>.properties` translation files against the English base and prints a per-file report (missing keys, unknown keys, broken `{0}` placeholders).  
-- **`reboot`, `restart`**  
-  Restarts the application.
+- **`vrchatapi-test`**  
+  Runs a quick check of the bundled VRChat API client against the live API.  
+- **`popup`, `popup-test`**  
+  Shows a test desktop notification, to verify the notification path works.  
+- **`data-transfer`**  
+  Runs the export/import migration flow for moving Scarlet to another PC or OS.  
+- **`data-folder-notice`**  
+  Prints the location of Scarlet's data folder.
 
 Scarlet supports sending cli commands via named pipes.
 Windows: `\\.\pipe\ScarletIPC-grp_00000000-0000-0000-0000-000000000000`
