@@ -1,11 +1,11 @@
 {
   "latest_release": "0.4.18",
-  "latest_build": "0.4.18-b1",
+  "latest_build": "0.4.18-b2",
   "announcement": {
-    "id": "20260720-000000-b1-hotfix",
+    "id": "20260723-000000-b2",
     "severity": "info",
-    "title": "0.4.18-b1 updated — please redownload",
-    "message": "0.4.18-b1 has been updated in place with a privacy hotfix: avatar logging no longer runs for people who left the instance. Avatar lookups could previously continue for players who were no longer present — after they left while Scarlet and VRChat kept running, and for players from a previous instance or a closed VRChat session. Departed players still stay visible in the player table, but Scarlet no longer tracks them: every avatar path now checks presence before doing any work or recording any result, in-flight lookups are discarded when a player leaves, and join checks are skipped for anyone who left during log catch-up. This also removes a class of unnecessary avatar lookups and rate-limit pressure. If you downloaded 0.4.18-b1 before this update, please download it again — the version number is unchanged. 0.4.18-b1 also brings burst polling for near-instant moderation posts, avatar statuses without VRChat launch options, the avatar search provider manager, and the export progress/safety overhaul.",
-    "expires": "2026-08-20T00:00:00Z"
+    "title": "0.4.18-b2 released — localization, training mode, reliability",
+    "message": "0.4.18-b2 is out. The entire desktop client is now translated and ships complete English and Russian (with a native-name language dropdown and localized text-to-speech callouts); community translations still drop into the lang/ folder with no rebuild. New moderator Training mode (Settings -> Training) lets a trainer fire simulated events through the real pipeline — including a genuine Discord post to practice tagging — all marked [TRAINING] and isolated from live moderation, with an optional /set-training-channel to keep drills out of the real audit log. Reliability watchdogs now make Scarlet's silent failure modes loud and recoverable: it detects a stalled log tailer or an expired VRChat session, attempts unattended re-login, and can route health alerts to a staff channel via /set-ops-alert-channel. Data files also now save crash-safely with dated backups. See the changelog for the full list.",
+    "expires": "2026-08-23T00:00:00Z"
   }
 }

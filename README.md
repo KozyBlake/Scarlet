@@ -25,6 +25,20 @@ Since there is no automatic synchronization of data between groups running Scarl
 
 ---
 
+## Highlights
+
+- **Cross-platform.** Runs on Windows and Linux (this is the Linux-compatible fork). The desktop app is Java/Swing; the VRChat-log features work when VRChat runs on the same machine, including under Proton/Wine on Linux.
+- **Near-instant moderation posts.** Moderation actions (Discord command, UI, or bulk-ban queue) and in-game warns/kicks/bans post to Discord within seconds via burst polling, then settle back to the idle interval.
+- **Watched users, groups, and avatars** with per-category advisories, spoken TTS callouts, native desktop notifications, and optional mobile push — each independently toggleable.
+- **Avatar statuses with or without VRChat's `[API]` launch options.** When the launch options aren't set, Scarlet reconstructs avatar/performance info through avatar-search databases plus current-avatar-image confirmation and the VRChat API, and tells you honestly when something can't be resolved.
+- **Instance creation and management** for both group instances (Public/Group+/Members) and personal instances (Public/Friends+/Friends/Invite+/Invite), with queue/age-gate/content presets, invite-a-friend, and self-invite when VRChat is already running.
+- **Multi-language UI (English and Russian complete).** The whole desktop client — including spoken TTS callouts — follows your OS language or a chosen one; the Discord bot replies in each user's own Discord locale. Community translations drop into a `lang/` folder with no rebuild.
+- **Training mode.** A settings toggle enables an event simulator so a trainer can run realistic drills — including practicing the Discord tagging workflow — without anyone joining a bad group, fully isolated from live moderation (see **Training mode** below).
+- **Reliability watchdogs.** Scarlet detects a stalled VRChat log tailer or an expired session, attempts unattended re-login, and can route health alerts to a staff Discord channel — so it never fails silently. Data files save crash-safely with dated backups.
+- **Migration bundles, a diagnostics view, and a searchable friend/invite picker** round out the desktop tooling.
+
+---
+
 ## Features
 
 ### Discord Commands
@@ -32,11 +46,11 @@ Since there is no automatic synchronization of data between groups running Scarl
 #### Moderation Commands
 
 - **`create-or-update-moderation-tag <value:string> <label:string?> <description:string?>`**  
-  Adds or updates a custom moderation tag (max of 25).  
+  Adds or updates a custom moderation tag (max of 125).  
   Example: `/create-or-update-moderation-tag "trolling" "Trolling" "Provocative or mocking behavior intended to antagonize someone"`
 
 - **`delete-moderation-tag <value:string>`**  
-  Removes a custom moderation tag (max of 25).  
+  Removes a custom moderation tag (max of 125).  
   Example: `/delete-moderation-tag "trolling"`
 
 - **`watched-user`**  
@@ -132,6 +146,18 @@ Since there is no automatic synchronization of data between groups running Scarl
   Sets the channel for Discord warn/kick/ban result logs and Discord member join invite logs. Omit the channel to disable this log. Invite tracking requires the bot to have Manage Server permission and the Discord member intent enabled; Discord does not expose member IP addresses to bots.  
   Example: `/set-discord-action-log-channel <#discord-mod-log>`
 
+- **`set-ops-alert-channel <discord-text-channel:channel?>`**  
+  Sets a channel to receive Scarlet's operational health alerts — VRChat session lost/recovered, log tailer stalled/recovered, hard VRChat rate-limiting, a Scarlet update becoming available, and VRChat API version mismatches — so staff learn about problems in Discord instead of only from the desktop app. Omit the channel to disable.  
+  Example: `/set-ops-alert-channel <#scarlet-health>`
+
+- **`set-training-channel <discord-text-channel:channel?>`**  
+  Sets a channel to receive simulated `[TRAINING]` events from Training mode, keeping drills out of your real audit log. If unset, simulated events are not posted to Discord. Omit the channel to disable.  
+  Example: `/set-training-channel <#scarlet-training>`
+
+- **`set-discord-account-age-alert <days:int?>`**  
+  Sets a Discord account-age threshold; members whose account is newer are flagged in the join log. Omit to clear.  
+  Example: `/set-discord-account-age-alert "7"`
+
 - **`moderation-summary <hours-back:int?>`**  
   Generates a summary of moderation actions.  
   Example: `/moderation-summary "48"`
@@ -161,6 +187,12 @@ Since there is no automatic synchronization of data between groups running Scarl
 - **`config-set`**  
   Configures miscellaneous settings.  
   Example: `/config-set mod-summary-time-of-day "-06:00"`
+
+- **`link-vrchat-account` / `unlink-vrchat-account`**  
+  Lets a server member link (or unlink) their own Discord account to their VRChat account. Group staff can unlink another member with `unlink-vrchat-account-for`.  
+  Example: `/link-vrchat-account`
+
+- **`set-training-channel`, `set-ops-alert-channel`** — see the Audit and Logging section above.
 
 #### Utility Commands
 
@@ -197,7 +229,13 @@ Since there is no automatic synchronization of data between groups running Scarl
 - **`importgroups <file|url...>`**  
   Imports a legacy CSV list of watched groups from a file or url.  
 - **`importgroupsjson <file|url...>`**  
-  Imports a JSON list of watched groups from a file or url.
+  Imports a JSON list of watched groups from a file or url.  
+- **`simulate <kind> [name]`**  
+  Fires a simulated training event (requires Training mode enabled). Kinds: `join`, `watched`, `wuser`, `new`, `mixed`, `pronouns`, `avatar`, `vtk`, `leave`.  
+- **`langlint`**  
+  Validates the external `lang/messages_<lang>.properties` translation files against the English base and prints a per-file report (missing keys, unknown keys, broken `{0}` placeholders).  
+- **`reboot`, `restart`**  
+  Restarts the application.
 
 Scarlet supports sending cli commands via named pipes.
 Windows: `\\.\pipe\ScarletIPC-grp_00000000-0000-0000-0000-000000000000`
@@ -230,12 +268,43 @@ Scarlet can generate a link that will autopopulate the fields of the VRChat Help
 
 ---
 
+### Localization
+
+- The desktop UI and the spoken TTS callouts are translated. **English and Russian** ship complete; German, Spanish, and Indonesian are in-progress pilots that fall back to English for anything not yet translated.
+- Pick a language in **Settings -> Appearance** (a dropdown of native names); it defaults to your operating system language and applies on restart. The Discord bot renders each reply in the invoking user's own Discord language.
+- **Community translations without a rebuild:** drop a `messages_<lang>.properties` file into the `lang/` folder in Scarlet's data directory and restart — new languages are auto-discovered, and Scarlet writes an up-to-date English `messages.template.properties` there as a starting point. The `langlint` CLI command (and a startup check) validates community files, flagging missing keys and broken `{0}` placeholders.
+
+---
+
+### Training mode
+
+- Enable **Settings -> Training** to unlock an event simulator (Edit -> *Simulate event (training)...*, or the `simulate` CLI command) that fires realistic events on demand — so new moderators can learn on a screenshare instead of a live incident, and nobody has to actually join a bad group.
+- Simulated events run the **real** pipeline — the player-list row, TTS callout, desktop/mobile notification, and a genuine Discord post with its ban/unban buttons — so the whole workflow, including tagging in Discord, is practiceable.
+- While training, Scarlet behaves as a **separate client**: the real instance is parked and kept updated in the background, actions on training players show real success feedback but make no VRChat call, and turning training off restores the live instance instantly. Everything training-related is marked `[TRAINING]` and, with `set-training-channel`, posts to its own channel — a drill can never be mistaken for a real record.
+
+---
+
+### Reliability and health monitoring
+
+- A background watchdog turns Scarlet's silent failure modes into loud, recoverable ones: if the VRChat log goes quiet while the game is running, or the VRChat session expires mid-run, Scarlet raises a popup, attempts unattended re-login, and (with `set-ops-alert-channel`) posts a Discord health alert.
+- Data files (watched lists, settings, Discord config, moderation tags, ...) are written crash-safely and keep the last several dated backups in a `backups/` folder beside each file, so a crash mid-write can't lose a blocklist.
+- The **Diagnostics** view (Help -> Scarlet: Diagnostics...) shows connectivity, rate-limit, and avatar-provider status without making extra API calls.
+
+---
+
+### Desktop and mobile notifications
+
+- Advisories can raise native desktop notifications (Windows Action Center, Linux `notify-send`, macOS `osascript` — PowerShell is never invoked), configured per category in **Settings -> Desktop Notifications**.
+- A mobile companion can push the same alerts to a phone; pair it from **Settings -> Mobile Companion**.
+
+---
+
 ### About Extended Events
 
 Extended audit events (Instance Inactive, Staff Join, Staff Leave, Vote-to-Kick Initiated) are logged with the Discord command `set-audit-ex-channel`.  
 Some of these require that a VRChat Client in a group instance must be running on the same machine in order for them to be logged in Discord channels.  
 This limitation exists because Scarlet reads the VRChat client log file as it gets updated with information.  
-At the moment, these events are not of the same degree as the canonical group audit events, as they do not have an , but similar functionality may hopefully be added to VRChat's first-party API in the future.
+At the moment, these events are not of the same degree as the canonical group audit events, as they are derived from the local client log rather than a server-side audit record, but similar functionality may hopefully be added to VRChat's first-party API in the future.
 
 ---
 
@@ -255,9 +324,11 @@ You will need:
 - A VRChat group you (or a dedicated bot account) have permissions for.  
 - A Discord server (guild) in which you have permissions.  
 - A Discord bot account (application).  
-- A Windows PC with Java 8 installed.
+- A Windows or Linux PC with Java 8 (or newer) installed.
 
-If you wish to not install Java 8 for all users on the PC, if you would like to have several different Java installations, or if you would otherwise prefer to keep the Java 8 installation to Scarlet only, see the instructions further below.
+Scarlet runs on both Windows and Linux (this is the Linux-compatible fork). The Discord and VRChat-API features work anywhere; the VRChat-log features (instance monitoring, extended events, avatar statuses) require the VRChat client to be running on the same machine — natively on Windows, or under Proton/Wine on Linux.
+
+If you wish to not install Java for all users on the PC, if you would like to have several different Java installations, or if you would otherwise prefer to keep the Java installation to Scarlet only, see the instructions further below.
 
 Thanks to [@KozyBlake](https://github.com/KozyBlake) for making this video tutorial:
 
@@ -304,11 +375,11 @@ All such actions (e.g., kicking or banning a user) must be performed manually, b
 
 1. Download the latest release (`zip` is recommended): https://github.com/KozyBlake/Scarlet/releases/latest  
 2. Copy or extract the files into the directory of your choosing.  
-3. If you have Java 8 installed to the system PATH, skip this step.  
-    - Download and extract a Java 8 JDK, such as this one from [Adoptium](https://adoptium.net/temurin/releases/?os=windows&arch=x64&package=jdk&version=8).  
+3. If you have Java 8 (or newer) installed to the system PATH, skip this step.  
+    - Download and extract a Java 8 JDK, such as one from [Adoptium](https://adoptium.net/temurin/releases/?package=jdk&version=8) (pick your OS/arch — Windows or Linux).  
     - Create (or overwrite) the file `scarlet.home.java` next to `run.bat`.  
     - Copy-paste etc. the root path of the JDK to the **first line** of `scarlet.home.java` and save the file.  
 4. If you want Scarlet to store data in a specific folder:  
     - Create (or overwrite) the file `scarlet.home` next to `run.bat`.  
     - Copy-paste etc. path of the desired directory to the **first line** of `scarlet.home` and save the file.  
-5. Run the `run.bat`.
+5. Start Scarlet: on Windows run `run.bat`; on Linux run the included launch script (or start the jar directly with your Java 8+ runtime).

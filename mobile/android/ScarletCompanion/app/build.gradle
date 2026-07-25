@@ -10,8 +10,12 @@ android {
         applicationId "net.sybyline.scarlet.companion"
         minSdk 26
         targetSdk 35
-        versionCode 3
-        versionName "0.4.18"
+        // Bumped alongside the desktop 0.4.18-b2 notification fixes. The companion's read
+        // timeout and reconnect changes only work against a desktop that sends heartbeats,
+        // so being able to tell an updated phone from a stale one matters when someone
+        // reports that alerts still are not arriving.
+        versionCode 4
+        versionName "0.4.18-b2"
     }
 }
 

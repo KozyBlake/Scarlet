@@ -211,6 +211,9 @@ layout notification_template_part_chronometer
 layout notification_template_part_time
 layout zxing_barcode_scanner
 layout zxing_capture
+raw bl_sfx_alert
+raw bl_sfx_notice
+raw bl_sfx_siren_chirp
 raw firebase_common_keep
 raw zxing_beep
 string app_name

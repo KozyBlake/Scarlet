@@ -494,6 +494,13 @@ public class ScarletUI implements IScarletUI
     private JTextField jfield_settingsSearch;
     private final List<JPanel>  settingsCardPanels     = new ArrayList<>();
     private final List<String>  settingsCardSearchText = new ArrayList<>();
+    // ── Settings category sidebar ───────────────────────────────────────────────
+    // Each card in settingsCardPanels carries a category tag at the same index.
+    // With no active search, the panel shows only the selected category's cards;
+    // an active search overrides the category and matches across all of them.
+    private final List<String>  settingsCardCategory   = new ArrayList<>();
+    private String settingsCategory = "General";
+    private final java.util.Map<String, JLabel> settingsSidebarItems = new java.util.LinkedHashMap<>();
     // ── CLI panel ─────────────────────────────────────────────────────────────
     private JTextArea jtext_cli;
     
@@ -1089,6 +1096,7 @@ public class ScarletUI implements IScarletUI
                     @Override public void changedUpdate(DocumentEvent e) { ScarletUI.this.filterSettings(); }
                 });
                 settingsOuter.add(this.jfield_settingsSearch, BorderLayout.NORTH);
+                settingsOuter.add(this.buildSettingsSidebar(), BorderLayout.WEST);
                 settingsOuter.add(settingsScroll, BorderLayout.CENTER);
                 this.jtabs.addTab("  "+I18n.tr("ui.tabSettings")+"  ", settingsOuter);
             }
@@ -3678,6 +3686,43 @@ public class ScarletUI implements IScarletUI
     }
 
     /** IDs that belong to each settings section, in display order. */
+    // Top-level categories shown in the settings sidebar, in display order. Each
+    // section below is filed under exactly one of these so the settings tab shows
+    // one focused group at a time instead of one long twenty-section scroll.
+    static final String[] SETTINGS_CATEGORIES = { "General", "Moderation", "Notifications", "Discord", "Integrations", "System" };
+    private static final java.util.Map<String, String> SECTION_CATEGORY = new java.util.HashMap<>();
+    static
+    {
+        SECTION_CATEGORY.put("Training",                      "General");
+        SECTION_CATEGORY.put("Appearance",                    "General");
+        SECTION_CATEGORY.put("Interface",                     "General");
+        SECTION_CATEGORY.put("Instance Enforcement",          "Moderation");
+        SECTION_CATEGORY.put("Moderation",                    "Moderation");
+        SECTION_CATEGORY.put("Advisories",                    "Moderation");
+        SECTION_CATEGORY.put("Text-to-Speech",                "Notifications");
+        SECTION_CATEGORY.put("Desktop Notifications",         "Notifications");
+        SECTION_CATEGORY.put("Mobile Companion",              "Notifications");
+        SECTION_CATEGORY.put("Discord",                       "Discord");
+        SECTION_CATEGORY.put("Verification",                  "Discord");
+        SECTION_CATEGORY.put("Discord — Outstanding Moderation", "Discord");
+        SECTION_CATEGORY.put("Evidence",                      "Integrations");
+        SECTION_CATEGORY.put("VRChat Reports",                "Integrations");
+        SECTION_CATEGORY.put("Avatar Search",                 "Integrations");
+        SECTION_CATEGORY.put("Pronouns",                      "Integrations");
+        SECTION_CATEGORY.put("Cache Cleanup",                 "System");
+        SECTION_CATEGORY.put("VRChat Credentials",            "System");
+        SECTION_CATEGORY.put("CLI",                           "System");
+    }
+    static String categoryForSection(String sectionLabel)
+    {
+        String c = SECTION_CATEGORY.get(sectionLabel);
+        return c != null ? c : "System";
+    }
+    private static String categoryDisplay(String key)
+    {
+        return I18n.tr("setting.category." + key.toLowerCase());
+    }
+
     private static final String[][] SETTINGS_SECTIONS = {
         // Section label, then setting IDs that belong to it
 
@@ -3685,7 +3730,7 @@ public class ScarletUI implements IScarletUI
           "training_mode_enabled" },
 
         { "Appearance",
-          "Theme preset", "Accent colour", "UI scale", "ui_left_player_dim_percent" },
+          "Theme preset", "Accent colour", "UI scale", "ui_left_player_dim_percent", "ui_accent_headers" },
 
         { "Interface",
           "ui_confirm_group_invite", "ui_alert_update", "ui_alert_update_preview",
@@ -3720,12 +3765,12 @@ public class ScarletUI implements IScarletUI
 
         { "Mobile Companion",
           "mobile_enabled", "mobile_direct_enabled", "mobile_direct_port",
-          "mobile_fcm_service_account_file",
+          "mobile_fcm_service_account",
           "mobile_relay_endpoint", "mobile_relay_auth_token", "mobile_min_severity", "mobile_pairing_expires_minutes",
           "mobile_notify_watched_users", "mobile_notify_watched_groups", "mobile_notify_watched_avatars",
           "mobile_notify_votes_to_kick", "mobile_notify_moderation", "mobile_notify_staff",
           "mobile_notify_new_players", "mobile_notify_mixed_character_names", "mobile_notify_suspicious_pronouns",
-          "Create mobile pairing QR", "Send mobile test notification", "Edit mobile devices file" },
+          "Create mobile pairing QR", "Send mobile test notification", "Show mobile delivery status", "Edit mobile devices file" },
 
         { "Discord",
           "Discord bot token", "Discord guild snowflake",
@@ -3768,6 +3813,33 @@ public class ScarletUI implements IScarletUI
         { "CLI",
           "Run CLI command" },
     };
+
+    // The per-event notification toggles used to repeat verbatim across the
+    // Text-to-Speech, Desktop and Mobile sections. Here each event is one row and
+    // each delivery channel one column, so the same nine events read as a single
+    // grid instead of three parallel lists. Columns: {eventLabelKey, ttsId,
+    // desktopId, mobileId}; a null cell means that channel has no such toggle.
+    static final String[][] NOTIF_MATRIX = {
+        { "notif.event.watchedUser",        "tts_announce_watched_users",         "toast_notify_watched_users",         "mobile_notify_watched_users" },
+        { "notif.event.watchedGroup",       "tts_announce_watched_groups",        "toast_notify_watched_groups",        "mobile_notify_watched_groups" },
+        { "notif.event.watchedAvatar",      "tts_announce_watched_avatars",       "toast_notify_watched_avatars",       "mobile_notify_watched_avatars" },
+        { "notif.event.newPlayer",          "tts_announce_new_players",           "toast_notify_new_players",           "mobile_notify_new_players" },
+        { "notif.event.mixedName",          "tts_announce_mixed_character_names", "toast_notify_mixed_character_names", "mobile_notify_mixed_character_names" },
+        { "notif.event.votesToKick",        "tts_announce_votes_to_kick",         "toast_notify_votes_to_kick",         "mobile_notify_votes_to_kick" },
+        { "notif.event.suspiciousPronouns", "tts_announce_suspicious_pronouns",   "toast_notify_suspicious_pronouns",   "mobile_notify_suspicious_pronouns" },
+        { "notif.event.moderation",         null,                                 "toast_notify_moderation",            "mobile_notify_moderation" },
+        { "notif.event.staff",              null,                                 "toast_notify_staff",                 "mobile_notify_staff" },
+    };
+    // Every setting id that the matrix renders, so the ordinary section loop can
+    // skip them (a Swing component can live in only one place at a time).
+    private static final java.util.Set<String> MATRIX_SETTING_IDS = new java.util.HashSet<>();
+    static
+    {
+        for (String[] row : NOTIF_MATRIX)
+            for (int c = 1; c <= 3; c++)
+                if (row[c] != null)
+                    MATRIX_SETTING_IDS.add(row[c]);
+    }
 
     private static boolean isFeatureHiddenSettingId(String id)
     {
@@ -3816,17 +3888,160 @@ public class ScarletUI implements IScarletUI
             && !isFeatureHiddenSettingId(setting.id());
     }
 
+    // The rounded, accent-striped panel used for every settings card. Extracted so
+    // the notification matrix can reuse the exact look without a fourth inline copy.
+    private JPanel newSettingsCard()
+    {
+        final Color CARD_BG     = Swing.BG_PANEL;
+        final Color CARD_BORDER = Swing.BORDER;
+        JPanel card = new JPanel(new GridBagLayout())
+        {
+            private static final long serialVersionUID = 1L;
+            @Override
+            protected void paintComponent(java.awt.Graphics g)
+            {
+                java.awt.Graphics2D g2 = (java.awt.Graphics2D) g.create();
+                try
+                {
+                    g2.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING,
+                                        java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+                    java.awt.Shape viewportClip = g2.getClip();
+                    java.awt.Shape cardShape = new java.awt.geom.RoundRectangle2D.Float(
+                        0, 0, getWidth(), getHeight(), 10, 10);
+                    if (viewportClip == null)
+                    {
+                        g2.setClip(cardShape);
+                    }
+                    else
+                    {
+                        java.awt.geom.Area clipped = new java.awt.geom.Area(viewportClip);
+                        clipped.intersect(new java.awt.geom.Area(cardShape));
+                        g2.setClip(clipped);
+                    }
+                    g2.setColor(CARD_BG);
+                    g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
+                    g2.setClip(viewportClip);
+                    g2.setColor(CARD_BORDER);
+                    g2.setStroke(new java.awt.BasicStroke(1f));
+                    g2.drawRoundRect(0, 0, getWidth()-1, getHeight()-1, 10, 10);
+                }
+                finally
+                {
+                    g2.dispose();
+                }
+            }
+        };
+        card.setOpaque(false);
+        card.setBorder(BorderFactory.createEmptyBorder(10, 16, 12, 16));
+        return card;
+    }
+
+    // Builds the consolidated notification matrix (events x TTS/Desktop/Mobile).
+    // Reuses each toggle's existing checkbox component, so there is no new binding
+    // and no data-model change. Returns null when no rows are available (every
+    // event feature-hidden), so the caller can skip adding an empty card. Any
+    // setting placed here is added to placed so the ordinary loop leaves it out.
+    private JPanel buildNotificationMatrixCard(Map<String, GUISetting<?>> byId, java.util.Set<String> placed)
+    {
+        final Color CARD_HDR_FG = Boolean.TRUE.equals(this.scarlet.uiAccentHeaders.get()) ? Swing.ACCENT : Swing.FG_DIM;
+        final Color LABEL_FG    = Swing.FG_SOFT;
+        JPanel card = this.newSettingsCard();
+        GridBagConstraints cgbc = new GridBagConstraints();
+        cgbc.gridy = 0;
+
+        cgbc.gridx = 0;
+        cgbc.gridwidth = GridBagConstraints.REMAINDER;
+        cgbc.fill = GridBagConstraints.NONE;
+        cgbc.anchor = GridBagConstraints.WEST;
+        cgbc.weightx = 0.0;
+        cgbc.insets = new Insets(0, 0, 8, 0);
+        JLabel title = new JLabel(I18n.tr("notif.matrix.title").toUpperCase());
+        title.setFont(title.getFont().deriveFont(java.awt.Font.BOLD, 10f));
+        title.setForeground(CARD_HDR_FG);
+        card.add(title, cgbc);
+        cgbc.gridy++;
+
+        // Header row: blank corner over the event labels, the three channel
+        // headers, then a weighted filler in the last column. The filler — not the
+        // title — owns the horizontal slack, so the three columns stay grouped next
+        // to the labels instead of the last one being flung to the right edge.
+        cgbc.gridwidth = 1;
+        cgbc.fill = GridBagConstraints.NONE;
+        cgbc.weightx = 0.0;
+        cgbc.gridx = 0;
+        cgbc.anchor = GridBagConstraints.WEST;
+        cgbc.insets = new Insets(2, 0, 6, 18);
+        card.add(new JLabel(), cgbc);
+        String[] colKeys = { "notif.col.tts", "notif.col.desktop", "notif.col.mobile" };
+        cgbc.insets = new Insets(2, 10, 6, 10);
+        for (int c = 0; c < 3; c++)
+        {
+            cgbc.gridx = c + 1;
+            cgbc.anchor = GridBagConstraints.CENTER;
+            JLabel h = new JLabel(I18n.tr(colKeys[c]));
+            h.setForeground(LABEL_FG);
+            h.setFont(h.getFont().deriveFont(java.awt.Font.BOLD));
+            card.add(h, cgbc);
+        }
+        cgbc.gridx = 4;
+        cgbc.weightx = 1.0;
+        cgbc.fill = GridBagConstraints.HORIZONTAL;
+        cgbc.insets = new Insets(0, 0, 0, 0);
+        card.add(new JLabel(), cgbc);
+        cgbc.weightx = 0.0;
+        cgbc.fill = GridBagConstraints.NONE;
+        cgbc.gridy++;
+
+        int rows = 0;
+        for (String[] row : NOTIF_MATRIX)
+        {
+            GUISetting<?> tts = row[1] == null ? null : byId.get(row[1]);
+            GUISetting<?> dsk = row[2] == null ? null : byId.get(row[2]);
+            GUISetting<?> mob = row[3] == null ? null : byId.get(row[3]);
+            if (tts == null && dsk == null && mob == null)
+                continue;
+            cgbc.gridx = 0;
+            cgbc.anchor = GridBagConstraints.WEST;
+            cgbc.insets = new Insets(2, 0, 2, 18);
+            JLabel lbl = new JLabel(I18n.tr(row[0]));
+            lbl.setForeground(LABEL_FG);
+            card.add(lbl, cgbc);
+            GUISetting<?>[] cells = { tts, dsk, mob };
+            cgbc.insets = new Insets(2, 10, 2, 10);
+            for (int c = 0; c < 3; c++)
+            {
+                GUISetting<?> s = cells[c];
+                // Leave the cell empty when a channel has no such toggle (TTS has
+                // no moderation/staff callout). A blank reads as "not applicable"
+                // without the stray-dash look.
+                if (s == null)
+                    continue;
+                cgbc.gridx = c + 1;
+                cgbc.anchor = GridBagConstraints.CENTER;
+                placed.add(s.id());
+                card.add(s.render(), cgbc);
+            }
+            cgbc.gridy++;
+            rows++;
+        }
+        if (rows == 0)
+            return null;
+
+        return card;
+    }
+
     private void readSettingUI()
     {
         final Color CARD_BG     = Swing.BG_PANEL;
         final Color CARD_BORDER = Swing.BORDER;
-        final Color CARD_HDR_FG = Swing.ACCENT;
+        final Color CARD_HDR_FG = Boolean.TRUE.equals(this.scarlet.uiAccentHeaders.get()) ? Swing.ACCENT : Swing.FG_DIM;
         final Color LABEL_FG    = Swing.FG_SOFT;
 
         this.jpanel_settings.removeAll();
         this.jpanel_settings.setBackground(Swing.BG_INPUT);
         this.settingsCardPanels.clear();
         this.settingsCardSearchText.clear();
+        this.settingsCardCategory.clear();
 
         List<GUISetting<?>> visibleSettings = new ArrayList<>();
         for (GUISetting<?> s : this.ssettings)
@@ -3866,8 +4081,6 @@ public class ScarletUI implements IScarletUI
                     }
                     g2.setColor(CARD_BG);
                     g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
-                    g2.setColor(Swing.ACCENT);
-                    g2.fillRect(0, 0, 4, getHeight());
                     g2.setClip(viewportClip);
                     g2.setColor(CARD_BORDER);
                     g2.setStroke(new java.awt.BasicStroke(1f));
@@ -3920,6 +4133,7 @@ public class ScarletUI implements IScarletUI
         gbc.gridy++;
         this.settingsCardPanels.add(vrchatApiCard);
         this.settingsCardSearchText.add("vrchat api status update version compatibility ticket blakebelladonna vinyarion");
+        this.settingsCardCategory.add("General");
         this.refreshVrchatApiStatus();
 
         JPanel migrationCard = new JPanel(new GridBagLayout())
@@ -3948,8 +4162,6 @@ public class ScarletUI implements IScarletUI
                     }
                     g2.setColor(CARD_BG);
                     g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
-                    g2.setColor(Swing.ACCENT);
-                    g2.fillRect(0, 0, 4, getHeight());
                     g2.setClip(viewportClip);
                     g2.setColor(CARD_BORDER);
                     g2.setStroke(new java.awt.BasicStroke(1f));
@@ -4000,8 +4212,32 @@ public class ScarletUI implements IScarletUI
         gbc.gridy++;
         this.settingsCardPanels.add(migrationCard);
         this.settingsCardSearchText.add("backup migration export import bundle transfer move pc os windows linux credentials sign-in usb");
+        this.settingsCardCategory.add("System");
 
         java.util.Set<String> placed = new java.util.HashSet<>();
+
+        // Consolidated notification matrix, filed at the top of the Notifications
+        // category. Built before the section loop so the loop can skip the toggles
+        // it renders (see MATRIX_SETTING_IDS) rather than drawing them twice.
+        JPanel notifMatrixCard = this.buildNotificationMatrixCard(byId, placed);
+        if (notifMatrixCard != null)
+        {
+            gbc.gridx = 0;
+            gbc.gridwidth = GridBagConstraints.REMAINDER;
+            gbc.fill = GridBagConstraints.HORIZONTAL;
+            gbc.anchor = GridBagConstraints.NORTH;
+            gbc.weightx = 1.0;
+            gbc.weighty = 0.0;
+            gbc.insets = new Insets(10, 12, 0, 12);
+            this.jpanel_settings.add(notifMatrixCard, gbc);
+            gbc.gridy++;
+            StringBuilder matrixSearch = new StringBuilder("notifications announce notify tts desktop mobile");
+            for (String[] row : NOTIF_MATRIX)
+                matrixSearch.append(' ').append(I18n.tr(row[0]).toLowerCase());
+            this.settingsCardPanels.add(notifMatrixCard);
+            this.settingsCardSearchText.add(matrixSearch.toString());
+            this.settingsCardCategory.add("Notifications");
+        }
 
         for (String[] section : SETTINGS_SECTIONS)
         {
@@ -4012,6 +4248,9 @@ public class ScarletUI implements IScarletUI
             {
                 String id = section[i];
                 if (isFeatureHiddenSettingId(id))
+                    continue;
+                // Rendered in the notification matrix instead of as a section row.
+                if (MATRIX_SETTING_IDS.contains(id))
                     continue;
                 GUISetting<?> s = byId.get(id);
                 if (s != null) { sectionSettings.add(s); placed.add(id); }
@@ -4048,8 +4287,6 @@ public class ScarletUI implements IScarletUI
                         }
                         g2.setColor(CARD_BG);
                         g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
-                        g2.setColor(Swing.ACCENT);
-                        g2.fillRect(0, 0, 4, getHeight());
                         g2.setClip(viewportClip);
                         g2.setColor(CARD_BORDER);
                         g2.setStroke(new java.awt.BasicStroke(1f));
@@ -4114,6 +4351,7 @@ public class ScarletUI implements IScarletUI
                 searchText.append(' ').append(settingLabel(s).toLowerCase());
             this.settingsCardPanels.add(card);
             this.settingsCardSearchText.add(searchText.toString());
+            this.settingsCardCategory.add(categoryForSection(sectionLabel));
         }
 
         // Ungrouped settings
@@ -4149,8 +4387,6 @@ public class ScarletUI implements IScarletUI
                         }
                         g2.setColor(CARD_BG);
                         g2.fillRoundRect(0, 0, getWidth(), getHeight(), 10, 10);
-                        g2.setColor(Swing.ACCENT);
-                        g2.fillRect(0, 0, 4, getHeight());
                         g2.setClip(viewportClip);
                         g2.setColor(CARD_BORDER);
                         g2.setStroke(new java.awt.BasicStroke(1f));
@@ -4200,6 +4436,7 @@ public class ScarletUI implements IScarletUI
                 ungroupedSearch.append(' ').append(settingLabel(s).toLowerCase());
             this.settingsCardPanels.add(card);
             this.settingsCardSearchText.add(ungroupedSearch.toString());
+            this.settingsCardCategory.add("System");
         }
 
         // Spacer
@@ -4240,14 +4477,97 @@ public class ScarletUI implements IScarletUI
         String query = this.jfield_settingsSearch != null
             ? this.jfield_settingsSearch.getText().trim().toLowerCase()
             : "";
+        // An active search matches across every category; with the box empty we
+        // fall back to showing only the category selected in the sidebar.
+        boolean searching = !query.isEmpty();
         for (int i = 0; i < this.settingsCardPanels.size(); i++)
         {
+            if (!searching)
+            {
+                boolean inCategory = i < this.settingsCardCategory.size()
+                    && this.settingsCategory.equals(this.settingsCardCategory.get(i));
+                this.settingsCardPanels.get(i).setVisible(inCategory);
+                continue;
+            }
             boolean visible = query.isEmpty()
                 || this.settingsCardSearchText.get(i).contains(query);
             this.settingsCardPanels.get(i).setVisible(visible);
         }
         this.jpanel_settings.revalidate();
         this.jpanel_settings.repaint();
+    }
+
+    // Left-hand category list for the settings tab. One clickable row per entry in
+    // SETTINGS_CATEGORIES; selecting one narrows the card list to that category.
+    private JPanel buildSettingsSidebar()
+    {
+        JPanel sidebar = new JPanel();
+        sidebar.setLayout(new javax.swing.BoxLayout(sidebar, javax.swing.BoxLayout.Y_AXIS));
+        sidebar.setBackground(Swing.BG_INPUT);
+        sidebar.setOpaque(true);
+        this.settingsSidebarItems.clear();
+        for (String cat : SETTINGS_CATEGORIES)
+        {
+            final String category = cat;
+            JLabel item = new JLabel(categoryDisplay(cat));
+            item.setOpaque(true);
+            item.setBackground(Swing.BG_INPUT);
+            item.setForeground(Swing.FG_SOFT);
+            item.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 3, 0, 0, Swing.BG_INPUT),
+                BorderFactory.createEmptyBorder(9, 12, 9, 16)));
+            item.setAlignmentX(0.0f);
+            item.setMaximumSize(new java.awt.Dimension(Integer.MAX_VALUE, item.getPreferredSize().height));
+            item.setCursor(java.awt.Cursor.getPredefinedCursor(java.awt.Cursor.HAND_CURSOR));
+            item.addMouseListener(new java.awt.event.MouseAdapter()
+            {
+                // mousePressed, not mouseClicked: a click only fires if press and
+                // release land on the same pixel, so the tiniest drift swallowed
+                // the selection and made it feel like it needed a double-click.
+                @Override public void mousePressed(java.awt.event.MouseEvent e)
+                {
+                    ScarletUI.this.selectSettingsCategory(category);
+                }
+            });
+            this.settingsSidebarItems.put(cat, item);
+            sidebar.add(item);
+        }
+        this.highlightSettingsSidebar();
+
+        JPanel wrap = new JPanel(new BorderLayout());
+        wrap.setOpaque(true);
+        wrap.setBackground(Swing.BG_INPUT);
+        wrap.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Swing.BORDER));
+        wrap.add(sidebar, BorderLayout.NORTH);
+        wrap.setPreferredSize(new java.awt.Dimension(158, 10));
+        return wrap;
+    }
+
+    private void selectSettingsCategory(String category)
+    {
+        this.settingsCategory = category;
+        // Clicking a category is a browse intent, so drop any active search; the
+        // field's document listener re-runs filterSettings, which then shows the
+        // category. Clear it directly too in case the field was already empty.
+        if (this.jfield_settingsSearch != null && !this.jfield_settingsSearch.getText().isEmpty())
+            this.jfield_settingsSearch.setText("");
+        this.highlightSettingsSidebar();
+        this.filterSettings();
+    }
+
+    private void highlightSettingsSidebar()
+    {
+        for (java.util.Map.Entry<String, JLabel> e : this.settingsSidebarItems.entrySet())
+        {
+            boolean sel = e.getKey().equals(this.settingsCategory);
+            JLabel item = e.getValue();
+            item.setForeground(sel ? Swing.ACCENT : Swing.FG_SOFT);
+            item.setBackground(sel ? Swing.BG_PANEL : Swing.BG_INPUT);
+            item.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createMatteBorder(0, 3, 0, 0, sel ? Swing.ACCENT : Swing.BG_INPUT),
+                BorderFactory.createEmptyBorder(9, 12, 9, 16)));
+            item.setFont(item.getFont().deriveFont(sel ? java.awt.Font.BOLD : java.awt.Font.PLAIN));
+        }
     }
 
     public void loadSettings()

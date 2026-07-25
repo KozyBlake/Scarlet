@@ -4,24 +4,7 @@
             "outputFile": "net.sybyline.scarlet.companion.app-mergeDebugResources-8:/values-af/values-af.xml",
             "map": [
                 {
-                    "source": "I:\\Users\\Blake Belladonna\\.gradle\\caches\\transforms-4\\1ae9c82720aa468535e947d5bb975360\\transformed\\play-services-basement-18.3.0\\res\\values-af\\values.xml",
-                    "from": {
-                        "startLines": "4",
-                        "startColumns": "0",
-                        "startOffsets": "195",
-                        "endColumns": "138",
-                        "endOffsets": "333"
-                    },
-                    "to": {
-                        "startLines": "10",
-                        "startColumns": "4",
-                        "startOffsets": "1049",
-                        "endColumns": "142",
-                        "endOffsets": "1187"
-                    }
-                },
-                {
-                    "source": "I:\\Users\\Blake Belladonna\\.gradle\\caches\\transforms-4\\47ef54378ca9cf82719f3ebf773ab8b0\\transformed\\core-1.2.0\\res\\values-af\\values-af.xml",
+                    "source": "I:\\Users\\Blake Belladonna\\.gradle\\caches\\8.13\\transforms\\dfa863f8529796ad9f11bdcc9b81bda9\\transformed\\core-1.2.0\\res\\values-af\\values-af.xml",
                     "from": {
                         "startLines": "2",
                         "startColumns": "4",
@@ -38,7 +21,7 @@
                     }
                 },
                 {
-                    "source": "I:\\Users\\Blake Belladonna\\.gradle\\caches\\transforms-4\\88f7dd6aaba8df0a8df0ae721cafb833\\transformed\\play-services-base-18.0.1\\res\\values-af\\values.xml",
+                    "source": "I:\\Users\\Blake Belladonna\\.gradle\\caches\\8.13\\transforms\\3547ed0f31c28c008a7e3f34200bae32\\transformed\\play-services-base-18.0.1\\res\\values-af\\values.xml",
                     "from": {
                         "startLines": "4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20",
                         "startColumns": "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0",
@@ -52,6 +35,23 @@
                         "startOffsets": "55,162,318,444,554,704,826,947,1192,1358,1466,1623,1750,1889,2043,2109,2172",
                         "endColumns": "106,155,125,109,149,121,120,101,165,107,156,126,138,153,65,62,78",
                         "endOffsets": "157,313,439,549,699,821,942,1044,1353,1461,1618,1745,1884,2038,2104,2167,2246"
+                    }
+                },
+                {
+                    "source": "I:\\Users\\Blake Belladonna\\.gradle\\caches\\8.13\\transforms\\ba136e8287c6bae94714b8d363d53ee7\\transformed\\play-services-basement-18.3.0\\res\\values-af\\values.xml",
+                    "from": {
+                        "startLines": "4",
+                        "startColumns": "0",
+                        "startOffsets": "195",
+                        "endColumns": "138",
+                        "endOffsets": "333"
+                    },
+                    "to": {
+                        "startLines": "10",
+                        "startColumns": "4",
+                        "startOffsets": "1049",
+                        "endColumns": "142",
+                        "endOffsets": "1187"
                     }
                 }
             ]

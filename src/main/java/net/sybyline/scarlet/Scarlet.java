@@ -906,7 +906,8 @@ public class Scarlet implements Closeable
                                      discordKickBanEnabled = this.settings.new FileValuedBoolean("discord_kick_ban_enabled", I18n.tr("setting.discord_kick_ban_enabled"), false),
                                      discordKickBanPrompted = this.settings.new FileValuedBoolean("discord_kick_ban_prompted", I18n.tr("setting.discord_kick_ban_prompted"), false),
                                      autoInviteOnVerify = this.settings.new FileValuedBoolean("auto_invite_group_on_verify", I18n.tr("setting.auto_invite_group_on_verify"), true),
-                                     trainingMode = this.settings.new FileValuedBoolean("training_mode_enabled", I18n.tr("setting.training_mode_enabled"), false);
+                                     trainingMode = this.settings.new FileValuedBoolean("training_mode_enabled", I18n.tr("setting.training_mode_enabled"), false),
+                                     uiAccentHeaders = this.settings.new FileValuedBoolean("ui_accent_headers", I18n.tr("setting.ui_accent_headers"), false);
     /** Desktop UI language override; blank/"system" follows the operating system language. Applied at startup (restart to change). */
     final ScarletSettings.FileValued<String> uiLanguage = this.settings.new FileValuedStringChoice("ui_language", I18n.tr("setting.ui_language"), "system", () ->
     {

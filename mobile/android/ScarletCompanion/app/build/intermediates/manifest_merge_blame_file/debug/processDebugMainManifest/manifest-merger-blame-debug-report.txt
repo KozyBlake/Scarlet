@@ -1,8 +1,8 @@
 1<?xml version="1.0" encoding="utf-8"?>
 2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
 3    package="net.sybyline.scarlet.companion"
-4    android:versionCode="1"
-5    android:versionName="0.1.0" >
+4    android:versionCode="4"
+5    android:versionName="0.4.18-b2" >
 6
 7    <uses-sdk
 8        android:minSdkVersion="26"
@@ -14,284 +14,288 @@
 12    <uses-permission android:name="android.permission.INTERNET" />
 12-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:5:5-67
 12-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:5:22-64
-13    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-13-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:6:5-77
-13-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:6:22-74
-14    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+13    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+13-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:6:5-79
+13-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:6:22-76
+14    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 14-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:7:5-77
 14-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:7:22-74
-15    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
-15-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:8:5-94
-15-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:8:22-91
-16    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-16-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:22:5-79
-16-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:22:22-76
-17    <uses-permission android:name="android.permission.WAKE_LOCK" /> <!-- Required by older versions of Google Play services to create IID tokens -->
-17-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:24:5-68
-17-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:24:22-65
-18    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE" /> <!-- Don't require camera, as this requires a rear camera. This allows it to work on the Nexus 7 -->
-18-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:26:5-82
-18-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:26:22-79
-19    <uses-feature
-19-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:25:5-27:36
-20        android:name="android.hardware.camera"
-20-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:26:9-47
-21        android:required="false" />
-21-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:27:9-33
-22    <uses-feature
-22-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:28:5-30:36
-23        android:name="android.hardware.camera.front"
-23-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:29:9-53
-24        android:required="false" /> <!-- TODO replace above two with next line after Android 4.2 -->
-24-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:30:9-33
-25    <!-- <uses-feature android:name="android.hardware.camera.any"/> -->
-26    <uses-feature
-26-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:33:5-35:36
-27        android:name="android.hardware.camera.autofocus"
-27-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:34:9-57
-28        android:required="false" />
-28-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:35:9-33
-29    <uses-feature
-29-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:36:5-38:36
-30        android:name="android.hardware.camera.flash"
-30-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:37:9-53
-31        android:required="false" />
-31-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:38:9-33
-32    <uses-feature
-32-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:39:5-41:36
-33        android:name="android.hardware.screen.landscape"
-33-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:40:9-57
-34        android:required="false" />
-34-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:41:9-33
-35    <uses-feature
-35-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:42:5-44:36
-36        android:name="android.hardware.wifi"
-36-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:43:9-45
-37        android:required="false" />
-37-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:44:9-33
-38
-39    <application
-39-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:10:5-39:19
-40        android:allowBackup="true"
-40-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:11:9-35
-41        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
-41-->[androidx.core:core:1.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\47ef54378ca9cf82719f3ebf773ab8b0\transformed\core-1.2.0\AndroidManifest.xml:24:18-86
-42        android:debuggable="true"
-43        android:extractNativeLibs="false"
-44        android:icon="@drawable/ic_scarlet"
-44-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:12:9-44
-45        android:label="@string/app_name"
-45-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:13:9-41
-46        android:supportsRtl="true"
-46-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:14:9-35
-47        android:theme="@style/AppTheme" >
-47-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:15:9-40
-48        <activity
-48-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:17:9-24:20
-49            android:name="net.sybyline.scarlet.companion.MainActivity"
-49-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:18:13-41
-50            android:exported="true" >
-50-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:19:13-36
-51            <intent-filter>
-51-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:20:13-23:29
-52                <action android:name="android.intent.action.MAIN" />
-52-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:21:17-69
-52-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:21:25-66
-53
-54                <category android:name="android.intent.category.LAUNCHER" />
-54-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:22:17-77
-54-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:22:27-74
-55            </intent-filter>
-56        </activity>
-57
-58        <service
-58-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:26:9-29:63
-59            android:name="net.sybyline.scarlet.companion.DirectScarletService"
-59-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:27:13-49
-60            android:exported="false"
-60-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:28:13-37
-61            android:foregroundServiceType="connectedDevice" />
-61-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:29:13-60
-62        <service
-62-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:31:9-37:19
-63            android:name="net.sybyline.scarlet.companion.ScarletFirebaseMessagingService"
-63-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:32:13-60
-64            android:exported="false" >
-64-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:33:13-37
-65            <intent-filter>
-65-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:34:13-36:29
-66                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-66-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:35:17-78
-66-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:35:25-75
-67            </intent-filter>
-68        </service>
-69
-70        <receiver
-70-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:29:9-40:20
-71            android:name="com.google.firebase.iid.FirebaseInstanceIdReceiver"
-71-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:30:13-78
-72            android:exported="true"
-72-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:31:13-36
-73            android:permission="com.google.android.c2dm.permission.SEND" >
-73-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:32:13-73
-74            <intent-filter>
-74-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:33:13-35:29
-75                <action android:name="com.google.android.c2dm.intent.RECEIVE" />
-75-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:34:17-81
-75-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:34:25-78
-76            </intent-filter>
-77
-78            <meta-data
-78-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:37:13-39:40
-79                android:name="com.google.android.gms.cloudmessaging.FINISHED_AFTER_HANDLED"
-79-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:38:17-92
-80                android:value="true" />
-80-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:39:17-37
-81        </receiver>
-82        <!--
-83             FirebaseMessagingService performs security checks at runtime,
-84             but set to not exported to explicitly avoid allowing another app to call it.
-85        -->
-86        <service
-86-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:46:9-53:19
-87            android:name="com.google.firebase.messaging.FirebaseMessagingService"
-87-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:47:13-82
-88            android:directBootAware="true"
-88-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:48:13-43
-89            android:exported="false" >
-89-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:49:13-37
-90            <intent-filter android:priority="-500" >
-90-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:34:13-36:29
-91                <action android:name="com.google.firebase.MESSAGING_EVENT" />
-91-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:35:17-78
-91-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:35:25-75
-92            </intent-filter>
-93        </service>
-94        <service
-94-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:54:9-63:19
-95            android:name="com.google.firebase.components.ComponentDiscoveryService"
-95-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:55:13-84
-96            android:directBootAware="true"
-96-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:32:13-43
-97            android:exported="false" >
-97-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:56:13-37
-98            <meta-data
-98-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:57:13-59:85
-99                android:name="com.google.firebase.components:com.google.firebase.messaging.FirebaseMessagingKtxRegistrar"
-99-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:58:17-122
-100                android:value="com.google.firebase.components.ComponentRegistrar" />
-100-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:59:17-82
-101            <meta-data
-101-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:60:13-62:85
-102                android:name="com.google.firebase.components:com.google.firebase.messaging.FirebaseMessagingRegistrar"
-102-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:61:17-119
-103                android:value="com.google.firebase.components.ComponentRegistrar" />
-103-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eecb69c0096fca3606bb781f2f73d14d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:62:17-82
-104            <meta-data
-104-->[com.google.firebase:firebase-datatransport:18.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eab62378a7054964320c869a0cc78a90\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:25:13-27:85
-105                android:name="com.google.firebase.components:com.google.firebase.datatransport.TransportRegistrar"
-105-->[com.google.firebase:firebase-datatransport:18.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eab62378a7054964320c869a0cc78a90\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:26:17-115
-106                android:value="com.google.firebase.components.ComponentRegistrar" />
-106-->[com.google.firebase:firebase-datatransport:18.2.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\eab62378a7054964320c869a0cc78a90\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:27:17-82
-107            <meta-data
-107-->[com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:15:13-17:85
-108                android:name="com.google.firebase.components:com.google.firebase.installations.FirebaseInstallationsKtxRegistrar"
-108-->[com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:16:17-130
-109                android:value="com.google.firebase.components.ComponentRegistrar" />
-109-->[com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:17:17-82
-110            <meta-data
-110-->[com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:18:13-20:85
-111                android:name="com.google.firebase.components:com.google.firebase.installations.FirebaseInstallationsRegistrar"
-111-->[com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:19:17-127
-112                android:value="com.google.firebase.components.ComponentRegistrar" />
-112-->[com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\67f45b727abcb421c4a15e18a64c9dff\transformed\firebase-installations-18.0.0\AndroidManifest.xml:20:17-82
-113            <meta-data
-113-->[com.google.firebase:firebase-common-ktx:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\c346f013103237bc840060e14164e714\transformed\firebase-common-ktx-21.0.0\AndroidManifest.xml:12:13-14:85
-114                android:name="com.google.firebase.components:com.google.firebase.ktx.FirebaseCommonLegacyRegistrar"
-114-->[com.google.firebase:firebase-common-ktx:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\c346f013103237bc840060e14164e714\transformed\firebase-common-ktx-21.0.0\AndroidManifest.xml:13:17-116
-115                android:value="com.google.firebase.components.ComponentRegistrar" />
-115-->[com.google.firebase:firebase-common-ktx:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\c346f013103237bc840060e14164e714\transformed\firebase-common-ktx-21.0.0\AndroidManifest.xml:14:17-82
-116            <meta-data
-116-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:35:13-37:85
-117                android:name="com.google.firebase.components:com.google.firebase.FirebaseCommonKtxRegistrar"
-117-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:36:17-109
-118                android:value="com.google.firebase.components.ComponentRegistrar" />
-118-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:37:17-82
-119        </service>
-120
-121        <activity
-121-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:47:9-53:63
-122            android:name="com.journeyapps.barcodescanner.CaptureActivity"
-122-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:48:13-74
-123            android:clearTaskOnLaunch="true"
-123-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:49:13-45
-124            android:screenOrientation="sensorLandscape"
-124-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:50:13-56
-125            android:stateNotNeeded="true"
-125-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:51:13-42
-126            android:theme="@style/zxing_CaptureTheme"
-126-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:52:13-54
-127            android:windowSoftInputMode="stateAlwaysHidden" />
-127-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\4d577c7ff410e55cc322ad067f24afcf\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:53:13-60
-128
-129        <service
-129-->[com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:28:9-34:19
-130            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
-130-->[com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:29:13-103
-131            android:exported="false" >
-131-->[com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:30:13-37
-132            <meta-data
-132-->[com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:31:13-33:39
-133                android:name="backend:com.google.android.datatransport.cct.CctBackendFactory"
-133-->[com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:32:17-94
-134                android:value="cct" />
-134-->[com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\79d23c5354c4ede647675fdc1cc55ffd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:33:17-36
-135        </service>
-136        <service
-136-->[com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:26:9-30:19
-137            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
-137-->[com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:27:13-117
-138            android:exported="false"
-138-->[com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:28:13-37
-139            android:permission="android.permission.BIND_JOB_SERVICE" >
-139-->[com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:29:13-69
-140        </service>
-141
-142        <receiver
-142-->[com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:32:9-34:40
-143            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
-143-->[com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:33:13-132
-144            android:exported="false" />
-144-->[com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\7d33da3e0c3e9fdbbb28bffad36375f0\transformed\transport-runtime-3.1.9\AndroidManifest.xml:34:13-37
-145
-146        <provider
-146-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:23:9-28:39
-147            android:name="com.google.firebase.provider.FirebaseInitProvider"
-147-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:24:13-77
-148            android:authorities="net.sybyline.scarlet.companion.firebaseinitprovider"
-148-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:25:13-72
-149            android:directBootAware="true"
-149-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:26:13-43
-150            android:exported="false"
-150-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:27:13-37
-151            android:initOrder="100" />
-151-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\a8d3aa63d1eb6f92ddae3e7bc3888a25\transformed\firebase-common-21.0.0\AndroidManifest.xml:28:13-36
-152
-153        <activity
-153-->[com.google.android.gms:play-services-base:18.0.1] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\88f7dd6aaba8df0a8df0ae721cafb833\transformed\play-services-base-18.0.1\AndroidManifest.xml:20:9-22:45
-154            android:name="com.google.android.gms.common.api.GoogleApiActivity"
-154-->[com.google.android.gms:play-services-base:18.0.1] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\88f7dd6aaba8df0a8df0ae721cafb833\transformed\play-services-base-18.0.1\AndroidManifest.xml:20:19-85
-155            android:exported="false"
-155-->[com.google.android.gms:play-services-base:18.0.1] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\88f7dd6aaba8df0a8df0ae721cafb833\transformed\play-services-base-18.0.1\AndroidManifest.xml:22:19-43
-156            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
-156-->[com.google.android.gms:play-services-base:18.0.1] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\88f7dd6aaba8df0a8df0ae721cafb833\transformed\play-services-base-18.0.1\AndroidManifest.xml:21:19-78
-157
-158        <meta-data
-158-->[com.google.android.gms:play-services-basement:18.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\1ae9c82720aa468535e947d5bb975360\transformed\play-services-basement-18.3.0\AndroidManifest.xml:21:9-23:69
-159            android:name="com.google.android.gms.version"
-159-->[com.google.android.gms:play-services-basement:18.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\1ae9c82720aa468535e947d5bb975360\transformed\play-services-basement-18.3.0\AndroidManifest.xml:22:13-58
-160            android:value="@integer/google_play_services_version" />
-160-->[com.google.android.gms:play-services-basement:18.3.0] I:\Users\Blake Belladonna\.gradle\caches\transforms-4\1ae9c82720aa468535e947d5bb975360\transformed\play-services-basement-18.3.0\AndroidManifest.xml:23:13-66
-161    </application>
-162
-163</manifest>
+15    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+15-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:8:5-77
+15-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:8:22-74
+16    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+16-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:9:5-94
+16-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:9:22-91
+17    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+17-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:10:5-95
+17-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:10:22-92
+18    <uses-permission android:name="android.permission.WAKE_LOCK" /> <!-- Required by older versions of Google Play services to create IID tokens -->
+18-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:24:5-68
+18-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:24:22-65
+19    <uses-permission android:name="com.google.android.c2dm.permission.RECEIVE" /> <!-- Don't require camera, as this requires a rear camera. This allows it to work on the Nexus 7 -->
+19-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:26:5-82
+19-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:26:22-79
+20    <uses-feature
+20-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:25:5-27:36
+21        android:name="android.hardware.camera"
+21-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:26:9-47
+22        android:required="false" />
+22-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:27:9-33
+23    <uses-feature
+23-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:28:5-30:36
+24        android:name="android.hardware.camera.front"
+24-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:29:9-53
+25        android:required="false" /> <!-- TODO replace above two with next line after Android 4.2 -->
+25-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:30:9-33
+26    <!-- <uses-feature android:name="android.hardware.camera.any"/> -->
+27    <uses-feature
+27-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:33:5-35:36
+28        android:name="android.hardware.camera.autofocus"
+28-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:34:9-57
+29        android:required="false" />
+29-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:35:9-33
+30    <uses-feature
+30-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:36:5-38:36
+31        android:name="android.hardware.camera.flash"
+31-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:37:9-53
+32        android:required="false" />
+32-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:38:9-33
+33    <uses-feature
+33-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:39:5-41:36
+34        android:name="android.hardware.screen.landscape"
+34-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:40:9-57
+35        android:required="false" />
+35-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:41:9-33
+36    <uses-feature
+36-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:42:5-44:36
+37        android:name="android.hardware.wifi"
+37-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:43:9-45
+38        android:required="false" />
+38-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:44:9-33
+39
+40    <application
+40-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:12:5-41:19
+41        android:allowBackup="true"
+41-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:13:9-35
+42        android:appComponentFactory="androidx.core.app.CoreComponentFactory"
+42-->[androidx.core:core:1.2.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\dfa863f8529796ad9f11bdcc9b81bda9\transformed\core-1.2.0\AndroidManifest.xml:24:18-86
+43        android:debuggable="true"
+44        android:extractNativeLibs="false"
+45        android:icon="@drawable/ic_scarlet"
+45-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:14:9-44
+46        android:label="@string/app_name"
+46-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:15:9-41
+47        android:supportsRtl="true"
+47-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:16:9-35
+48        android:testOnly="true"
+49        android:theme="@style/AppTheme" >
+49-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:17:9-40
+50        <activity
+50-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:19:9-26:20
+51            android:name="net.sybyline.scarlet.companion.MainActivity"
+51-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:20:13-41
+52            android:exported="true" >
+52-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:21:13-36
+53            <intent-filter>
+53-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:22:13-25:29
+54                <action android:name="android.intent.action.MAIN" />
+54-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:23:17-69
+54-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:23:25-66
+55
+56                <category android:name="android.intent.category.LAUNCHER" />
+56-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:24:17-77
+56-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:24:27-74
+57            </intent-filter>
+58        </activity>
+59
+60        <service
+60-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:28:9-31:63
+61            android:name="net.sybyline.scarlet.companion.DirectScarletService"
+61-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:29:13-49
+62            android:exported="false"
+62-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:30:13-37
+63            android:foregroundServiceType="connectedDevice" />
+63-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:31:13-60
+64        <service
+64-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:33:9-39:19
+65            android:name="net.sybyline.scarlet.companion.ScarletFirebaseMessagingService"
+65-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:34:13-60
+66            android:exported="false" >
+66-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:35:13-37
+67            <intent-filter>
+67-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:36:13-38:29
+68                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+68-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:37:17-78
+68-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:37:25-75
+69            </intent-filter>
+70        </service>
+71
+72        <receiver
+72-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:29:9-40:20
+73            android:name="com.google.firebase.iid.FirebaseInstanceIdReceiver"
+73-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:30:13-78
+74            android:exported="true"
+74-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:31:13-36
+75            android:permission="com.google.android.c2dm.permission.SEND" >
+75-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:32:13-73
+76            <intent-filter>
+76-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:33:13-35:29
+77                <action android:name="com.google.android.c2dm.intent.RECEIVE" />
+77-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:34:17-81
+77-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:34:25-78
+78            </intent-filter>
+79
+80            <meta-data
+80-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:37:13-39:40
+81                android:name="com.google.android.gms.cloudmessaging.FINISHED_AFTER_HANDLED"
+81-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:38:17-92
+82                android:value="true" />
+82-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:39:17-37
+83        </receiver>
+84        <!--
+85             FirebaseMessagingService performs security checks at runtime,
+86             but set to not exported to explicitly avoid allowing another app to call it.
+87        -->
+88        <service
+88-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:46:9-53:19
+89            android:name="com.google.firebase.messaging.FirebaseMessagingService"
+89-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:47:13-82
+90            android:directBootAware="true"
+90-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:48:13-43
+91            android:exported="false" >
+91-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:49:13-37
+92            <intent-filter android:priority="-500" >
+92-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:36:13-38:29
+93                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+93-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:37:17-78
+93-->I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\src\main\AndroidManifest.xml:37:25-75
+94            </intent-filter>
+95        </service>
+96        <service
+96-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:54:9-63:19
+97            android:name="com.google.firebase.components.ComponentDiscoveryService"
+97-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:55:13-84
+98            android:directBootAware="true"
+98-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\e3049e7a682f7d042c2308897ca16143\transformed\firebase-common-21.0.0\AndroidManifest.xml:32:13-43
+99            android:exported="false" >
+99-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:56:13-37
+100            <meta-data
+100-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:57:13-59:85
+101                android:name="com.google.firebase.components:com.google.firebase.messaging.FirebaseMessagingKtxRegistrar"
+101-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:58:17-122
+102                android:value="com.google.firebase.components.ComponentRegistrar" />
+102-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:59:17-82
+103            <meta-data
+103-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:60:13-62:85
+104                android:name="com.google.firebase.components:com.google.firebase.messaging.FirebaseMessagingRegistrar"
+104-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:61:17-119
+105                android:value="com.google.firebase.components.ComponentRegistrar" />
+105-->[com.google.firebase:firebase-messaging:24.1.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\2bc3f788fedd77def3df71434cf8909d\transformed\firebase-messaging-24.1.0\AndroidManifest.xml:62:17-82
+106            <meta-data
+106-->[com.google.firebase:firebase-datatransport:18.2.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\d2ddbc41a2d93fc6222c3f982fde63fa\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:25:13-27:85
+107                android:name="com.google.firebase.components:com.google.firebase.datatransport.TransportRegistrar"
+107-->[com.google.firebase:firebase-datatransport:18.2.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\d2ddbc41a2d93fc6222c3f982fde63fa\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:26:17-115
+108                android:value="com.google.firebase.components.ComponentRegistrar" />
+108-->[com.google.firebase:firebase-datatransport:18.2.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\d2ddbc41a2d93fc6222c3f982fde63fa\transformed\firebase-datatransport-18.2.0\AndroidManifest.xml:27:17-82
+109            <meta-data
+109-->[com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\ae59f75ac8b5b8f4c3d5a4cb928b2df9\transformed\firebase-installations-18.0.0\AndroidManifest.xml:15:13-17:85
+110                android:name="com.google.firebase.components:com.google.firebase.installations.FirebaseInstallationsKtxRegistrar"
+110-->[com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\ae59f75ac8b5b8f4c3d5a4cb928b2df9\transformed\firebase-installations-18.0.0\AndroidManifest.xml:16:17-130
+111                android:value="com.google.firebase.components.ComponentRegistrar" />
+111-->[com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\ae59f75ac8b5b8f4c3d5a4cb928b2df9\transformed\firebase-installations-18.0.0\AndroidManifest.xml:17:17-82
+112            <meta-data
+112-->[com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\ae59f75ac8b5b8f4c3d5a4cb928b2df9\transformed\firebase-installations-18.0.0\AndroidManifest.xml:18:13-20:85
+113                android:name="com.google.firebase.components:com.google.firebase.installations.FirebaseInstallationsRegistrar"
+113-->[com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\ae59f75ac8b5b8f4c3d5a4cb928b2df9\transformed\firebase-installations-18.0.0\AndroidManifest.xml:19:17-127
+114                android:value="com.google.firebase.components.ComponentRegistrar" />
+114-->[com.google.firebase:firebase-installations:18.0.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\ae59f75ac8b5b8f4c3d5a4cb928b2df9\transformed\firebase-installations-18.0.0\AndroidManifest.xml:20:17-82
+115            <meta-data
+115-->[com.google.firebase:firebase-common-ktx:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\12773eba0e5c3e9ea95a27b5505ee5ee\transformed\firebase-common-ktx-21.0.0\AndroidManifest.xml:12:13-14:85
+116                android:name="com.google.firebase.components:com.google.firebase.ktx.FirebaseCommonLegacyRegistrar"
+116-->[com.google.firebase:firebase-common-ktx:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\12773eba0e5c3e9ea95a27b5505ee5ee\transformed\firebase-common-ktx-21.0.0\AndroidManifest.xml:13:17-116
+117                android:value="com.google.firebase.components.ComponentRegistrar" />
+117-->[com.google.firebase:firebase-common-ktx:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\12773eba0e5c3e9ea95a27b5505ee5ee\transformed\firebase-common-ktx-21.0.0\AndroidManifest.xml:14:17-82
+118            <meta-data
+118-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\e3049e7a682f7d042c2308897ca16143\transformed\firebase-common-21.0.0\AndroidManifest.xml:35:13-37:85
+119                android:name="com.google.firebase.components:com.google.firebase.FirebaseCommonKtxRegistrar"
+119-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\e3049e7a682f7d042c2308897ca16143\transformed\firebase-common-21.0.0\AndroidManifest.xml:36:17-109
+120                android:value="com.google.firebase.components.ComponentRegistrar" />
+120-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\e3049e7a682f7d042c2308897ca16143\transformed\firebase-common-21.0.0\AndroidManifest.xml:37:17-82
+121        </service>
+122
+123        <activity
+123-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:47:9-53:63
+124            android:name="com.journeyapps.barcodescanner.CaptureActivity"
+124-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:48:13-74
+125            android:clearTaskOnLaunch="true"
+125-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:49:13-45
+126            android:screenOrientation="sensorLandscape"
+126-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:50:13-56
+127            android:stateNotNeeded="true"
+127-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:51:13-42
+128            android:theme="@style/zxing_CaptureTheme"
+128-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:52:13-54
+129            android:windowSoftInputMode="stateAlwaysHidden" />
+129-->[com.journeyapps:zxing-android-embedded:4.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\442678713beeb641644a4dcadae5708b\transformed\zxing-android-embedded-4.3.0\AndroidManifest.xml:53:13-60
+130
+131        <service
+131-->[com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\8b1432ffcc5ad15a9338a10ac2d882dd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:28:9-34:19
+132            android:name="com.google.android.datatransport.runtime.backends.TransportBackendDiscovery"
+132-->[com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\8b1432ffcc5ad15a9338a10ac2d882dd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:29:13-103
+133            android:exported="false" >
+133-->[com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\8b1432ffcc5ad15a9338a10ac2d882dd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:30:13-37
+134            <meta-data
+134-->[com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\8b1432ffcc5ad15a9338a10ac2d882dd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:31:13-33:39
+135                android:name="backend:com.google.android.datatransport.cct.CctBackendFactory"
+135-->[com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\8b1432ffcc5ad15a9338a10ac2d882dd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:32:17-94
+136                android:value="cct" />
+136-->[com.google.android.datatransport:transport-backend-cct:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\8b1432ffcc5ad15a9338a10ac2d882dd\transformed\transport-backend-cct-3.1.9\AndroidManifest.xml:33:17-36
+137        </service>
+138        <service
+138-->[com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\b645922d85ff5670e11493d0fb0572b9\transformed\transport-runtime-3.1.9\AndroidManifest.xml:26:9-30:19
+139            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService"
+139-->[com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\b645922d85ff5670e11493d0fb0572b9\transformed\transport-runtime-3.1.9\AndroidManifest.xml:27:13-117
+140            android:exported="false"
+140-->[com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\b645922d85ff5670e11493d0fb0572b9\transformed\transport-runtime-3.1.9\AndroidManifest.xml:28:13-37
+141            android:permission="android.permission.BIND_JOB_SERVICE" >
+141-->[com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\b645922d85ff5670e11493d0fb0572b9\transformed\transport-runtime-3.1.9\AndroidManifest.xml:29:13-69
+142        </service>
+143
+144        <receiver
+144-->[com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\b645922d85ff5670e11493d0fb0572b9\transformed\transport-runtime-3.1.9\AndroidManifest.xml:32:9-34:40
+145            android:name="com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver"
+145-->[com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\b645922d85ff5670e11493d0fb0572b9\transformed\transport-runtime-3.1.9\AndroidManifest.xml:33:13-132
+146            android:exported="false" />
+146-->[com.google.android.datatransport:transport-runtime:3.1.9] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\b645922d85ff5670e11493d0fb0572b9\transformed\transport-runtime-3.1.9\AndroidManifest.xml:34:13-37
+147
+148        <provider
+148-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\e3049e7a682f7d042c2308897ca16143\transformed\firebase-common-21.0.0\AndroidManifest.xml:23:9-28:39
+149            android:name="com.google.firebase.provider.FirebaseInitProvider"
+149-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\e3049e7a682f7d042c2308897ca16143\transformed\firebase-common-21.0.0\AndroidManifest.xml:24:13-77
+150            android:authorities="net.sybyline.scarlet.companion.firebaseinitprovider"
+150-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\e3049e7a682f7d042c2308897ca16143\transformed\firebase-common-21.0.0\AndroidManifest.xml:25:13-72
+151            android:directBootAware="true"
+151-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\e3049e7a682f7d042c2308897ca16143\transformed\firebase-common-21.0.0\AndroidManifest.xml:26:13-43
+152            android:exported="false"
+152-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\e3049e7a682f7d042c2308897ca16143\transformed\firebase-common-21.0.0\AndroidManifest.xml:27:13-37
+153            android:initOrder="100" />
+153-->[com.google.firebase:firebase-common:21.0.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\e3049e7a682f7d042c2308897ca16143\transformed\firebase-common-21.0.0\AndroidManifest.xml:28:13-36
+154
+155        <activity
+155-->[com.google.android.gms:play-services-base:18.0.1] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\3547ed0f31c28c008a7e3f34200bae32\transformed\play-services-base-18.0.1\AndroidManifest.xml:20:9-22:45
+156            android:name="com.google.android.gms.common.api.GoogleApiActivity"
+156-->[com.google.android.gms:play-services-base:18.0.1] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\3547ed0f31c28c008a7e3f34200bae32\transformed\play-services-base-18.0.1\AndroidManifest.xml:20:19-85
+157            android:exported="false"
+157-->[com.google.android.gms:play-services-base:18.0.1] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\3547ed0f31c28c008a7e3f34200bae32\transformed\play-services-base-18.0.1\AndroidManifest.xml:22:19-43
+158            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+158-->[com.google.android.gms:play-services-base:18.0.1] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\3547ed0f31c28c008a7e3f34200bae32\transformed\play-services-base-18.0.1\AndroidManifest.xml:21:19-78
+159
+160        <meta-data
+160-->[com.google.android.gms:play-services-basement:18.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\ba136e8287c6bae94714b8d363d53ee7\transformed\play-services-basement-18.3.0\AndroidManifest.xml:21:9-23:69
+161            android:name="com.google.android.gms.version"
+161-->[com.google.android.gms:play-services-basement:18.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\ba136e8287c6bae94714b8d363d53ee7\transformed\play-services-basement-18.3.0\AndroidManifest.xml:22:13-58
+162            android:value="@integer/google_play_services_version" />
+162-->[com.google.android.gms:play-services-basement:18.3.0] I:\Users\Blake Belladonna\.gradle\caches\8.13\transforms\ba136e8287c6bae94714b8d363d53ee7\transformed\play-services-basement-18.3.0\AndroidManifest.xml:23:13-66
+163    </application>
+164
+165</manifest>

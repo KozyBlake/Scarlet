@@ -1,6 +1,9 @@
 R_DEF: Internal format may change without notice
 local
 drawable ic_scarlet
+raw bl_sfx_alert
+raw bl_sfx_notice
+raw bl_sfx_siren_chirp
 string app_name
 string firebase_api_key
 string firebase_app_id

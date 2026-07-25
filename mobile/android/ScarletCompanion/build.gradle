@@ -1,3 +1,8 @@
 plugins {
-    id "com.android.application" version "8.6.1" apply false
+    // AGP 8.13.x is the current stable 8.x line and requires Gradle 8.13, which
+    // gradle/wrapper/gradle-wrapper.properties pins. Both must move together: AGP 8.6.1
+    // required Gradle 8.7, and when Android Studio updated itself and supplied Gradle 9.0
+    // the mismatch failed the build during configuration, before packaging, so no APK was
+    // produced. The wrapper is what stops the IDE from silently changing Gradle again.
+    id "com.android.application" version "8.13.2" apply false
 }

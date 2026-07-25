@@ -45,9 +45,15 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -168,8 +174,13 @@ public class ScarletMobile implements Closeable
         this.notifyNewPlayers = scarlet.settings.new FileValuedBoolean("mobile_notify_new_players", "Mobile: new players", false);
         this.notifyMixedNames = scarlet.settings.new FileValuedBoolean("mobile_notify_mixed_character_names", "Mobile: mixed-character names", false);
         this.notifySuspiciousPronouns = scarlet.settings.new FileValuedBoolean("mobile_notify_suspicious_pronouns", "Mobile: suspicious pronouns", true);
+        // Path to a Firebase service account JSON. When set, paired devices that registered an
+        // FCM token are reachable anywhere, not just on the LAN. Empty by default, in which
+        // case Scarlet falls back to the LAN stream and the relay.
+        this.fcmServiceAccount_ = scarlet.settings.new FileValuedStringPattern("mobile_fcm_service_account", "Mobile FCM service account JSON", "", null, false);
         this.createPairingQr = scarlet.settings.new FileValuedVoid("Create mobile pairing QR", "Create", this::showPairingQrDialog);
         this.sendTestNotification = scarlet.settings.new FileValuedVoid("Send mobile test notification", "Send", this::sendTestNotification);
+        this.showDeliveryStatus = scarlet.settings.new FileValuedVoid("Show mobile delivery status", "Show", this::showDeliveryStatusDialog);
 
         this.toastEnabled = scarlet.settings.new FileValuedBoolean("notify_desktop_enabled", "Desktop notifications", false);
         this.toastWatchedUsers = scarlet.settings.new FileValuedBoolean("toast_notify_watched_users", "Toast: watched users", true);
@@ -209,14 +220,43 @@ public class ScarletMobile implements Closeable
                                             toastMixedNames,
                                             toastSuspiciousPronouns;
     final ScarletSettings.FileValued<Severity> minSeverity;
-    final ScarletSettings.FileValued<Void> createPairingQr, sendTestNotification, sendToastTest;
+    final ScarletSettings.FileValued<String> fcmServiceAccount_;
+    final ScarletSettings.FileValued<Void> createPairingQr, sendTestNotification, sendToastTest, showDeliveryStatus;
     HttpServer directServer;
     int directServerPort;
     final List<DirectClient> directClients = Collections.synchronizedList(new ArrayList<>());
     volatile FcmServiceAccount fcmServiceAccount;
+    Device cachedRelayDevice;
     volatile String fcmAccessToken;
     volatile long fcmAccessTokenExpiresAtMillis;
     final AtomicBoolean toastInstallPrompted = new AtomicBoolean(false);
+
+    final AtomicInteger threadIdx = new AtomicInteger();
+
+    /**
+     * Threads for the direct LAN server. Each connected phone holds one for the whole life of
+     * its event stream, so this pool must grow on demand and must never be Scarlet's shared
+     * worker pool — otherwise a handful of paired phones starves audit polling outright.
+     */
+    final ExecutorService directServerExec = Executors.newCachedThreadPool(runnable ->
+    {
+        Thread thread = new Thread(runnable, "KozyBlake/Scarlet Mobile Direct Thread " + this.threadIdx.incrementAndGet());
+        thread.setDaemon(true);
+        return thread;
+    });
+
+    /**
+     * Threads for outbound notification delivery (relay, FCM, webhooks) and retry scheduling.
+     * Separate from Scarlet's worker pool so that a slow or unreachable endpoint — with up to
+     * 10s connect plus 15s read timeout per attempt — delays only other notifications, never
+     * moderation polling.
+     */
+    final ScheduledExecutorService notifyExec = Executors.newScheduledThreadPool(2, runnable ->
+    {
+        Thread thread = new Thread(runnable, "KozyBlake/Scarlet Mobile Notify Thread " + this.threadIdx.incrementAndGet());
+        thread.setDaemon(true);
+        return thread;
+    });
 
     public boolean wants(NotificationType type, Severity severity)
     {
@@ -419,64 +459,125 @@ public class ScarletMobile implements Closeable
         this.dispatch(event);
     }
 
+    /**
+     * Fans an event out to every delivery path.
+     * <p>
+     * The LAN broadcast is now only a queue offer, so it returns immediately and runs inline.
+     * Each remote endpoint is submitted as its own task rather than posted in a loop: a single
+     * unreachable endpoint can burn 25 seconds in connect and read timeouts, and sequentially
+     * that delay was inherited by every device behind it in the list.
+     */
     void dispatch(MobileEvent event)
     {
-        this.scarlet.exec.execute(() ->
+        // The caller is typically the VRChat log-tailing or audit-processing thread, which must
+        // never wait on notification work, so the fan-out itself is handed to the notify pool.
+        this.submitDelivery(() -> this.dispatch0(event));
+    }
+
+    void dispatch0(MobileEvent event)
+    {
+        // Broadcast to any LAN SSE clients (low latency on same network). Non-blocking.
+        this.broadcastDirect(event);
+
+        // Always also post to relay — LAN may appear alive due to TCP buffering
+        // even after the phone has left the network. Android deduplicates by
+        // notification tag (event ID hash) so no duplicate alerts appear.
+        Device relayDevice = this.relayDevice();
+        if (relayDevice != null)
+            this.submitDelivery(() -> this.postEvent(RELAY_ENDPOINT, relayDevice, event));
+
+        // Also handle any registered FCM/webhook devices
+        List<Device> devices;
+        synchronized (this)
         {
-            // Broadcast to any LAN SSE clients (low latency on same network)
-            this.broadcastDirect(event);
+            devices = new ArrayList<>(this.state.devices);
+        }
+        NotificationType type = NotificationType.of(event.type);
+        for (Device device : devices)
+        {
+            if (device == null || !device.enabled)
+                continue;
+            if (type != null && !device.wants(type, true))
+                continue;
+            if (clean(device.pushToken) != null && this.isFcmConfigured())
+            {
+                this.submitDelivery(() -> this.postFcm(device, event));
+                continue;
+            }
+            String endpoint = clean(device.pushEndpoint);
+            if (endpoint == null)
+            {
+                // No push endpoint and no usable FCM configuration: this device has no way to
+                // be reached. Record it so the cause is visible in the UI rather than silent.
+                this.markFailed(device, this.isFcmConfigured()
+                    ? "no push endpoint"
+                    : "no push endpoint, and FCM is not configured");
+                continue;
+            }
+            this.submitDelivery(() -> this.postEvent(endpoint, device, event));
+        }
+    }
 
-            // Always also post to relay — LAN may appear alive due to TCP buffering
-            // even after the phone has left the network. Android deduplicates by
-            // notification tag (event ID hash) so no duplicate alerts appear.
-            String relaySecret = this.state.relaySecret;
-            Device relayDevice = null;
-            if (clean(relaySecret) != null)
-            {
-                relayDevice = new Device();
-                relayDevice.authToken = relaySecret;
-            }
-            this.postEvent(RELAY_ENDPOINT, relayDevice, event);
+    void submitDelivery(Runnable task)
+    {
+        try
+        {
+            this.notifyExec.execute(task);
+        }
+        catch (Exception ex)
+        {
+            LOG.debug("Could not submit mobile delivery task", ex);
+        }
+    }
 
-            // Also handle any registered FCM/webhook devices
-            List<Device> devices;
-            synchronized (this)
-            {
-                devices = new ArrayList<>(this.state.devices);
-            }
-            for (Device device : devices)
-            {
-                if (device == null || !device.enabled)
-                    continue;
-                NotificationType type = NotificationType.of(event.type);
-                if (type != null && !device.wants(type, true))
-                    continue;
-                if (clean(device.pushToken) != null && this.isFcmConfigured())
-                {
-                    this.postFcm(device, event);
-                    continue;
-                }
-                String endpoint = clean(device.pushEndpoint);
-                if (endpoint == null)
-                    continue;
-                this.postEvent(endpoint, device, event);
-            }
-        });
+    /**
+     * The relay's pseudo-device, reused across dispatches so its delivery status survives.
+     * Rebuilt whenever the pairing secret changes.
+     */
+    synchronized Device relayDevice()
+    {
+        String relaySecret = clean(this.state.relaySecret);
+        if (relaySecret == null)
+            return null;
+        Device relay = this.cachedRelayDevice;
+        if (relay == null || !Objects.equals(relay.authToken, relaySecret))
+        {
+            relay = new Device();
+            relay.id = "relay";
+            relay.name = "Relay";
+            relay.authToken = relaySecret;
+            this.cachedRelayDevice = relay;
+        }
+        return relay;
+    }
+
+    /** Path to the Firebase service account JSON, or null if the user has not set one. */
+    String fcmServiceAccountPath()
+    {
+        return clean(this.fcmServiceAccount_.get());
     }
 
     boolean isFcmConfigured()
     {
-        String file = null; // FCM not configured in this build
+        String file = this.fcmServiceAccountPath();
         return file != null && new File(file).isFile();
     }
 
     void postFcm(Device device, MobileEvent event)
     {
+        this.postFcm(device, event, 1);
+    }
+
+    void postFcm(Device device, MobileEvent event, int attempt)
+    {
         try
         {
             FcmServiceAccount account = this.loadFcmServiceAccount();
             if (account == null)
+            {
+                this.markFailed(device, "FCM service account could not be loaded");
                 return;
+            }
 
             JsonObject message = new JsonObject();
             JsonObject root = new JsonObject();
@@ -516,23 +617,66 @@ public class ScarletMobile implements Closeable
 
             try (Response response = HTTP.newCall(request).execute())
             {
-                if (!response.isSuccessful())
-                    LOG.warn("FCM returned HTTP {} for mobile event {}", response.code(), event.id);
-                else if (NotificationType.TEST.id.equals(event.type))
-                    this.info("Mobile test sent", "Scarlet sent a test notification through Firebase Cloud Messaging.");
+                if (response.isSuccessful())
+                {
+                    this.markDelivered(device);
+                    if (NotificationType.TEST.id.equals(event.type))
+                        this.info("Mobile test sent", "Scarlet sent a test notification through Firebase Cloud Messaging.");
+                    return;
+                }
+                int code = response.code();
+                LOG.warn("FCM returned HTTP {} for mobile event {} (attempt {}/{})", code, event.id, attempt, DELIVERY_MAX_ATTEMPTS);
+                this.markFailed(device, "FCM HTTP " + code);
+                // 401 usually means the cached OAuth token went stale; drop it so the retry
+                // mints a fresh one. 404/UNREGISTERED means the app was uninstalled — permanent.
+                if (code == 401)
+                    this.invalidateFcmAccessToken();
+                if ((code == 401 || code == 429 || code >= 500) && this.scheduleFcmRetry(device, event, attempt))
+                    return;
+                if (NotificationType.TEST.id.equals(event.type))
+                    this.info("Mobile test failed", "Firebase Cloud Messaging returned HTTP " + code + ".");
             }
         }
         catch (Exception ex)
         {
-            LOG.warn("Exception sending mobile event {} through FCM", event.id, ex);
+            LOG.warn("Exception sending mobile event {} through FCM (attempt {}/{})", event.id, attempt, DELIVERY_MAX_ATTEMPTS, ex);
+            this.markFailed(device, ex.getMessage());
+            if (this.scheduleFcmRetry(device, event, attempt))
+                return;
             if (NotificationType.TEST.id.equals(event.type))
                 this.info("Mobile test failed", ex.getMessage());
         }
     }
 
+    synchronized void invalidateFcmAccessToken()
+    {
+        this.fcmAccessToken = null;
+        this.fcmAccessTokenExpiresAtMillis = 0L;
+    }
+
+    boolean scheduleFcmRetry(Device device, MobileEvent event, int attempt)
+    {
+        if (attempt >= DELIVERY_MAX_ATTEMPTS)
+        {
+            LOG.warn("Giving up on mobile event {} through FCM after {} attempts", event.id, attempt);
+            return false;
+        }
+        long delay = DELIVERY_RETRY_BACKOFF_MILLIS[Math.min(attempt - 1, DELIVERY_RETRY_BACKOFF_MILLIS.length - 1)];
+        try
+        {
+            this.notifyExec.schedule(() -> this.postFcm(device, event, attempt + 1), delay, TimeUnit.MILLISECONDS);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            LOG.debug("Could not schedule FCM retry for event {}", event.id, ex);
+            return false;
+        }
+    }
+
     synchronized FcmServiceAccount loadFcmServiceAccount()
     {
-        String file = null; // FCM not configured in this build
+        String file = this.fcmServiceAccountPath();
         if (file == null)
             return null;
         FcmServiceAccount cached = this.fcmServiceAccount;
@@ -620,7 +764,26 @@ public class ScarletMobile implements Closeable
         return sent;
     }
 
+    /** Delivery attempts (including the first) before an event is given up on. */
+    static final int DELIVERY_MAX_ATTEMPTS = 5;
+    /** Backoff before each retry. A phone or relay blip of a few seconds no longer loses an alert. */
+    static final long[] DELIVERY_RETRY_BACKOFF_MILLIS = { 2_000L, 5_000L, 15_000L, 45_000L };
+
     void postEvent(String endpoint, Device device, MobileEvent event)
+    {
+        this.postEvent(endpoint, device, event, 1);
+    }
+
+    /**
+     * Posts an event, retrying with backoff on failure.
+     * <p>
+     * A single dropped POST used to lose the alert outright: the failure was logged and
+     * discarded. Moderation alerts are exactly the kind of message that must not be lost to a
+     * two-second network blip, so transient failures (I/O errors, HTTP 5xx, HTTP 429) are now
+     * retried. Client errors other than 429 are permanent — a rejected auth token or an
+     * unregistered push token will not start working — so those stop immediately.
+     */
+    void postEvent(String endpoint, Device device, MobileEvent event, int attempt)
     {
         JsonObject envelope = new JsonObject();
         envelope.addProperty("schema", 1);
@@ -646,17 +809,72 @@ public class ScarletMobile implements Closeable
 
         try (Response response = HTTP.newCall(builder.build()).execute())
         {
-            if (!response.isSuccessful())
-                LOG.warn("Mobile relay returned HTTP {} for event {}", response.code(), event.id);
-            else if (NotificationType.TEST.id.equals(event.type))
-                this.info("Mobile test sent", "Scarlet sent a test notification to the configured relay.");
+            if (response.isSuccessful())
+            {
+                this.markDelivered(device);
+                if (NotificationType.TEST.id.equals(event.type))
+                    this.info("Mobile test sent", "Scarlet sent a test notification to the configured relay.");
+                return;
+            }
+            int code = response.code();
+            boolean transient_ = code == 429 || code >= 500;
+            LOG.warn("Mobile relay returned HTTP {} for event {} (attempt {}/{})", code, event.id, attempt, DELIVERY_MAX_ATTEMPTS);
+            this.markFailed(device, "HTTP " + code);
+            if (transient_ && this.scheduleRetry(endpoint, device, event, attempt))
+                return;
+            if (NotificationType.TEST.id.equals(event.type))
+                this.info("Mobile test failed", "The endpoint returned HTTP " + code + ".");
         }
         catch (Exception ex)
         {
-            LOG.warn("Exception posting mobile event {} to {}", event.id, endpoint, ex);
+            LOG.warn("Exception posting mobile event {} to {} (attempt {}/{})", event.id, endpoint, attempt, DELIVERY_MAX_ATTEMPTS, ex);
+            this.markFailed(device, ex.getMessage());
+            if (this.scheduleRetry(endpoint, device, event, attempt))
+                return;
             if (NotificationType.TEST.id.equals(event.type))
                 this.info("Mobile test failed", ex.getMessage());
         }
+    }
+
+    /**
+     * Queues another delivery attempt if any remain. Returns whether a retry was scheduled, so
+     * the caller can tell a "will try again" failure from a final one.
+     */
+    boolean scheduleRetry(String endpoint, Device device, MobileEvent event, int attempt)
+    {
+        if (attempt >= DELIVERY_MAX_ATTEMPTS)
+        {
+            LOG.warn("Giving up on mobile event {} to {} after {} attempts", event.id, endpoint, attempt);
+            return false;
+        }
+        long delay = DELIVERY_RETRY_BACKOFF_MILLIS[Math.min(attempt - 1, DELIVERY_RETRY_BACKOFF_MILLIS.length - 1)];
+        try
+        {
+            this.notifyExec.schedule(() -> this.postEvent(endpoint, device, event, attempt + 1), delay, TimeUnit.MILLISECONDS);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            // Executor shut down mid-retry (Scarlet closing): nothing left to do.
+            LOG.debug("Could not schedule mobile delivery retry for event {}", event.id, ex);
+            return false;
+        }
+    }
+
+    void markDelivered(Device device)
+    {
+        if (device == null)
+            return;
+        device.lastDeliveredAtMillis = System.currentTimeMillis();
+        device.lastError = null;
+    }
+
+    void markFailed(Device device, String error)
+    {
+        if (device == null)
+            return;
+        device.lastErrorAtMillis = System.currentTimeMillis();
+        device.lastError = error == null ? "delivery failed" : error;
     }
 
     synchronized PairingPayload createPairingPayload()
@@ -752,6 +970,88 @@ public class ScarletMobile implements Closeable
         }
         this.save();
         return false;
+    }
+
+    /**
+     * Shows how each delivery path is actually doing.
+     * <p>
+     * A phone that quietly stops receiving alerts used to be entirely invisible: the desktop
+     * kept "sending" into a dead socket and nothing in the UI disagreed. This makes the failure
+     * legible — how many LAN streams are live, and when each device last took a notification.
+     */
+    void showDeliveryStatusDialog()
+    {
+        this.scarlet.execModal.execute(() ->
+        {
+            StringBuilder sb = new StringBuilder();
+
+            sb.append("Mobile companion: ").append(this.enabled.get() ? "enabled" : "disabled").append('\n');
+            sb.append("Minimum severity: ").append(this.minSeverity.get()).append('\n');
+
+            HttpServer server = this.directServer;
+            sb.append("Direct LAN listener: ");
+            if (server == null)
+                sb.append("not running");
+            else
+                sb.append("running on port ").append(this.directServerPort);
+            sb.append('\n');
+
+            List<DirectClient> clients;
+            synchronized (this.directClients)
+            {
+                clients = new ArrayList<>(this.directClients);
+            }
+            sb.append("Live LAN event streams: ").append(clients.size()).append('\n');
+            for (DirectClient client : clients)
+                sb.append("    connected ").append(describeAge(client.connectedAtMillis)).append(" ago, ")
+                  .append(client.queue.size()).append(" frame(s) queued\n");
+
+            sb.append("FCM: ").append(this.isFcmConfigured()
+                ? "configured (" + this.fcmServiceAccountPath() + ")"
+                : "not configured").append('\n');
+
+            Device relay = this.relayDevice();
+            sb.append("Relay: ").append(relay == null ? "not paired" : relay.deliveryStatus()).append('\n');
+
+            List<Device> devices;
+            synchronized (this)
+            {
+                devices = new ArrayList<>(this.state.devices);
+            }
+            sb.append('\n').append("Paired devices: ").append(devices.size()).append('\n');
+            for (Device device : devices)
+            {
+                if (device == null)
+                    continue;
+                sb.append('\n')
+                  .append(nonBlank(device.name, "(unnamed)")).append("  [").append(nonBlank(device.platform, "?")).append("]\n")
+                  .append("    ").append(device.enabled ? "enabled" : "DISABLED").append('\n')
+                  .append("    transport: ").append(clean(device.pushToken) != null ? "FCM push token"
+                      : clean(device.pushEndpoint) != null ? "webhook " + device.pushEndpoint
+                      : "none — this device cannot be reached").append('\n')
+                  .append("    ").append(device.deliveryStatus()).append('\n');
+                if (device.pairedAt != null)
+                    sb.append("    paired: ").append(DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(device.pairedAt)).append('\n');
+            }
+
+            if (GraphicsEnvironment.isHeadless())
+            {
+                LOG.info("Mobile delivery status:\n{}", sb);
+                return;
+            }
+
+            JTextArea text = new JTextArea(sb.toString(), 24, 62);
+            text.setEditable(false);
+            text.setCaretPosition(0);
+            JPanel panel = new JPanel(new BorderLayout(8, 8));
+            panel.add(new JScrollPane(text), BorderLayout.CENTER);
+            panel.setPreferredSize(new Dimension(620, 480));
+            JOptionPane.showMessageDialog(
+                this.scarlet.ui == null ? null : this.scarlet.ui.getParentComponent(),
+                panel,
+                "Scarlet mobile delivery status",
+                JOptionPane.INFORMATION_MESSAGE);
+        });
     }
 
     void showPairingQrDialog()
@@ -977,11 +1277,14 @@ public class ScarletMobile implements Closeable
             this.save();
             return true;
         }
-        try (FileReader reader = new FileReader(this.devicesFile))
+        try
         {
-            State loaded = Scarlet.GSON_PRETTY.fromJson(reader, State.class);
-            if (loaded != null)
-                this.state = loaded;
+            try (FileReader reader = new FileReader(this.devicesFile))
+            {
+                State loaded = Scarlet.GSON_PRETTY.fromJson(reader, State.class);
+                if (loaded != null)
+                    this.state = loaded;
+            }
             if (clean(this.state.instanceId) == null)
                 this.state.instanceId = "scr_" + randomToken(12);
             if (clean(this.state.directToken) == null)
@@ -991,6 +1294,12 @@ public class ScarletMobile implements Closeable
             if (this.state.pendingPairings == null)
                 this.state.pendingPairings = new ArrayList<>();
             this.pruneExpiredPairings();
+            // Deliberately outside the reader's try-with-resources above. save() writes a temp
+            // file and then moves it over the target, and Windows refuses to replace a file
+            // that any handle is still open on — including this process's own read handle. So
+            // saving while the reader was open failed on Windows every startup with "the
+            // process cannot access the file because it is being used by another process",
+            // while working fine on Linux, where POSIX permits renaming over an open file.
             this.save();
             return true;
         }
@@ -1028,6 +1337,22 @@ public class ScarletMobile implements Closeable
     public void close()
     {
         this.stopDirectServer();
+        // Both pools are daemon-threaded, so shutdownNow only hastens exit; pending retries
+        // are abandoned deliberately rather than delaying shutdown on a dead endpoint.
+        try
+        {
+            this.notifyExec.shutdownNow();
+        }
+        catch (Exception ignored)
+        {
+        }
+        try
+        {
+            this.directServerExec.shutdownNow();
+        }
+        catch (Exception ignored)
+        {
+        }
         if (this.scarlet.shouldPersistOnShutdown())
             this.save();
         else
@@ -1047,7 +1372,7 @@ public class ScarletMobile implements Closeable
             server.createContext("/scarlet/mobile/health", this::handleDirectHealth);
             server.createContext("/scarlet/mobile/events", this::handleDirectEvents);
             server.createContext("/scarlet/mobile/pair", this::handleDirectPair);
-            server.setExecutor(this.scarlet.exec);
+            server.setExecutor(this.directServerExec);
             server.start();
             this.directServer = server;
             this.directServerPort = server.getAddress().getPort();
@@ -1136,7 +1461,10 @@ public class ScarletMobile implements Closeable
             client = new DirectClient(exchange);
             this.directClients.add(client);
             client.sendRaw("event: hello\ndata: {\"ok\":true}\n\n");
-            client.await();
+            // Occupies this handler thread for the lifetime of the connection, which is why
+            // the direct server must not share Scarlet's general worker pool: every connected
+            // phone would otherwise permanently consume one of its four threads.
+            client.runWriter();
         }
         catch (Exception ex)
         {
@@ -1275,6 +1603,21 @@ public class ScarletMobile implements Closeable
             return null;
         value = value.trim();
         return value.isEmpty() ? null : value;
+    }
+
+    /** Formats how long ago an epoch-millis timestamp was, coarsely, for status text. */
+    static String describeAge(long timestampMillis)
+    {
+        long seconds = Math.max(0L, (System.currentTimeMillis() - timestampMillis) / 1000L);
+        if (seconds < 60L)
+            return seconds + "s";
+        long minutes = seconds / 60L;
+        if (minutes < 60L)
+            return minutes + "m";
+        long hours = minutes / 60L;
+        if (hours < 24L)
+            return hours + "h";
+        return (hours / 24L) + "d";
     }
 
     static String stringMember(JsonObject json, String member)
@@ -1493,36 +1836,97 @@ public class ScarletMobile implements Closeable
         String privateKeyPem;
     }
 
+    /**
+     * A connected LAN server-sent-events client.
+     * <p>
+     * Sends are queued rather than written inline. A phone that leaves Wi-Fi range does not
+     * send a TCP FIN, so the socket stays half-open and a direct {@code write} on it blocks
+     * for as long as the kernel retransmits — tens of seconds. Previously that happened on
+     * the thread dispatching the alert, so one out-of-range phone delayed or stalled every
+     * other notification (and, because dispatch shared Scarlet's worker pool, audit polling
+     * with it). Now {@link #send} only offers to a bounded queue and the connection's own
+     * handler thread performs the blocking write.
+     * <p>
+     * The writer also emits a heartbeat comment whenever the queue is idle. Android and
+     * carrier NAT silently drop idle TCP connections after roughly 30-60 seconds; without
+     * traffic neither end notices, so alerts vanish into a dead socket. The heartbeat both
+     * keeps the connection alive and surfaces a broken one within one interval.
+     */
     static class DirectClient
     {
+        /** Idle gap after which a heartbeat comment is written. */
+        static final long HEARTBEAT_MILLIS = 15_000L;
+        /** Queued frames tolerated before a client is considered too slow and dropped. */
+        static final int QUEUE_CAPACITY = 64;
+
         DirectClient(HttpExchange exchange)
         {
             this.exchange = exchange;
             this.out = exchange.getResponseBody();
             this.closed = new CountDownLatch(1);
+            this.queue = new ArrayBlockingQueue<>(QUEUE_CAPACITY);
+            this.open = true;
+            this.connectedAtMillis = System.currentTimeMillis();
         }
 
         final HttpExchange exchange;
         final OutputStream out;
         final CountDownLatch closed;
+        final BlockingQueue<String> queue;
+        final long connectedAtMillis;
+        volatile boolean open;
 
         boolean send(String json)
         {
             return this.sendRaw("event: scarlet\ndata: " + json.replace("\n", "\\n") + "\n\n");
         }
 
-        synchronized boolean sendRaw(String data)
+        /** Queues a frame. Never blocks; returns false if the client is gone or too far behind. */
+        boolean sendRaw(String data)
+        {
+            if (!this.open)
+                return false;
+            if (!this.queue.offer(data))
+            {
+                // The socket is not draining. Rather than let the backlog grow unbounded,
+                // drop the client; the phone reconnects on its own retry loop.
+                LOG.debug("Dropping mobile direct client that is not draining its event queue");
+                this.close();
+                return false;
+            }
+            return true;
+        }
+
+        /**
+         * Blocking writer loop, run on the connection's own HTTP handler thread. Returns
+         * once the client disconnects or a write fails.
+         */
+        void runWriter()
         {
             try
             {
-                this.out.write(data.getBytes(StandardCharsets.UTF_8));
-                this.out.flush();
-                return true;
+                while (this.open)
+                {
+                    String data = this.queue.poll(HEARTBEAT_MILLIS, TimeUnit.MILLISECONDS);
+                    // An idle poll means no alert was pending: send a comment frame instead.
+                    // SSE comments are ignored by the client but still prove the socket lives.
+                    if (data == null)
+                        data = ": ping\n\n";
+                    this.out.write(data.getBytes(StandardCharsets.UTF_8));
+                    this.out.flush();
+                }
+            }
+            catch (InterruptedException ex)
+            {
+                Thread.currentThread().interrupt();
             }
             catch (Exception ex)
             {
+                LOG.debug("Mobile direct client write failed, closing stream", ex);
+            }
+            finally
+            {
                 this.close();
-                return false;
             }
         }
 
@@ -1533,6 +1937,7 @@ public class ScarletMobile implements Closeable
 
         void close()
         {
+            this.open = false;
             this.closed.countDown();
             try
             {
@@ -1563,6 +1968,26 @@ public class ScarletMobile implements Closeable
         public OffsetDateTime pairedAt;
         public OffsetDateTime lastSeenAt;
         public Map<String, Boolean> notificationTypes = new LinkedHashMap<>();
+
+        // Delivery health. Transient (not persisted) — the useful question is whether this
+        // device is receiving alerts in the current session, and a stale timestamp from a
+        // previous run would be misleading. A phone that silently stops receiving used to be
+        // completely invisible; these let the UI show it.
+        public transient volatile long lastDeliveredAtMillis;
+        public transient volatile long lastErrorAtMillis;
+        public transient volatile String lastError;
+
+        /** Human-readable delivery state for the UI, e.g. "Delivered 4s ago" or "Failed: HTTP 502". */
+        public String deliveryStatus()
+        {
+            long delivered = this.lastDeliveredAtMillis, failed = this.lastErrorAtMillis;
+            if (delivered <= 0L && failed <= 0L)
+                return "No alerts sent yet";
+            if (delivered >= failed)
+                return "Delivered " + describeAge(delivered) + " ago";
+            String error = this.lastError;
+            return "Failed " + describeAge(failed) + " ago" + (error == null ? "" : ": " + error);
+        }
 
         boolean wants(NotificationType type, boolean fallback)
         {

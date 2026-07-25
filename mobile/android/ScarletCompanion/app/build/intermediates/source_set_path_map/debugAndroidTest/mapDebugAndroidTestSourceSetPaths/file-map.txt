@@ -1,0 +1,5 @@
+net.sybyline.scarlet.companion.test.app-androidTest-0 I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\build\generated\res\resValues\androidTest\debug
+net.sybyline.scarlet.companion.test.app-updated_navigation_xml-1 I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\build\generated\updated_navigation_xml\debugAndroidTest
+net.sybyline.scarlet.companion.test.app-mergeDebugAndroidTestResources-2 I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\build\intermediates\incremental\debugAndroidTest\mergeDebugAndroidTestResources\merged.dir
+net.sybyline.scarlet.companion.test.app-mergeDebugAndroidTestResources-3 I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\build\intermediates\incremental\debugAndroidTest\mergeDebugAndroidTestResources\stripped.dir
+net.sybyline.scarlet.companion.test.app-debugAndroidTest-4 I:\Users\Blake Belladonna\Documents\GitHub\Scarlet\mobile\android\ScarletCompanion\app\build\intermediates\merged_res\debugAndroidTest\mergeDebugAndroidTestResources
