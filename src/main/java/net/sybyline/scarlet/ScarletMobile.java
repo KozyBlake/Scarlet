@@ -169,6 +169,7 @@ public class ScarletMobile implements Closeable
      * moderation events are delivered to a server operated by someone else.
      * <p>
      * The relay currently receives event payloads in the clear. Encrypting them end-to-end from
+     * the pairing secret is planned, and would reduce this to an opaque forwarder.
      *
      * @see #relayEndpoint()
      * @see #ensureRelayConsent()
