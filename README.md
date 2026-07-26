@@ -20,8 +20,10 @@ A self-hostable VRChat Group management utility with Discord integration.
 ## Why Scarlet?
 
 Scarlet is self-hosted, meaning you have complete control of your group's data.  
-There is no third party with access to your VRChat or Discord credentials or other sensitive information.  
+Your VRChat and Discord credentials are held only on your own machine — they are never sent to a third party, and no Scarlet-operated service ever receives them.  
 Since there is no automatic synchronization of data between groups running Scarlet, you don't have to worry about other groups seeing who your group has moderated or what groups you are tracking.
+
+Scarlet does talk to a small number of outside services — VRChat and Discord because that is the job, plus a handful of **optional** features (avatar search, mobile push, update checks) that are listed individually in [SECURITY.md](SECURITY.md#1-network-connections) along with how to turn each one off. No optional feature is enabled by default. One of them — the mobile companion's off-network relay — does ship pointing at a maintainer-run host, and Scarlet will not contact it until you have paired a phone and accepted an on-screen notice naming that host and what it receives; you can decline and keep using the companion over your own network, or point it at a server you run. If a build behaves differently from that list, treat the list as the claim and the build as the thing to check.
 
 ---
 

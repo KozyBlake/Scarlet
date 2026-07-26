@@ -55,6 +55,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import net.sybyline.scarlet.util.HttpURLInputStream;
+
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import javax.imageio.ImageIO;
@@ -152,7 +154,26 @@ public class ScarletMobile implements Closeable
         }
     }
 
-    static final String RELAY_ENDPOINT = "https://peachpuff-swan-183728.hostingersite.com/scarlet/mobile/event";
+    /**
+     * The default relay, run by the Scarlet fork maintainer, used to deliver mobile push to a
+     * paired phone that is not on the operator's LAN.
+     * <p>
+     * This is a real third-party hop and is treated as one: it is used only after the operator
+     * has enabled the mobile companion (off by default), paired a device, and explicitly
+     * accepted the disclosure in {@link #ensureRelayConsent()}. Operators who would rather not
+     * route through it can point {@code mobile_relay_endpoint} at their own server, or blank it
+     * to use LAN and FCM delivery only.
+     * <p>
+     * <b>Note for anyone forking this repository:</b> this endpoint is not yours. If you
+     * redistribute a build, change it to a host you control or blank it — otherwise your users'
+     * moderation events are delivered to a server operated by someone else.
+     * <p>
+     * The relay currently receives event payloads in the clear. Encrypting them end-to-end from
+     *
+     * @see #relayEndpoint()
+     * @see #ensureRelayConsent()
+     */
+    static final String RELAY_ENDPOINT_DEFAULT = "https://peachpuff-swan-183728.hostingersite.com/scarlet/mobile/event";
     static final int DIRECT_PORT = 24892;
     static final int PAIRING_EXPIRES_MINUTES = 10;
 
@@ -178,6 +199,10 @@ public class ScarletMobile implements Closeable
         // FCM token are reachable anywhere, not just on the LAN. Empty by default, in which
         // case Scarlet falls back to the LAN stream and the relay.
         this.fcmServiceAccount_ = scarlet.settings.new FileValuedStringPattern("mobile_fcm_service_account", "Mobile FCM service account JSON", "", null, false);
+        // Optional relay for off-network delivery. Defaults to the maintainer-run host, but is
+        // not contacted until the operator accepts the disclosure; see RELAY_ENDPOINT_DEFAULT.
+        // Must be an https URL; the value is validated again before use.
+        this.relayEndpoint_ = scarlet.settings.new FileValuedStringPattern("mobile_relay_endpoint", "Mobile relay endpoint (optional, https)", RELAY_ENDPOINT_DEFAULT, "https://.+", false);
         this.createPairingQr = scarlet.settings.new FileValuedVoid("Create mobile pairing QR", "Create", this::showPairingQrDialog);
         this.sendTestNotification = scarlet.settings.new FileValuedVoid("Send mobile test notification", "Send", this::sendTestNotification);
         this.showDeliveryStatus = scarlet.settings.new FileValuedVoid("Show mobile delivery status", "Show", this::showDeliveryStatusDialog);
@@ -220,7 +245,7 @@ public class ScarletMobile implements Closeable
                                             toastMixedNames,
                                             toastSuspiciousPronouns;
     final ScarletSettings.FileValued<Severity> minSeverity;
-    final ScarletSettings.FileValued<String> fcmServiceAccount_;
+    final ScarletSettings.FileValued<String> fcmServiceAccount_, relayEndpoint_;
     final ScarletSettings.FileValued<Void> createPairingQr, sendTestNotification, sendToastTest, showDeliveryStatus;
     HttpServer directServer;
     int directServerPort;
@@ -230,6 +255,8 @@ public class ScarletMobile implements Closeable
     volatile String fcmAccessToken;
     volatile long fcmAccessTokenExpiresAtMillis;
     final AtomicBoolean toastInstallPrompted = new AtomicBoolean(false);
+    /** Guards the one-time "relay configured but not consented" warning on the delivery path. */
+    final AtomicBoolean relayConsentWarned = new AtomicBoolean(false);
 
     final AtomicInteger threadIdx = new AtomicInteger();
 
@@ -482,9 +509,20 @@ public class ScarletMobile implements Closeable
         // Always also post to relay — LAN may appear alive due to TCP buffering
         // even after the phone has left the network. Android deduplicates by
         // notification tag (event ID hash) so no duplicate alerts appear.
-        Device relayDevice = this.relayDevice();
+        // Consent is checked here rather than only at pairing so that blanking or repointing the
+        // endpoint takes effect immediately, without needing to re-pair.
+        String relayEndpoint = this.relayConsentGranted() ? this.relayEndpoint() : null;
+        // Devices paired before the disclosure existed still have a relay secret but no recorded
+        // consent, so relay delivery stops until they accept it. Say so once, loudly: an alert
+        // that silently stops arriving on someone's phone is worse than one that never worked.
+        if (relayEndpoint == null && this.relayEndpoint() != null && this.relayDevice() != null
+            && this.relayConsentWarned.compareAndSet(false, true))
+            LOG.warn("A relay is configured and a device is paired, but the relay disclosure has "
+                + "not been accepted, so off-network mobile alerts are not being sent. Open "
+                + "Settings -> \"Create mobile pairing QR\" to review and accept it.");
+        Device relayDevice = relayEndpoint == null ? null : this.relayDevice();
         if (relayDevice != null)
-            this.submitDelivery(() -> this.postEvent(RELAY_ENDPOINT, relayDevice, event));
+            this.submitDelivery(() -> this.postEvent(relayEndpoint, relayDevice, event));
 
         // Also handle any registered FCM/webhook devices
         List<Device> devices;
@@ -528,6 +566,130 @@ public class ScarletMobile implements Closeable
         {
             LOG.debug("Could not submit mobile delivery task", ex);
         }
+    }
+
+    /**
+     * The operator-configured relay endpoint, or {@code null} when relay delivery is not set up.
+     * <p>
+     * Kept cheap: this runs on the delivery path for every event, so it does no DNS resolution.
+     * The stricter public-address check is done once at pairing time by
+     * {@link #relayEndpointForPairing()}, where latency does not matter.
+     */
+    String relayEndpoint()
+    {
+        String endpoint = clean(this.relayEndpoint_.get());
+        if (endpoint == null)
+            return null;
+        if (!endpoint.regionMatches(true, 0, "https://", 0, 8))
+        {
+            LOG.warn("Ignoring mobile relay endpoint: must be an https URL");
+            return null;
+        }
+        return endpoint;
+    }
+
+    /**
+     * The relay endpoint to advertise in a pairing QR, or {@code null} if none is usable.
+     * <p>
+     * Also rejects private, loopback, link-local and metadata addresses, so a mistyped or
+     * hostile value cannot turn a paired phone into a probe against the operator's own network.
+     */
+    String relayEndpointForPairing()
+    {
+        String endpoint = this.relayEndpoint();
+        if (endpoint == null)
+            return null;
+        if (!HttpURLInputStream.PUBLIC_ONLY.test(endpoint))
+        {
+            LOG.warn("Ignoring mobile relay endpoint: does not resolve to a public address");
+            return null;
+        }
+        return endpoint;
+    }
+
+    /**
+     * Whether the operator has accepted the disclosure for the currently configured relay.
+     * <p>
+     * Cheap and allocation-free enough to sit on the per-event delivery path.
+     */
+    boolean relayConsentGranted()
+    {
+        String endpoint = this.relayEndpoint();
+        if (endpoint == null)
+            return false;
+        synchronized (this)
+        {
+            return Objects.equals(endpoint, this.state.relayConsentEndpoint);
+        }
+    }
+
+    /**
+     * Asks the operator, once per distinct relay endpoint, whether moderation events may be
+     * routed through that host — naming the host and the fields it will receive.
+     * <p>
+     * Called at pairing time, which is the point the relay first becomes reachable. Declining
+     * is not an error: pairing continues over the LAN and FCM, and the QR simply advertises no
+     * relay. On a headless host there is no one to prompt, so the disclosure is logged and the
+     * relay stays disabled until an operator accepts it in the desktop UI — silence is not
+     * consent.
+     *
+     * @return whether the relay may be used
+     */
+    boolean ensureRelayConsent()
+    {
+        String endpoint = this.relayEndpoint();
+        if (endpoint == null)
+            return false;
+        if (this.relayConsentGranted())
+            return true;
+
+        String host;
+        try
+        {
+            host = URI.create(endpoint).getHost();
+        }
+        catch (Exception ex)
+        {
+            host = endpoint;
+        }
+
+        String message =
+            "Scarlet can deliver mobile alerts to your phone when it is not on this network by\n" +
+            "relaying them through:\n\n" +
+            "    " + host + "\n\n" +
+            "This is a third-party server. If you enable it, each alert sent to your phone is\n" +
+            "delivered through that host, and includes:\n\n" +
+            "  • the VRChat user ID and display name the alert is about\n" +
+            "  • your group ID, and the instance/world the event happened in\n" +
+            "  • the alert title and text, and its severity\n\n" +
+            "It does NOT include your VRChat or Discord credentials, session tokens, or any\n" +
+            "file from this machine. Alerts are sent over HTTPS, but are not currently\n" +
+            "end-to-end encrypted, so the relay operator is technically able to read them.\n\n" +
+            "You can decline and still use the mobile companion over your local network, or\n" +
+            "point Settings → \"Mobile relay endpoint\" at a server you run yourself.\n\n" +
+            "Route mobile alerts through this relay?";
+
+        if (GraphicsEnvironment.isHeadless())
+        {
+            LOG.warn("Mobile relay {} not used: it requires consent, and this host is headless. "
+                + "Accept it in the desktop UI, set mobile_relay_endpoint to your own server, "
+                + "or leave it blank to use LAN/FCM delivery only.", host);
+            return false;
+        }
+
+        if (!this.scarlet.settings.requireConfirmYesNo(message, "Scarlet mobile relay"))
+        {
+            LOG.info("Operator declined the mobile relay; using LAN/FCM delivery only");
+            return false;
+        }
+
+        synchronized (this)
+        {
+            this.state.relayConsentEndpoint = endpoint;
+            this.save();
+        }
+        LOG.info("Operator accepted the mobile relay {}", host);
+        return true;
     }
 
     /**
@@ -877,7 +1039,13 @@ public class ScarletMobile implements Closeable
         device.lastError = error == null ? "delivery failed" : error;
     }
 
-    synchronized PairingPayload createPairingPayload()
+    /**
+     * @param allowRelay whether the relay may be advertised in the payload. Resolved by the
+     *                   caller via {@link #ensureRelayConsent()}, deliberately outside this
+     *                   method: consent can involve a modal dialog, and this method holds the
+     *                   instance monitor that the delivery path also needs.
+     */
+    synchronized PairingPayload createPairingPayload(boolean allowRelay)
     {
         this.pruneExpiredPairings();
         List<String> directEventEndpoints = this.directEndpoints("events");
@@ -918,11 +1086,20 @@ public class ScarletMobile implements Closeable
         payload.addProperty("createdAt", DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(pending.createdAt));
         String expiresAt = DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(pending.expiresAt);
         payload.addProperty("expiresAt", expiresAt);
-        String relayEndpoint = RELAY_ENDPOINT;
+        // null when the relay is unconfigured, unreachable-by-policy, or the operator declined
+        // the disclosure: the phone then pairs over the LAN or FCM, and no third-party host is
+        // advertised in the QR at all.
+        String relayEndpoint = allowRelay ? this.relayEndpointForPairing() : null;
         String authToken = null;
-        payload.addProperty("relayEndpoint", relayEndpoint);
-        payload.addProperty("relayPairEndpoint", pairEndpointFor(relayEndpoint));
-        payload.addProperty("relayEventEndpoint", relayEventEndpointFor(relayEndpoint, this.state.instanceId));
+        // Omit the relay keys entirely rather than emitting JSON nulls: the companion treats an
+        // absent relay as "LAN/FCM only", and a QR for an unconfigured relay should advertise
+        // no host at all.
+        if (relayEndpoint != null)
+        {
+            payload.addProperty("relayEndpoint", relayEndpoint);
+            payload.addProperty("relayPairEndpoint", pairEndpointFor(relayEndpoint));
+            payload.addProperty("relayEventEndpoint", relayEventEndpointFor(relayEndpoint, this.state.instanceId));
+        }
         payload.add("notificationDefaults", this.notificationDefaultsJson());
         if (authToken != null)
         {
@@ -1058,7 +1235,10 @@ public class ScarletMobile implements Closeable
     {
         this.scarlet.execModal.execute(() ->
         {
-            PairingPayload pairing = this.createPairingPayload();
+            // Prompted before createPairingPayload, which is synchronized: showing a modal while
+            // holding that monitor would stall event delivery for as long as the dialog is open.
+            boolean allowRelay = this.ensureRelayConsent();
+            PairingPayload pairing = this.createPairingPayload(allowRelay);
             File png = new File(Scarlet.dir, "mobile_pairing_qr.png");
             try
             {
@@ -1824,6 +2004,13 @@ public class ScarletMobile implements Closeable
         String instanceId;
         String directToken;
         String relaySecret;
+        /**
+         * The relay endpoint the operator has accepted the disclosure for, or null if none.
+         * Stored as the endpoint rather than a boolean so that changing the relay — including a
+         * fork repointing it at a different host — re-prompts instead of silently inheriting an
+         * old consent.
+         */
+        String relayConsentEndpoint;
         List<Device> devices = new ArrayList<>();
         List<PendingPairing> pendingPairings = new ArrayList<>();
     }
