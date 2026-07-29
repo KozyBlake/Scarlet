@@ -199,7 +199,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
     {
         scarlet.splash.splashSubtext("Configuring Discord");
         this.scarlet = scarlet;
-        this.token = scarlet.settings.new RegistryStringEncrypted("discord.token", true);
+        this.token = scarlet.settings.new RegistryStringEncrypted("discord.token", true, ScarletSettings.GROUP_SCOPE_DISCORD);
         this.discordBotFile = discordBotFile;
         this.audio = new JDAAudioSendingHandler();
         this.requestingEmail = scarlet.settings.new FileValuedStringPattern("vrchat_report_email", "VRChat Help Desk report email", "", ".+@.+", false);
@@ -1134,6 +1134,56 @@ public class ScarletDiscordJDA implements ScarletDiscord
         public Map<String, String> auditExType2secretChannelSf = new HashMap<>();
         public Map<String, String> auditType2color = new HashMap<>();
         public List<Action> queuedActions = new ArrayList<>();
+
+        /** Blanks the Discord channel/webhook routing (audit->channel maps, the named channel
+         *  fields, evidence root, ticket category, aux webhooks). Keeps the bot token, guild,
+         *  roles, colours, and other non-channel settings. Used when cloning or importing into
+         *  a fresh Discord setup so channels are re-pointed rather than inherited by mistake. */
+        public void scrubChannels()
+        {
+            this.audioChannelSf = null;
+            this.discordActionLogChannelSf = null;
+            this.opsAlertChannelSf = null;
+            this.trainingChannelSf = null;
+            this.evidenceRoot = null;
+            this.ticketToolCategorySf = null;
+            this.auditType2channelSf = new HashMap<>();
+            this.auditExType2channelSf = new HashMap<>();
+            this.auditType2secretChannelSf = new HashMap<>();
+            this.auditExType2secretChannelSf = new HashMap<>();
+            this.scarletAuxWh2webhookUrl = new HashMap<>();
+            this.auditType2scarletAuxWh = new HashMap<>();
+        }
+    }
+
+    // Loads a discord config file, blanks its channel/webhook routing, and saves it back.
+    // Used by migration import (when "carry over channels" is declined) and group cloning.
+    // A safe no-op if the file is missing or unreadable.
+    public static void scrubDiscordChannels(File discordConfigFile)
+    {
+        if (discordConfigFile == null || !discordConfigFile.isFile())
+            return;
+        JDASettingsSpec spec;
+        try (java.io.FileReader fr = new java.io.FileReader(discordConfigFile))
+        {
+            spec = Scarlet.GSON_PRETTY.fromJson(fr, JDASettingsSpec.class);
+        }
+        catch (Exception ex)
+        {
+            LOG.error("Could not read discord config to scrub channels: {}", discordConfigFile, ex);
+            return;
+        }
+        if (spec == null)
+            return;
+        spec.scrubChannels();
+        try (java.io.FileWriter fw = new java.io.FileWriter(discordConfigFile))
+        {
+            Scarlet.GSON_PRETTY.toJson(spec, JDASettingsSpec.class, fw);
+        }
+        catch (Exception ex)
+        {
+            LOG.error("Could not write scrubbed discord config: {}", discordConfigFile, ex);
+        }
     }
 
     public void load()
@@ -2367,11 +2417,23 @@ public class ScarletDiscordJDA implements ScarletDiscord
             .setColor(GroupAuditType.color(this.auditType2color, entryMeta.entry.getEventType()))
             .setTimestamp(entryMeta.entry.getCreatedAt())
             .setAuthor(entryMeta.hasAuxActor() ? entryMeta.auxActorDisplayName : entryMeta.entry.getActorDisplayName(), "https://vrchat.com/home/user/"+(entryMeta.hasAuxActor() ? entryMeta.auxActorId : entryMeta.entry.getActorId()))
-            .setFooter(ScarletDiscord.FOOTER_PREFIX+entryMeta.entry.getId())
+            .setFooter(this.footerWithGroup(entryMeta.entry.getId()))
         ;
         if (addTargetIdField)
             embed.addField("Target id", entryMeta.entry.getTargetId(), false);
         return embed;
+    }
+
+    // Prepends this core's group label to the standard footer, so when several groups
+    // run at once (and especially if their posts share a bot or a channel) a moderator
+    // can tell at a glance which group an action belongs to. Harmless in the single-
+    // group case — it just names the one group.
+    private String footerWithGroup(String entryId)
+    {
+        String base = ScarletDiscord.FOOTER_PREFIX + entryId;
+        String label = null;
+        try { label = this.scarlet.vrc.groupDisplayName(); } catch (Throwable ignored) {}
+        return (label != null && !label.isEmpty()) ? label + "  •  " + base : base;
     }
     @FunctionalInterface interface CondEmitEmbed { void emitEmbed(String channelSf, Guild guild, TextChannel channel, EmbedBuilder embed); }
     void condEmitEmbed(ScarletData.AuditEntryMetadata entryMeta, boolean addTargetIdField, String title, String url, Map<String, GroupAuditType.UpdateSubComponent> updates, Consumer<EmbedBuilder> condEmitEmbed)

@@ -42,7 +42,7 @@ public final class I18n
     private static final String BASE = "/net/sybyline/scarlet/i18n/messages";
 
     /** Languages Scarlet ships translations for (base English is always present). */
-    public static final String[] SHIPPED_LANGUAGES = { "en", "de", "es", "id", "ru" };
+    public static final String[] SHIPPED_LANGUAGES = { "en", "de", "es", "id", "ja", "ru" };
 
     private static final Map<String, Map<String, String>> byLang = new ConcurrentHashMap<>();
     private static volatile Locale locale = Locale.getDefault();

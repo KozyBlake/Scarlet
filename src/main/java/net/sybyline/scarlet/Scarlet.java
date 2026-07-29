@@ -219,10 +219,26 @@ public class Scarlet implements Closeable
             try
             {
                 SecurityRegressionChecks.runAll();
-                try (Scarlet scarlet = new Scarlet())
+                if (isMultiGroupEnabled())
                 {
-                    scarlet.run();
-                    exitCode = scarlet.exitCode;
+                    applyMultiGroupCredentialScopes();
+                    // Multi-group: the primary group keeps running from the base data dir
+                    // (nothing is moved, so the existing group is never disturbed), plus one
+                    // additional core per subfolder of groups/. Turning the master setting
+                    // off returns to the exact single-group path below.
+                    List<File> cores = new ArrayList<>();
+                    cores.add(dir);
+                    cores.addAll(discoverGroupSlots());
+                    exitCode = runSupervisor(cores);
+                }
+                else
+                {
+                    // Default single-group launch — behaves exactly as before.
+                    try (Scarlet scarlet = new Scarlet())
+                    {
+                        scarlet.run();
+                        exitCode = scarlet.exitCode;
+                    }
                 }
             }
             catch (Throwable t)
@@ -318,6 +334,195 @@ public class Scarlet implements Closeable
                 return main;
         }
         return Scarlet.class.getName();
+    }
+
+    // ── Multi-core supervisor ───────────────────────────────────────────────────
+    // Opt-in and non-breaking: if a "groups" directory exists under the install dir,
+    // each immediate subfolder is treated as one group's data directory and gets its
+    // own fully independent Scarlet core in this single process (its own settings,
+    // watch lists, VRChat session, Discord bot, IPC pipe, and window). With no such
+    // directory — the default — Scarlet launches exactly one core exactly as before.
+    // Each group folder just needs its own settings.json (its VRChat group id and,
+    // for now, its own Discord bot token, since Discord allows one gateway connection
+    // per token). Install-level data (logs, caches, tts, lang) stays shared.
+    // The single master switch for multi-group mode, read straight from the base
+    // settings.json before any core is constructed. False (the default) means the
+    // classic single-group launch, untouched. The desktop toggle sets this and asks
+    // for a restart, since the decision is made at process startup.
+    static boolean isMultiGroupEnabled()
+    {
+        try
+        {
+            File settingsFile = new File(dir, "settings.json");
+            if (!settingsFile.isFile())
+                return false;
+            try (java.io.FileReader fr = new java.io.FileReader(settingsFile))
+            {
+                com.google.gson.JsonObject o = GSON.fromJson(fr, com.google.gson.JsonObject.class);
+                return o != null
+                    && o.has("multi_group_enabled")
+                    && o.get("multi_group_enabled").getAsBoolean();
+            }
+        }
+        catch (Throwable t)
+        {
+            LOG.error("Could not read multi_group_enabled from settings; defaulting to single-group", t);
+            return false;
+        }
+    }
+
+    // Reads the two credential sub-toggles from the base settings.json and applies them
+    // process-wide before any core logs in. Off by default, so credentials stay shared
+    // (the classic behaviour) unless the user opts into per-group accounts/tokens.
+    static void applyMultiGroupCredentialScopes()
+    {
+        try
+        {
+            File settingsFile = new File(dir, "settings.json");
+            if (!settingsFile.isFile())
+                return;
+            try (java.io.FileReader fr = new java.io.FileReader(settingsFile))
+            {
+                com.google.gson.JsonObject o = GSON.fromJson(fr, com.google.gson.JsonObject.class);
+                if (o == null)
+                    return;
+                ScarletSettings.PER_ACCOUNT_VRC = o.has("multi_group_per_account_creds") && o.get("multi_group_per_account_creds").getAsBoolean();
+                ScarletSettings.PER_GROUP_TOKEN = o.has("multi_group_per_group_token") && o.get("multi_group_per_group_token").getAsBoolean();
+            }
+        }
+        catch (Throwable t)
+        {
+            LOG.error("Could not read multi-group credential scope flags; keeping shared credentials", t);
+        }
+    }
+
+    static List<File> discoverGroupSlots()
+    {
+        File groupsRoot = new File(dir, "groups");
+        File[] children = groupsRoot.isDirectory() ? groupsRoot.listFiles(File::isDirectory) : null;
+        if (children == null || children.length == 0)
+            return java.util.Collections.emptyList();
+        List<File> slots = new ArrayList<>(Arrays.asList(children));
+        slots.sort(Comparator.comparing(File::getName));
+        return slots;
+    }
+
+    static int runSupervisor(List<File> slots) throws Exception
+    {
+        LOG.info("Multi-core supervisor: starting {} group core(s)", slots.size());
+        List<Scarlet> cores = new ArrayList<>();
+        // Construct sequentially on this thread (mirrors the single-core construction
+        // path). Only the first core keeps the shared console stdin; every core is
+        // still fully controllable through its own per-group IPC pipe and window.
+        boolean primary = true;
+        for (File slot : slots)
+        {
+            try
+            {
+                // Only the first core shows the loading splash — one splash, not one per group.
+                ScarletUISplash.SUPPRESS_INITIAL = !primary;
+                Scarlet core = Scarlet.forDataDir(slot);
+                if (!primary)
+                    core.stdinUsable = false;
+                primary = false;
+                cores.add(core);
+            }
+            catch (Throwable ex)
+            {
+                LOG.error("Failed to start group core for slot '"+slot.getName()+"'", ex);
+            }
+        }
+        ScarletUISplash.SUPPRESS_INITIAL = false;
+        if (cores.isEmpty())
+            return -1;
+        // Host every core in one shared tabbed window (best-effort; falls back to
+        // per-core windows if it fails). Must run before the cores' threads start so
+        // each UI is marked embedded before it would otherwise show its own frame.
+        buildMultiGroupShell(cores);
+        java.util.concurrent.atomic.AtomicInteger aggregate = new java.util.concurrent.atomic.AtomicInteger(0);
+        List<Thread> threads = new ArrayList<>();
+        for (Scarlet core : cores)
+        {
+            final Scarlet c = core;
+            Thread t = new Thread(() ->
+            {
+                try
+                {
+                    c.run();
+                }
+                catch (Throwable ex)
+                {
+                    LOG.error("Group core failed", ex);
+                }
+                finally
+                {
+                    try { c.close(); } catch (Throwable ignored) {}
+                    int ec = c.exitCode;
+                    if (ec != 0)
+                        // Prefer update(70) over restart(69) over any other non-zero code.
+                        aggregate.updateAndGet(cur -> ec == 70 ? 70 : (ec == 69 && cur != 70 ? 69 : (cur == 0 ? ec : cur)));
+                }
+            }, "KozyBlake/Scarlet Group ["+core.dataDir.getName()+"]");
+            threads.add(t);
+        }
+        for (Thread t : threads) t.start();
+        for (Thread t : threads) t.join();
+        LOG.info("Multi-core supervisor: all group cores stopped");
+        return aggregate.get();
+    }
+
+    // Builds one shared tabbed window hosting every core's UI, so several groups appear as
+    // tabs in a single window instead of separate windows. Each core's content pane and menu
+    // bar are moved into the shell; the frame-level menu bar swaps as tabs change; closing the
+    // shell stops every core. Best-effort and fully guarded — if anything fails it is logged
+    // and cores fall back to their own windows (they were not yet marked embedded).
+    static void buildMultiGroupShell(List<Scarlet> cores)
+    {
+        if (Platform.forceHeadlessUi() || GraphicsEnvironment.isHeadless() || cores.isEmpty())
+            return;
+        try
+        {
+            javax.swing.SwingUtilities.invokeAndWait(() ->
+            {
+                javax.swing.JFrame shell = new javax.swing.JFrame(APP_NAME + " " + VERSION + " — " + I18n.tr("ui.multiGroupWindowTitle"));
+                shell.setDefaultCloseOperation(javax.swing.JFrame.DO_NOTHING_ON_CLOSE);
+                javax.swing.JTabbedPane tabs = new javax.swing.JTabbedPane(javax.swing.JTabbedPane.TOP, javax.swing.JTabbedPane.SCROLL_TAB_LAYOUT);
+                List<javax.swing.JMenuBar> menus = new ArrayList<>();
+                for (Scarlet core : cores)
+                {
+                    core.ui.setEmbedded(shell);
+                    java.awt.Container[] content = new java.awt.Container[1];
+                    javax.swing.JMenuBar[] menu = new javax.swing.JMenuBar[1];
+                    core.ui.jframe(f -> { content[0] = f.getContentPane(); menu[0] = f.getJMenuBar(); });
+                    String label = core.dataDir.equals(dir) ? I18n.tr("ui.multiGroupPrimaryTab") : core.dataDir.getName();
+                    tabs.addTab(label, content[0] != null ? content[0] : new javax.swing.JPanel());
+                    menus.add(menu[0]);
+                }
+                tabs.addChangeListener($ ->
+                {
+                    int i = tabs.getSelectedIndex();
+                    shell.setJMenuBar(i >= 0 && i < menus.size() ? menus.get(i) : null);
+                });
+                if (!menus.isEmpty())
+                    shell.setJMenuBar(menus.get(0));
+                shell.getContentPane().add(tabs, java.awt.BorderLayout.CENTER);
+                shell.setSize(1120, 740);
+                shell.setLocationRelativeTo(null);
+                shell.addWindowListener(new java.awt.event.WindowAdapter()
+                {
+                    @Override public void windowClosing(java.awt.event.WindowEvent e)
+                    {
+                        for (Scarlet core : cores)
+                            try { core.stop(); } catch (Throwable ignored) {}
+                    }
+                });
+                shell.setVisible(true);
+            });
+        }
+        catch (Throwable t)
+        {
+            LOG.error("Could not build the multi-group shell window; cores fall back to their own windows", t);
+        }
     }
 
     public static final File user_home = new File(System.getProperty("user.home"));
@@ -775,7 +980,34 @@ public class Scarlet implements Closeable
                                           execModal = Executors.newSingleThreadScheduledExecutor(runnable -> new Thread(runnable, "KozyBlake/Scarlet Modal UI Thread "+this.threadidx.incrementAndGet())),
                                           execIPC = Executors.newSingleThreadScheduledExecutor(runnable -> new Thread(runnable, "KozyBlake/Scarlet IPC Thread "+this.threadidx.incrementAndGet()));
     
-    final ScarletSettings settings = new ScarletSettings(this, new File(dir, "settings.json"));
+    // ── Multi-core data directory ───────────────────────────────────────────────
+    // Each Scarlet core keeps its per-group data (settings, watch lists, tags, staff
+    // lists, report template, session store, Discord config, mobile devices) in its
+    // own folder. A normal single-group launch uses the shared install dir exactly as
+    // before — existing installs stay byte-identical — while a hosting supervisor can
+    // start additional cores pointed at a sub-folder via forDataDir(...). Install-level
+    // data (logs, caches, tts, lang, pronoun lists) stays shared in Scarlet.dir, and
+    // the group-id plumbing is untouched: a core still moderates exactly one group.
+    private static final ThreadLocal<File> PENDING_DATA_DIR = new ThreadLocal<>();
+    /** Constructs a core whose per-group data lives in {@code dataDir} instead of the shared install dir. */
+    public static Scarlet forDataDir(File dataDir) throws IOException
+    {
+        PENDING_DATA_DIR.set(dataDir);
+        try { return new Scarlet(); }
+        finally { PENDING_DATA_DIR.remove(); }
+    }
+    private static File resolveInstanceDataDir()
+    {
+        File pending = PENDING_DATA_DIR.get();
+        if (pending == null)
+            return dir;
+        pending.mkdirs();
+        return pending;
+    }
+    /** This core's per-group data directory; equals {@link #dir} for a default single-group launch. */
+    public final File dataDir = resolveInstanceDataDir();
+
+    final ScarletSettings settings = new ScarletSettings(this, new File(dataDir, "settings.json"));
     {
         if (!Platform.forceHeadlessUi())
         {
@@ -832,12 +1064,13 @@ public class Scarlet implements Closeable
         String lang = this.settings.getString("ui_language");
         if (lang != null && !lang.trim().isEmpty() && !"system".equalsIgnoreCase(lang.trim()))
             net.sybyline.scarlet.util.I18n.setLocale(new java.util.Locale(lang.trim().toLowerCase(java.util.Locale.ROOT)));
+        Swing.applyLocaleFonts(net.sybyline.scarlet.util.I18n.getLocale());
     }
     final IScarletUI ui = IScarletUI.create(this);
     final ScarletEventListener eventListener = new ScarletEventListener(this);
-    final ScarletPendingModActions pendingModActions = new ScarletPendingModActions(this, new File(dir, "pending_moderation_actions.json"));
-    final ScarletModerationTags moderationTags = new ScarletModerationTags(new File(dir, "moderation_tags.json"));
-    final ScarletWatchedGroups watchedGroups = new ScarletWatchedGroups(new File(dir, "watched_groups.json"));
+    final ScarletPendingModActions pendingModActions = new ScarletPendingModActions(this, new File(dataDir, "pending_moderation_actions.json"));
+    final ScarletModerationTags moderationTags = new ScarletModerationTags(new File(dataDir, "moderation_tags.json"));
+    final ScarletWatchedGroups watchedGroups = new ScarletWatchedGroups(new File(dataDir, "watched_groups.json"));
     /** Shared pronoun allow/deny lists — read by PronounValidator on every check. Public so the validator can access it statically. */
     public static ScarletPronounLists pronounLists;
     {
@@ -852,7 +1085,7 @@ public class Scarlet implements Closeable
             );
         }
     }
-    final ScarletWatchedEntities<User> watchedUsers = new ScarletWatchedEntities<>(new File(dir, "watched_users.json"), VrcIds.id_user, (user, id, embed) ->
+    final ScarletWatchedEntities<User> watchedUsers = new ScarletWatchedEntities<>(new File(dataDir, "watched_users.json"), VrcIds.id_user, (user, id, embed) ->
     {
         if (user == null)
         {
@@ -868,7 +1101,7 @@ public class Scarlet implements Closeable
             embed.setThumbnail(userThumbnail);
         }
     });
-    final ScarletWatchedEntities<Avatar> watchedAvatars = new ScarletWatchedEntities<>(new File(dir, "watched_avatars.json"), VrcIds.id_avatar, (avatar, id, embed) ->
+    final ScarletWatchedEntities<Avatar> watchedAvatars = new ScarletWatchedEntities<>(new File(dataDir, "watched_avatars.json"), VrcIds.id_avatar, (avatar, id, embed) ->
     {
         if (avatar == null)
         {
@@ -885,15 +1118,15 @@ public class Scarlet implements Closeable
             embed.setThumbnail(avatar.getThumbnailImageUrl());
         }
     });
-    final ScarletStaffList staffList = new ScarletStaffList(new File(dir, "staff_list.json"));
-    final ScarletSecretStaffList secretStaffList = new ScarletSecretStaffList(new File(dir, "secret_staff_list.json"));
-    final ScarletVRChatReportTemplate vrcReport = new ScarletVRChatReportTemplate(new File(dir, "report_template.txt"));
-    final ScarletData data = new ScarletData(new File(dir, "data"));
-    final ScarletVRChat vrc = new ScarletVRChat(this, "global", new File(dir, "store.bin"));
-    final ScarletMobile mobile = new ScarletMobile(this, new File(dir, "mobile_devices.json"));
-    final ScarletDiscord discord = new ScarletDiscordJDA(this, new File(dir, "discord_bot.json"), new File(dir, "discord_perms.json"));
+    final ScarletStaffList staffList = new ScarletStaffList(new File(dataDir, "staff_list.json"));
+    final ScarletSecretStaffList secretStaffList = new ScarletSecretStaffList(new File(dataDir, "secret_staff_list.json"));
+    final ScarletVRChatReportTemplate vrcReport = new ScarletVRChatReportTemplate(new File(dataDir, "report_template.txt"));
+    final ScarletData data = new ScarletData(new File(dataDir, "data"));
+    final ScarletVRChat vrc = new ScarletVRChat(this, "global", new File(dataDir, "store.bin"));
+    final ScarletMobile mobile = new ScarletMobile(this, new File(dataDir, "mobile_devices.json"));
+    final ScarletDiscord discord = new ScarletDiscordJDA(this, new File(dataDir, "discord_bot.json"), new File(dataDir, "discord_perms.json"));
     private TtsService ttsService = null;
-    final ScarletCalendar calendar = new ScarletCalendar(this, new File(dir, "event_schedule.json"));
+    final ScarletCalendar calendar = new ScarletCalendar(this, new File(dataDir, "event_schedule.json"));
     final ScarletVRChatLogs logs = new ScarletVRChatLogs(this.eventListener);
     final ScarletCacheCleanup cacheCleanup = new ScarletCacheCleanup(this);
     String[] last25logs = new String[0];
@@ -907,7 +1140,10 @@ public class Scarlet implements Closeable
                                      discordKickBanPrompted = this.settings.new FileValuedBoolean("discord_kick_ban_prompted", I18n.tr("setting.discord_kick_ban_prompted"), false),
                                      autoInviteOnVerify = this.settings.new FileValuedBoolean("auto_invite_group_on_verify", I18n.tr("setting.auto_invite_group_on_verify"), true),
                                      trainingMode = this.settings.new FileValuedBoolean("training_mode_enabled", I18n.tr("setting.training_mode_enabled"), false),
-                                     uiAccentHeaders = this.settings.new FileValuedBoolean("ui_accent_headers", I18n.tr("setting.ui_accent_headers"), false);
+                                     uiAccentHeaders = this.settings.new FileValuedBoolean("ui_accent_headers", I18n.tr("setting.ui_accent_headers"), false),
+                                     multiGroupEnabled = this.settings.new FileValuedBoolean("multi_group_enabled", I18n.tr("setting.multi_group_enabled"), false),
+                                     multiGroupPerAccountCreds = this.settings.new FileValuedBoolean("multi_group_per_account_creds", I18n.tr("setting.multi_group_per_account_creds"), false),
+                                     multiGroupPerGroupToken = this.settings.new FileValuedBoolean("multi_group_per_group_token", I18n.tr("setting.multi_group_per_group_token"), false);
     /** Desktop UI language override; blank/"system" follows the operating system language. Applied at startup (restart to change). */
     final ScarletSettings.FileValued<String> uiLanguage = this.settings.new FileValuedStringChoice("ui_language", I18n.tr("setting.ui_language"), "system", () ->
     {

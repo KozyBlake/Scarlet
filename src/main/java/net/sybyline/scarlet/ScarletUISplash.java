@@ -48,6 +48,12 @@ public class ScarletUISplash implements IScarletUISplash
 
     // ──────────────────────────────────────────────────────────────────────────
 
+    // Multi-group: when several cores start in one process, only the first shows the
+    // loading splash — the rest suppress it, so there is one splash, not one per group.
+    // The splash object is still built (subtext/feedback popups keep working); only its
+    // initial on-screen appearance is skipped.
+    public static volatile boolean SUPPRESS_INITIAL = false;
+
     public ScarletUISplash(Scarlet scarlet)
     {
         this.scarlet = scarlet;
@@ -325,7 +331,8 @@ public class ScarletUISplash implements IScarletUISplash
         this.splash.setLocationRelativeTo(null);
         this.splash.setFocusable(false);
         this.splash.setBackground(BG);
-        this.splash.setVisible(true);
+        if (!SUPPRESS_INITIAL)
+            this.splash.setVisible(true);
     }
 
     // ── Lifecycle ──────────────────────────────────────────────────────────────
@@ -346,7 +353,7 @@ public class ScarletUISplash implements IScarletUISplash
         this.splashSubtext = null;
         s.setVisible(false);
         s.dispose();
-        this.scarlet.ui.jframe(jframe -> jframe.setVisible(true));
+        this.scarlet.ui.showMainWindow();
     }
 
     public void splashText(String text)

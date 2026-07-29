@@ -7,6 +7,7 @@ import java.awt.Toolkit;
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
 import java.util.Enumeration;
+import java.util.Locale;
 import java.util.function.Supplier;
 
 import javax.swing.BorderFactory;
@@ -585,6 +586,95 @@ public class Swing
         }
     }
 
+    /**
+     * Selects a UIResource font family that can render the active UI language.
+     * This covers ordinary Swing labels, menus, buttons, tabs, and dialogs before
+     * they are constructed, avoiding missing-glyph boxes for CJK locales.
+     */
+    public static void applyLocaleFonts(Locale locale)
+    {
+        if (java.awt.GraphicsEnvironment.isHeadless())
+            return;
+        String sample = localeFontSample(locale);
+        if (sample == null || sample.isEmpty())
+            return;
+
+        Font base = UIManager.getFont("defaultFont");
+        if (base == null)
+            base = UIManager.getFont("Label.font");
+        if (base == null)
+            base = new Font(Font.DIALOG, Font.PLAIN, 12);
+        if (fontCovers(base, sample))
+            return;
+
+        Font localeFont = findFontForText(sample, base, localePreferredFamilies(locale));
+        if (localeFont == null)
+            localeFont = fontForText(sample, base);
+        if (localeFont == null || localeFont == base || !fontCovers(localeFont, sample))
+            return;
+
+        String family = localeFont.getFamily();
+        UIDefaults defaults = UIManager.getDefaults();
+        for (Enumeration<Object> e = defaults.keys(); e.hasMoreElements();)
+        {
+            Object key = e.nextElement();
+            Object value = defaults.get(key);
+            if (value instanceof FontUIResource)
+            {
+                Font font = (Font)value;
+                defaults.put(key, new FontUIResource(family, font.getStyle(), font.getSize()));
+            }
+        }
+        UIManager.put("defaultFont", new FontUIResource(family, base.getStyle(), base.getSize()));
+        LOG.info("Applied UI font '{}' for locale {}", family, locale == null ? Locale.getDefault() : locale);
+    }
+
+    private static String localeFontSample(Locale locale)
+    {
+        String lang = locale == null ? Locale.getDefault().getLanguage() : locale.getLanguage();
+        if (lang == null)
+            return "";
+        switch (lang.toLowerCase(Locale.ROOT))
+        {
+        case "ja": return "日本語ひらがなカタカナ漢字";
+        case "zh": return "中文简体繁體漢字";
+        case "ko": return "한국어한글漢字";
+        case "ru": return "Русский";
+        case "el": return "Ελληνικά";
+        case "he": return "עברית";
+        case "ar": return "العربية";
+        case "th": return "ภาษาไทย";
+        case "hi": return "हिन्दी";
+        default:   return "";
+        }
+    }
+
+    private static java.util.List<String> localePreferredFamilies(Locale locale)
+    {
+        String lang = locale == null ? Locale.getDefault().getLanguage() : locale.getLanguage();
+        if (lang == null)
+            lang = "";
+        switch (lang.toLowerCase(Locale.ROOT))
+        {
+        case "ja":
+            return java.util.Arrays.asList(
+                "Yu Gothic UI", "Yu Gothic", "Meiryo", "MS PGothic", "MS Gothic",
+                "Noto Sans JP", "Noto Sans CJK JP", "Hiragino Sans",
+                "Hiragino Kaku Gothic ProN", "TakaoPGothic", "IPAPGothic");
+        case "zh":
+            return java.util.Arrays.asList(
+                "Microsoft YaHei UI", "Microsoft YaHei", "SimSun", "SimHei",
+                "Noto Sans CJK SC", "Noto Sans CJK TC", "PingFang SC",
+                "PingFang TC", "WenQuanYi Micro Hei", "WenQuanYi Zen Hei");
+        case "ko":
+            return java.util.Arrays.asList(
+                "Malgun Gothic", "Malgun Gothic Semilight", "Noto Sans CJK KR",
+                "Apple SD Gothic Neo", "Gulim", "Batang", "Baekmuk Gulim");
+        default:
+            return java.util.Collections.emptyList();
+        }
+    }
+
     public static void invokeLater(Runnable func)
     {
         SwingUtilities.invokeLater(func);
@@ -869,35 +959,15 @@ public class Swing
         if (text == null || text.isEmpty())
             return baseFont;
 
-        // Fast path: base font can display everything
-        boolean allCovered = true;
-        for (int i = 0; i < text.length(); )
-        {
-            int cp = text.codePointAt(i);
-            i += Character.charCount(cp);
-            if (!baseFont.canDisplay(cp))
-            {
-                allCovered = false;
-                break;
-            }
-        }
-        if (allCovered)
+        int firstMissing = firstMissingCodePoint(text, baseFont);
+        if (firstMissing < 0)
             return baseFont;
 
         // Find the first codepoint the base font cannot display and derive
         // a cache key from its Unicode script
         Character.UnicodeScript needScript = null;
-        for (int i = 0; i < text.length(); )
-        {
-            int cp = text.codePointAt(i);
-            i += Character.charCount(cp);
-            if (!baseFont.canDisplay(cp))
-            {
-                try { needScript = Character.UnicodeScript.of(cp); }
-                catch (IllegalArgumentException ex) { needScript = Character.UnicodeScript.UNKNOWN; }
-                break;
-            }
-        }
+        try { needScript = Character.UnicodeScript.of(firstMissing); }
+        catch (IllegalArgumentException ex) { needScript = Character.UnicodeScript.UNKNOWN; }
         if (needScript == null)
             return baseFont;
 
@@ -911,9 +981,9 @@ public class Swing
         for (String family : fallbackFamilies())
         {
             Font candidate = new Font(family, baseFont.getStyle(), baseFont.getSize());
-            if (candidate.canDisplay(text.codePointAt(0)))
+            if (candidate.canDisplay(firstMissing))
             {
-                // Quick check passed — verify the first uncovered codepoint
+                // Quick check passed: verify every codepoint the base font lacks.
                 boolean covers = true;
                 for (int i = 0; i < text.length(); )
                 {
@@ -940,6 +1010,49 @@ public class Swing
         else
             LOG.warn("No font fallback found for script {} (text: {})", needScript, text);
         return found != null ? found : baseFont;
+    }
+
+    private static boolean fontCovers(Font font, String text)
+    {
+        return firstMissingCodePoint(text, font) < 0;
+    }
+
+    private static int firstMissingCodePoint(String text, Font font)
+    {
+        if (text == null || text.isEmpty() || font == null)
+            return -1;
+        for (int i = 0; i < text.length(); )
+        {
+            int cp = text.codePointAt(i);
+            i += Character.charCount(cp);
+            if (cp == '\n' || cp == '\r' || cp == '\t')
+                continue;
+            if (!font.canDisplay(cp))
+                return cp;
+        }
+        return -1;
+    }
+
+    private static Font findFontForText(String text, Font baseFont, java.util.List<String> preferredFamilies)
+    {
+        Font preferred = findFontForTextInFamilies(text, baseFont, preferredFamilies);
+        return preferred != null ? preferred : findFontForTextInFamilies(text, baseFont, fallbackFamilies());
+    }
+
+    private static Font findFontForTextInFamilies(String text, Font baseFont, java.util.List<String> families)
+    {
+        if (text == null || text.isEmpty() || baseFont == null || families == null || families.isEmpty())
+            return null;
+        int firstMissing = firstMissingCodePoint(text, baseFont);
+        if (firstMissing < 0)
+            return baseFont;
+        for (String family : families)
+        {
+            Font candidate = new Font(family, baseFont.getStyle(), baseFont.getSize());
+            if (candidate.canDisplay(firstMissing) && fontCovers(candidate, text))
+                return candidate;
+        }
+        return null;
     }
 
     private Swing()

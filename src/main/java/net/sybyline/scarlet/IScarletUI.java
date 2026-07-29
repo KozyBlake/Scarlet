@@ -31,6 +31,10 @@ public interface IScarletUI extends Closeable
     java.awt.Component getParentComponent();
     
     void jframe(Consumer<JFrame> edit);
+    /** Multi-group: run this UI embedded in a shared shell window instead of its own top-level frame. */
+    default void setEmbedded(JFrame shell) {}
+    /** Show this UI's main window — a no-op when embedded in a shared shell (see {@link #setEmbedded}). */
+    default void showMainWindow() { this.jframe(f -> f.setVisible(true)); }
     void setUIScale();
     void loadSettings();
     void refreshVrchatApiStatus();

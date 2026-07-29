@@ -220,9 +220,9 @@ public class ScarletVRChat implements Closeable
         Configuration.getDefaultApiClient();
         
         this.scarlet = scarlet;
-        this.username = scarlet.settings.new RegistryStringEncrypted(domain+":username", true);
-        this.password = scarlet.settings.new RegistryStringEncrypted(domain+":password", true);
-        this.totpsecret = scarlet.settings.new RegistryStringEncrypted(domain+":totpsecret", true);
+        this.username = scarlet.settings.new RegistryStringEncrypted(domain+":username", true, ScarletSettings.GROUP_SCOPE_VRC);
+        this.password = scarlet.settings.new RegistryStringEncrypted(domain+":password", true, ScarletSettings.GROUP_SCOPE_VRC);
+        this.totpsecret = scarlet.settings.new RegistryStringEncrypted(domain+":totpsecret", true, ScarletSettings.GROUP_SCOPE_VRC);
         this.cookies = new ScarletVRChatCookieJar(scarlet, domain, cookieFile);
         this.legacyTrustCompatEnabled = Boolean.TRUE.equals(this.scarlet.settings.getObject(LEGACY_TLS_COMPAT_SETTING, Boolean.class));
         OkHttpClient.Builder okHttpBuilder = new OkHttpClient.Builder();
@@ -317,7 +317,12 @@ public class ScarletVRChat implements Closeable
      * so it only bites under heavy combined load; the real protection is the 429
      * backoff.
      */
-    final net.sybyline.scarlet.util.VrcRateLimiter rateLimiter = new net.sybyline.scarlet.util.VrcRateLimiter(10.0, 20.0);
+    // With per-group accounts, each group has its OWN VRChat rate budget, so it gets its
+    // own limiter. With a shared account (the default), all cores draw from one shared
+    // limiter so their combined traffic stays under the single account's limit.
+    final net.sybyline.scarlet.util.VrcRateLimiter rateLimiter = ScarletSettings.PER_ACCOUNT_VRC
+        ? new net.sybyline.scarlet.util.VrcRateLimiter(10.0, 20.0)
+        : net.sybyline.scarlet.util.VrcRateLimiter.shared(10.0, 20.0);
     final ScarletSettings.RegistryStringEncrypted username, password, totpsecret;
     final ScarletVRChatCookieJar cookies;
     final ApiClient client;
@@ -340,6 +345,19 @@ public class ScarletVRChat implements Closeable
     final ScarletJsonCache<World> cachedWorlds;
     final ScarletJsonCache<Group> cachedGroups;
     final ScarletJsonCache<List<LimitedUserGroups>> cachedUserGroups;
+
+    /** Human-readable label for this core's group — the group name when known, else its id, else null. Used to tag Discord posts with their group when several groups run at once. */
+    public String groupDisplayName()
+    {
+        Group g = this.group;
+        if (g != null)
+        {
+            String name = g.getName();
+            if (name != null && !name.trim().isEmpty())
+                return name.trim();
+        }
+        return MiscUtils.blank(this.groupId) ? null : this.groupId.trim();
+    }
     final ScarletJsonCache<Avatar> cachedAvatars;
     final ScarletJsonCache<Print> cachedPrints;
     final ScarletJsonCache<Prop> cachedProps;

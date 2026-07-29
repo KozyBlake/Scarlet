@@ -315,6 +315,11 @@ public final class ScarletMigration
             try
             {
                 String summary = importBundleContents(working, importOptions);
+                // Optional, additive post-step: if the user chose not to carry channels over
+                // (e.g. importing into a different Discord server), blank the imported channel
+                // routing. Default keepChannels==true skips this, so legacy imports are unchanged.
+                if (importOptions.importDataFiles && !importOptions.keepChannels)
+                    scrubImportedDiscordChannels();
                 return new ImportResult(summary, backup);
             }
             catch (IOException ex)
@@ -539,6 +544,18 @@ public final class ScarletMigration
         return options.importCredentials && credentialData;
     }
 
+    // Blanks Discord channel/webhook routing in the freshly-imported config (bot token,
+    // guild, roles, and cosmetics kept). No-op when there is no imported config.
+    private static void scrubImportedDiscordChannels()
+    {
+        File dataDir = Scarlet.dir;
+        if (dataDir == null)
+            return;
+        File discordConfig = new File(dataDir, "discord_bot.json");
+        if (discordConfig.isFile())
+            ScarletDiscordJDA.scrubDiscordChannels(discordConfig);
+    }
+
     private static boolean isCredentialDataEntry(String relative)
     {
         String normalized = normalizeEntryName(relative);
@@ -611,17 +628,26 @@ public final class ScarletMigration
     {
         public ImportOptions(boolean importDataFiles, boolean importCredentials)
         {
+            this(importDataFiles, importCredentials, true);
+        }
+        public ImportOptions(boolean importDataFiles, boolean importCredentials, boolean keepChannels)
+        {
             this.importDataFiles = importDataFiles;
             this.importCredentials = importCredentials;
+            this.keepChannels = keepChannels;
         }
 
         static ImportOptions all()
         {
-            return new ImportOptions(true, true);
+            return new ImportOptions(true, true, true);
         }
 
         public final boolean importDataFiles;
         public final boolean importCredentials;
+        /** When false, the imported Discord config has its channel/webhook routing blanked
+         *  (bot token, guild, roles, and everything else kept). Defaults to true, so existing
+         *  callers and legacy bundles import exactly as before. */
+        public final boolean keepChannels;
     }
 
     private static void zipDir(ZipOutputStream zip, File root, File dir, String prefix, File skip, int[] count, ProgressState state) throws IOException

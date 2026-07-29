@@ -172,10 +172,27 @@ public class ScarletUI implements IScarletUI
         edit.accept(this.jframe);
     }
 
+    // Multi-group embedding: when this UI is hosted inside the shared tabbed shell,
+    // its own top-level frame is never shown, and dialogs parent to the shell so they
+    // appear over the visible window instead of the hidden per-core frame.
+    private volatile boolean embedded;
+    private volatile JFrame shellFrame;
+    @Override
+    public void setEmbedded(JFrame shell)
+    {
+        this.embedded = true;
+        this.shellFrame = shell;
+    }
+    @Override
+    public void showMainWindow()
+    {
+        if (!this.embedded)
+            this.jframe.setVisible(true);
+    }
     @Override
     public java.awt.Component getParentComponent()
     {
-        return this.jframe;
+        return this.embedded && this.shellFrame != null ? this.shellFrame : this.jframe;
     }
 
     public void setUIScale()
@@ -813,6 +830,7 @@ public class ScarletUI implements IScarletUI
                 {
                     jmenu_file.add(I18n.tr("menu.file.browseData")).addActionListener($ -> MiscUtils.AWTDesktop.browseDirectory(Scarlet.dir));
                     jmenu_file.add(I18n.tr("menu.file.createInstance")).addActionListener($ -> this.uiCreateGroupInstance());
+                    jmenu_file.add(I18n.tr("menu.file.cloneGroup")).addActionListener($ -> this.uiCloneGroup());
                     jmenu_file.addSeparator();
                     jmenu_file.add(I18n.tr("menu.file.quit")).addActionListener($ -> this.uiModalExit());
                 }
@@ -1925,6 +1943,7 @@ public class ScarletUI implements IScarletUI
     {
         JCheckBox importDataFiles = new JCheckBox(I18n.tr("ui.dataConfigFiles"), true);
         JCheckBox importCredentials = new JCheckBox(I18n.tr("ui.secureCredentialsAndSignIns"), true);
+        JCheckBox keepChannels = new JCheckBox(I18n.tr("ui.keepChannelMappings"), true);
 
         JPanel panel = new JPanel(new GridBagLayout());
         GridBagConstraints ogbc = new GridBagConstraints();
@@ -1953,6 +1972,14 @@ public class ScarletUI implements IScarletUI
         ogbc.insets = new Insets(0, 24, 0, 0);
         panel.add(new JLabel(I18n.tr("ui.importCredDesc")), ogbc);
 
+        ogbc.gridy++;
+        ogbc.insets = new Insets(8, 0, 2, 0);
+        panel.add(keepChannels, ogbc);
+
+        ogbc.gridy++;
+        ogbc.insets = new Insets(0, 24, 0, 0);
+        panel.add(new JLabel(I18n.tr("ui.keepChannelsDesc")), ogbc);
+
         int choice = JOptionPane.showConfirmDialog(this.jframe, panel,
             I18n.tr("ui.chooseWhatToImport"), JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
         if (choice != JOptionPane.OK_OPTION)
@@ -1964,7 +1991,7 @@ public class ScarletUI implements IScarletUI
                 I18n.tr("ui.importBundleTitle"), JOptionPane.WARNING_MESSAGE);
             return null;
         }
-        return new ScarletMigration.ImportOptions(importDataFiles.isSelected(), importCredentials.isSelected());
+        return new ScarletMigration.ImportOptions(importDataFiles.isSelected(), importCredentials.isSelected(), keepChannels.isSelected());
     }
 
     private void uiCreateGroupInstance()
@@ -3734,7 +3761,7 @@ public class ScarletUI implements IScarletUI
 
         { "Interface",
           "ui_confirm_group_invite", "ui_alert_update", "ui_alert_update_preview",
-          "ui_show_during_load" },
+          "ui_show_during_load", "multi_group_enabled", "multi_group_per_account_creds", "multi_group_per_group_token" },
 
         { "Instance Enforcement",
           "enforce_instances_18_plus", "enforce_instances_worlds", "enforce_instances_world_list",
@@ -4499,6 +4526,191 @@ public class ScarletUI implements IScarletUI
 
     // Left-hand category list for the settings tab. One clickable row per entry in
     // SETTINGS_CATEGORIES; selecting one narrows the card list to that category.
+    // Warns about the multi-group caveats before the master setting is turned on, so it
+    // is never enabled without the user seeing what to expect. Returns true if accepted.
+    boolean confirmEnableMultiGroup()
+    {
+        return JOptionPane.showConfirmDialog(this.jframe,
+            I18n.tr("ui.multiGroupWarn"),
+            I18n.tr("ui.multiGroupWarnTitle"),
+            JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE) == JOptionPane.OK_OPTION;
+    }
+
+    // Creates a new multi-group slot by cloning THIS group's config into groups/<name>/.
+    // Copies the config as a starting point (settings + Discord config), blanks the group
+    // id so the new slot re-points, optionally drops the channel routing, and never copies
+    // operational data (watch lists, session, audit history) — the new group starts clean.
+    // Requires multi-group mode; the new group runs on the next restart.
+    private void uiCloneGroup()
+    {
+        if (!Boolean.TRUE.equals(this.scarlet.multiGroupEnabled.get()))
+        {
+            JOptionPane.showMessageDialog(this.jframe, I18n.tr("ui.cloneNeedsMultiGroup"),
+                I18n.tr("ui.cloneGroupTitle"), JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        boolean perAccount = Boolean.TRUE.equals(this.scarlet.multiGroupPerAccountCreds.get());
+        boolean perToken = Boolean.TRUE.equals(this.scarlet.multiGroupPerGroupToken.get());
+
+        JTextField nameField = new JTextField(22);
+        JTextField groupIdField = new JTextField(22);
+        JCheckBox carryChannelsBox = new JCheckBox(I18n.tr("ui.keepChannelMappings"), true);
+        JTextField vrcUser = new JTextField(22);
+        JPasswordField vrcPass = new JPasswordField(22);
+        JPasswordField discToken = new JPasswordField(22);
+        JTextField guildIdField = new JTextField(22);
+
+        JPanel form = new JPanel(new GridBagLayout());
+        GridBagConstraints lc = new GridBagConstraints();
+        lc.gridx = 0; lc.anchor = GridBagConstraints.WEST; lc.insets = new Insets(3, 0, 3, 8);
+        GridBagConstraints fc = new GridBagConstraints();
+        fc.gridx = 1; fc.fill = GridBagConstraints.HORIZONTAL; fc.weightx = 1.0; fc.insets = new Insets(3, 0, 3, 0);
+        int y = 0;
+        lc.gridy = y; form.add(new JLabel(I18n.tr("ui.cloneFolderName")), lc); fc.gridy = y++; form.add(nameField, fc);
+        lc.gridy = y; form.add(new JLabel(I18n.tr("ui.cloneGroupIdLabel")), lc); fc.gridy = y++; form.add(groupIdField, fc);
+        if (perAccount)
+        {
+            lc.gridy = y; form.add(new JLabel(I18n.tr("ui.cloneVrcUser")), lc); fc.gridy = y++; form.add(vrcUser, fc);
+            lc.gridy = y; form.add(new JLabel(I18n.tr("ui.cloneVrcPass")), lc); fc.gridy = y++; form.add(vrcPass, fc);
+        }
+        if (perToken)
+        {
+            lc.gridy = y; form.add(new JLabel(I18n.tr("ui.cloneDiscToken")), lc); fc.gridy = y++; form.add(discToken, fc);
+            lc.gridy = y; form.add(new JLabel(I18n.tr("ui.cloneGuildId")), lc); fc.gridy = y++; form.add(guildIdField, fc);
+        }
+        GridBagConstraints wide = new GridBagConstraints();
+        wide.gridx = 0; wide.gridwidth = 2; wide.anchor = GridBagConstraints.WEST; wide.insets = new Insets(8, 0, 0, 0);
+        wide.gridy = y++; form.add(carryChannelsBox, wide);
+        wide.gridy = y++; form.add(new JLabel(I18n.tr("ui.cloneWizardHint")), wide);
+
+        if (JOptionPane.showConfirmDialog(this.jframe, form, I18n.tr("ui.cloneGroupTitle"),
+                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION)
+            return;
+
+        String name = nameField.getText().trim().replaceAll("[^A-Za-z0-9._-]", "_");
+        if (name.isEmpty())
+        {
+            JOptionPane.showMessageDialog(this.jframe, I18n.tr("ui.cloneGroupBadName"),
+                I18n.tr("ui.cloneGroupTitle"), JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        File slot = new File(new File(Scarlet.dir, "groups"), name);
+        if (slot.exists())
+        {
+            JOptionPane.showMessageDialog(this.jframe, I18n.tr("ui.cloneGroupExists", name),
+                I18n.tr("ui.cloneGroupTitle"), JOptionPane.WARNING_MESSAGE);
+            return;
+        }
+        String groupId = groupIdField.getText().trim();
+        try
+        {
+            slot.mkdirs();
+            for (String f : new String[]{ "settings.json", "discord_bot.json", "discord_perms.json" })
+            {
+                File src = new File(Scarlet.dir, f);
+                if (src.isFile())
+                    java.nio.file.Files.copy(src.toPath(), new File(slot, f).toPath(),
+                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+            }
+            File slotSettings = new File(slot, "settings.json");
+            File slotDiscord = new File(slot, "discord_bot.json");
+            // Group id: use the one entered, or blank it so the group prompts on first run.
+            if (!groupId.isEmpty())
+                putJsonStringKey(slotSettings, "vrchat_group_id", groupId);
+            else
+                blankSettingKey(slotSettings, "vrchat_group_id");
+            if (!carryChannelsBox.isSelected())
+                ScarletDiscordJDA.scrubDiscordChannels(slotDiscord);
+            // Pre-seed credentials as plaintext migration keys; the new group's first
+            // login/connect moves them into its own secure store and clears the plaintext.
+            if (perAccount)
+            {
+                String u = vrcUser.getText().trim();
+                char[] pc = vrcPass.getPassword();
+                String p = new String(pc);
+                java.util.Arrays.fill(pc, '\0');
+                if (!u.isEmpty()) putJsonStringKey(slotSettings, "vrc_username", u);
+                if (!p.isEmpty()) putJsonStringKey(slotSettings, "vrc_password", p);
+            }
+            if (perToken)
+            {
+                char[] tc = discToken.getPassword();
+                String t = new String(tc).trim();
+                java.util.Arrays.fill(tc, '\0');
+                String gid = guildIdField.getText().trim();
+                if (!t.isEmpty()) putJsonStringKey(slotDiscord, "token", t);
+                if (!gid.isEmpty()) putJsonStringKey(slotDiscord, "guildSf", gid);
+            }
+            JOptionPane.showMessageDialog(this.jframe,
+                I18n.tr("ui.cloneGroupDone", slot.getAbsolutePath()),
+                I18n.tr("ui.cloneGroupTitle"), JOptionPane.INFORMATION_MESSAGE);
+        }
+        catch (Exception ex)
+        {
+            LOG.error("Could not clone group into {}", slot, ex);
+            JOptionPane.showMessageDialog(this.jframe,
+                I18n.tr("ui.cloneGroupFailed", String.valueOf(ex.getMessage())),
+                I18n.tr("ui.cloneGroupTitle"), JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    // Sets a top-level string key in a JSON config file (settings.json / discord_bot.json),
+    // creating the file if needed. Used to pre-seed a new group's config so it needs only one
+    // restart. Values written as plaintext migration keys are secured on the group's first run.
+    private static void putJsonStringKey(File jsonFile, String key, String value)
+    {
+        if (jsonFile == null)
+            return;
+        try
+        {
+            com.google.gson.JsonObject o = new com.google.gson.JsonObject();
+            if (jsonFile.isFile())
+            {
+                try (java.io.FileReader fr = new java.io.FileReader(jsonFile))
+                {
+                    com.google.gson.JsonObject loaded = Scarlet.GSON.fromJson(fr, com.google.gson.JsonObject.class);
+                    if (loaded != null)
+                        o = loaded;
+                }
+            }
+            o.addProperty(key, value);
+            try (java.io.FileWriter fw = new java.io.FileWriter(jsonFile))
+            {
+                Scarlet.GSON_PRETTY.toJson(o, fw);
+            }
+        }
+        catch (Exception ex)
+        {
+            LOG.error("Could not set {} in {}", key, jsonFile, ex);
+        }
+    }
+
+    // Removes a top-level key from a settings.json file, if present.
+    private static void blankSettingKey(File settingsFile, String key)
+    {
+        if (!settingsFile.isFile())
+            return;
+        try
+        {
+            com.google.gson.JsonObject o;
+            try (java.io.FileReader fr = new java.io.FileReader(settingsFile))
+            {
+                o = Scarlet.GSON.fromJson(fr, com.google.gson.JsonObject.class);
+            }
+            if (o == null || !o.has(key))
+                return;
+            o.remove(key);
+            try (java.io.FileWriter fw = new java.io.FileWriter(settingsFile))
+            {
+                Scarlet.GSON_PRETTY.toJson(o, fw);
+            }
+        }
+        catch (Exception ex)
+        {
+            LOG.error("Could not blank setting {} in {}", key, settingsFile, ex);
+        }
+    }
+
     private JPanel buildSettingsSidebar()
     {
         JPanel sidebar = new JPanel();
@@ -4626,7 +4838,7 @@ public class ScarletUI implements IScarletUI
                 this.cliTabMenuItem.setSelected(showCli);
                 this.setCliTabVisible(showCli);
             }
-            if (this.scarlet.showUiDuringLoad.get())
+            if (!this.embedded && this.scarlet.showUiDuringLoad.get())
             {
                 this.jframe.setVisible(true);
             }
@@ -5030,7 +5242,16 @@ public class ScarletUI implements IScarletUI
         }
         void accept()
         {
-            this.set(this.render.isSelected());
+            boolean selected = this.render.isSelected();
+            // Enabling multi-group mode warns about the known caveats first; if the user
+            // declines, revert the checkbox so the setting is never turned on unknowingly.
+            if (selected && "multi_group_enabled".equals(this.setting.id())
+                && !ScarletUI.this.confirmEnableMultiGroup())
+            {
+                this.render.setSelected(false);
+                return;
+            }
+            this.set(selected);
         }
         @Override
         protected void update()
