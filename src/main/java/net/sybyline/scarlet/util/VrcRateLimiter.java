@@ -48,30 +48,6 @@ public final class VrcRateLimiter
         this.lastRefillMs = System.currentTimeMillis();
     }
 
-    // Process-wide shared limiter. VRChat's rate limits are per account, so when
-    // several group cores run in one process on the SAME account, they must draw from
-    // one budget rather than each assuming it owns the whole thing — otherwise their
-    // combined traffic overruns the account's limit and every core thrashes on 429s.
-    // Sharing one gate makes them pace cooperatively, and a 429 seen by any core eases
-    // the whole account off at once. A single-core launch just creates it once and
-    // uses it exactly as a per-instance limiter would, so nothing changes there.
-    // (When per-account credentials land, this becomes keyed by account.)
-    private static volatile VrcRateLimiter SHARED;
-    public static VrcRateLimiter shared(double permitsPerSecond, double burst)
-    {
-        VrcRateLimiter s = SHARED;
-        if (s == null)
-        {
-            synchronized (VrcRateLimiter.class)
-            {
-                s = SHARED;
-                if (s == null)
-                    s = SHARED = new VrcRateLimiter(permitsPerSecond, burst);
-            }
-        }
-        return s;
-    }
-
     /**
      * Blocks until any active global backoff has elapsed and a token is available.
      * On interruption it stops waiting and returns (the caller's request proceeds)

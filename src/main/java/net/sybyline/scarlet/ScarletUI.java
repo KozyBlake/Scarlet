@@ -172,27 +172,15 @@ public class ScarletUI implements IScarletUI
         edit.accept(this.jframe);
     }
 
-    // Multi-group embedding: when this UI is hosted inside the shared tabbed shell,
-    // its own top-level frame is never shown, and dialogs parent to the shell so they
-    // appear over the visible window instead of the hidden per-core frame.
-    private volatile boolean embedded;
-    private volatile JFrame shellFrame;
-    @Override
-    public void setEmbedded(JFrame shell)
-    {
-        this.embedded = true;
-        this.shellFrame = shell;
-    }
     @Override
     public void showMainWindow()
     {
-        if (!this.embedded)
-            this.jframe.setVisible(true);
+        this.jframe.setVisible(true);
     }
     @Override
     public java.awt.Component getParentComponent()
     {
-        return this.embedded && this.shellFrame != null ? this.shellFrame : this.jframe;
+        return this.jframe;
     }
 
     public void setUIScale()
@@ -830,7 +818,6 @@ public class ScarletUI implements IScarletUI
                 {
                     jmenu_file.add(I18n.tr("menu.file.browseData")).addActionListener($ -> MiscUtils.AWTDesktop.browseDirectory(Scarlet.dir));
                     jmenu_file.add(I18n.tr("menu.file.createInstance")).addActionListener($ -> this.uiCreateGroupInstance());
-                    jmenu_file.add(I18n.tr("menu.file.cloneGroup")).addActionListener($ -> this.uiCloneGroup());
                     jmenu_file.addSeparator();
                     jmenu_file.add(I18n.tr("menu.file.quit")).addActionListener($ -> this.uiModalExit());
                 }
@@ -908,6 +895,30 @@ public class ScarletUI implements IScarletUI
                     jmenu_help.add(I18n.tr("help.apiDocsGithub")).addActionListener($ -> MiscUtils.AWTDesktop.browse(URI.create(Scarlet.COMMUNITY_GITHUB_URL)));
                 }
                 jmenubar.add(jmenu_help);
+            }
+            // Debug menu — present ONLY in a debug build / -Dscarlet.debug=true. Lets a tester
+            // exercise features without real VRChat/Discord setup.
+            if (Debug.ENABLED)
+            {
+                JMenu jmenu_debug = new JMenu("Debug");
+                jmenu_debug.add("Event console… (fire any event)").addActionListener($ -> this.debugEventConsole());
+                jmenu_debug.add("Simulate event… (player/instance)").addActionListener($ -> this.uiSimulateEvent());
+                jmenu_debug.add("Inject sample watched data").addActionListener($ -> this.debugInjectSampleData());
+                jmenu_debug.addSeparator();
+                jmenu_debug.add("About debug mode").addActionListener($ -> JOptionPane.showMessageDialog(this.jframe,
+                    "This is a Scarlet DEBUG build.\n\n"
+                  + "• Starts OFFLINE by default — no VRChat sign-in, no Discord bot needed.\n"
+                  + "  (Pass -Dscarlet.debug.offline=false to sign in for real.)\n"
+                  + "• Event console… fires ANY event — the player/instance simulations and every\n"
+                  + "  group-audit type (bans, kicks, roles, requests, …) — through the real pipeline\n"
+                  + "  and mirrors what each would post to Discord into the console, so you can test\n"
+                  + "  without a bot. (Audit events that resolve VRChat users want a sign-in.)\n"
+                  + "• Simulate event… is the player/instance simulator on its own.\n"
+                  + "• Inject sample watched data adds fake watched groups/users/avatars so you\n"
+                  + "  can test the lists and remove-menu.\n\n"
+                  + "Release builds never include this menu.",
+                    "Debug mode", JOptionPane.INFORMATION_MESSAGE));
+                jmenubar.add(jmenu_debug);
             }
             this.jframe.setJMenuBar(jmenubar);
         }
@@ -1903,7 +1914,7 @@ public class ScarletUI implements IScarletUI
         catch (Exception ex)
         {
             LOG.error("Could not read migration bundle {}", file, ex);
-            JOptionPane.showMessageDialog(this.jframe, "Could not read that bundle: " + ex.getMessage(),
+            JOptionPane.showMessageDialog(this.jframe, I18n.tr("ui.couldNotReadBundle", String.valueOf(ex.getMessage())),
                 I18n.tr("ui.importBundleTitle"), JOptionPane.ERROR_MESSAGE);
             return;
         }
@@ -2445,9 +2456,168 @@ public class ScarletUI implements IScarletUI
      */
     private javax.swing.JDialog simDialog = null;
     private javax.swing.JMenuItem simMenuItem = null;
+
+    // Debug-only: seed the watch lists with obviously-fake entries so the lists, the Discord
+    // remove-menu, and related UI can be tested without a live group. Ids carry a "debug-" marker
+    // so they can never be mistaken for real VRChat entities.
+    private void debugInjectSampleData()
+    {
+        int n = 0;
+        for (int i = 1; i <= 5; i++)
+        {
+            ScarletWatchedGroups.WatchedGroup wg = new ScarletWatchedGroups.WatchedGroup();
+            wg.id = "grp_debug-" + i;
+            wg.type = ScarletWatchedGroups.WatchedGroup.Type.NUISANCE;
+            wg.priority = i;
+            wg.message = "Debug sample group " + i;
+            if (this.scarlet.watchedGroups.addWatchedGroup(wg.id, wg)) n++;
+
+            ScarletWatchedEntities.WatchedEntity wu = new ScarletWatchedEntities.WatchedEntity();
+            wu.id = "usr_debug-" + i;
+            wu.type = ScarletWatchedEntities.WatchedEntity.Type.NUISANCE;
+            wu.priority = i;
+            wu.message = "Debug sample user " + i;
+            if (this.scarlet.watchedUsers.addWatchedEntity(wu.id, wu)) n++;
+
+            ScarletWatchedEntities.WatchedEntity wa = new ScarletWatchedEntities.WatchedEntity();
+            wa.id = "avtr_debug-" + i;
+            wa.type = ScarletWatchedEntities.WatchedEntity.Type.NUISANCE;
+            wa.priority = i;
+            wa.message = "Debug sample avatar " + i;
+            if (this.scarlet.watchedAvatars.addWatchedEntity(wa.id, wa)) n++;
+        }
+        this.scarlet.watchedGroups.save();
+        this.scarlet.watchedUsers.save();
+        this.scarlet.watchedAvatars.save();
+        JOptionPane.showMessageDialog(this.jframe,
+            "Injected " + n + " sample watched entries (up to 5 groups, 5 users, 5 avatars) with debug- ids.\n"
+          + "Test removal via the desktop lists or the Discord /watched-*  remove-menu command.",
+            "Debug mode", JOptionPane.INFORMATION_MESSAGE);
+    }
+
+    // Debug Event Console: fire any event through the real pipeline and see what it would post,
+    // without a live Discord bot. Player/instance events (which build their own fake users) work
+    // fully offline; group-audit events resolve real VRChat users, so for the fullest fidelity run
+    // the debug jar with -Dscarlet.debug.offline=false (a VRChat sign-in, still no Discord bot).
+    private javax.swing.JDialog debugConsoleDialog = null;
+    private void debugEventConsole()
+    {
+        if (this.debugConsoleDialog != null && this.debugConsoleDialog.isShowing())
+        {
+            this.debugConsoleDialog.toFront();
+            return;
+        }
+        javax.swing.JDialog dialog = new javax.swing.JDialog(this.jframe, "Debug — Event console", false);
+        this.debugConsoleDialog = dialog;
+        javax.swing.JTextArea console = new javax.swing.JTextArea(16, 74);
+        console.setEditable(false);
+        console.setLineWrap(true);
+        console.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
+        // Register as the emit sink so Discord output is mirrored into this window.
+        Debug.SINK = line -> this.appendDebugConsole(console, line);
+        dialog.addWindowListener(new java.awt.event.WindowAdapter()
+        {
+            @Override public void windowClosing(java.awt.event.WindowEvent e) { Debug.SINK = null; }
+            @Override public void windowClosed(java.awt.event.WindowEvent e) { Debug.SINK = null; }
+        });
+
+        JPanel top = new JPanel(new GridBagLayout());
+        top.setBorder(BorderFactory.createEmptyBorder(8, 10, 8, 10));
+        GridBagConstraints g = new GridBagConstraints();
+        g.insets = new Insets(3, 4, 3, 4);
+        g.anchor = GridBagConstraints.WEST;
+        g.fill = GridBagConstraints.HORIZONTAL;
+
+        JComboBox<ScarletSimulation.Kind> simCombo = new JComboBox<>(ScarletSimulation.Kind.values());
+        JTextField simName = new JTextField("DebugUser", 12);
+        JTextField simDetail = new JTextField("", 12);
+        JButton simFire = new JButton("Fire");
+        simFire.addActionListener($ ->
+        {
+            ScarletSimulation.Kind k = (ScarletSimulation.Kind) simCombo.getSelectedItem();
+            String res = ScarletSimulation.trigger(this.scarlet, k, simName.getText(), simDetail.getText());
+            this.appendDebugConsole(console, "player: " + res);
+        });
+        g.gridx = 0; g.gridy = 0; top.add(new JLabel("Player/instance:"), g);
+        g.gridx = 1; top.add(simCombo, g);
+        g.gridx = 2; top.add(new JLabel("name"), g);
+        g.gridx = 3; top.add(simName, g);
+        g.gridx = 4; top.add(new JLabel("detail"), g);
+        g.gridx = 5; top.add(simDetail, g);
+        g.gridx = 6; top.add(simFire, g);
+
+        JComboBox<GroupAuditType> auditCombo = new JComboBox<>(GroupAuditType.values());
+        JButton auditFire = new JButton("Fire");
+        auditFire.addActionListener($ -> this.debugFireAudit((GroupAuditType) auditCombo.getSelectedItem(), console));
+        JButton auditFireAll = new JButton("Fire all");
+        auditFireAll.addActionListener($ -> { for (GroupAuditType t : GroupAuditType.values()) this.debugFireAudit(t, console); });
+        g.gridx = 0; g.gridy = 1; top.add(new JLabel("Group audit event:"), g);
+        g.gridx = 1; g.gridwidth = 3; top.add(auditCombo, g); g.gridwidth = 1;
+        g.gridx = 4; top.add(auditFire, g);
+        g.gridx = 5; top.add(auditFireAll, g);
+
+        dialog.setLayout(new java.awt.BorderLayout());
+        dialog.add(top, java.awt.BorderLayout.NORTH);
+        dialog.add(new javax.swing.JScrollPane(console), java.awt.BorderLayout.CENTER);
+        dialog.pack();
+        dialog.setLocationRelativeTo(this.jframe);
+        this.appendDebugConsole(console,
+            "Event console ready. Player/instance events fire fully offline. Group-audit events run\n"
+          + "through the real pipeline and mirror their Discord output here — no bot needed; for events\n"
+          + "that resolve VRChat users, start with -Dscarlet.debug.offline=false so lookups work.\n"
+          + "----------------------------------------------------------------------------------------");
+        dialog.setVisible(true);
+    }
+
+    private void appendDebugConsole(javax.swing.JTextArea console, String line)
+    {
+        Swing.invokeLater(() ->
+        {
+            console.append(line + "\n");
+            console.setCaretPosition(console.getDocument().getLength());
+        });
+    }
+
+    private void debugFireAudit(GroupAuditType type, javax.swing.JTextArea console)
+    {
+        this.scarlet.exec.execute(() ->
+        {
+            try
+            {
+                io.github.vrchatapi.model.GroupAuditLogEntry e = new io.github.vrchatapi.model.GroupAuditLogEntry();
+                e.setId("gaud_debug-" + Long.toUnsignedString(System.nanoTime(), 16));
+                e.setEventType(type.id);
+                e.setGroupId(this.scarlet.vrc.groupId != null ? this.scarlet.vrc.groupId : "grp_debug");
+                e.setActorId("usr_debug-actor");
+                e.setActorDisplayName("DebugActor");
+                e.setTargetId(debugTargetFor(type));
+                e.setCreatedAt(java.time.OffsetDateTime.now());
+                e.setDescription("[DEBUG] " + type.title);
+                this.scarlet.discord.process(this.scarlet, e);
+                this.appendDebugConsole(console, "fired " + type.name() + " (" + type.id + ")");
+            }
+            catch (Throwable ex)
+            {
+                this.appendDebugConsole(console, "fired " + type.name() + " — pipeline stopped (usually needs a live VRChat session or richer data): " + ex);
+            }
+        });
+    }
+
+    private static String debugTargetFor(GroupAuditType type)
+    {
+        switch (type)
+        {
+        case INSTANCE_CREATE: case INSTANCE_CLOSE: case INSTANCE_WARN: case INSTANCE_KICK:
+            return "wrld_debug-00000000-0000-0000-0000-000000000000:00000~debug";
+        default:
+            return "usr_debug-target";
+        }
+    }
+
     private void uiSimulateEvent()
     {
-        if (this.scarlet.trainingMode == null || !this.scarlet.trainingMode.get())
+        // Debug builds can fire events without flipping Training mode on.
+        if (!Debug.ENABLED && (this.scarlet.trainingMode == null || !this.scarlet.trainingMode.get()))
         {
             JOptionPane.showMessageDialog(this.jframe, I18n.tr("sim.disabled"), I18n.tr("sim.title"), JOptionPane.INFORMATION_MESSAGE);
             return;
@@ -2685,7 +2855,7 @@ public class ScarletUI implements IScarletUI
                 area.setEditable(false);
                 area.setFont(new Font(Font.MONOSPACED, Font.PLAIN, 12));
                 area.setCaretPosition(0);
-                JButton copy = new JButton("Copy");
+                JButton copy = new JButton(I18n.tr("common.copy"));
                 copy.addActionListener($ ->
                 {
                     Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(report), null);
@@ -3761,7 +3931,7 @@ public class ScarletUI implements IScarletUI
 
         { "Interface",
           "ui_confirm_group_invite", "ui_alert_update", "ui_alert_update_preview",
-          "ui_show_during_load", "multi_group_enabled", "multi_group_per_account_creds", "multi_group_per_group_token" },
+          "ui_show_during_load" },
 
         { "Instance Enforcement",
           "enforce_instances_18_plus", "enforce_instances_worlds", "enforce_instances_world_list",
@@ -3774,7 +3944,8 @@ public class ScarletUI implements IScarletUI
         { "Advisories",
           "advisory_show_watched_users", "advisory_show_watched_groups", "advisory_show_watched_avatars",
           "advisory_show_new_players", "advisory_show_mixed_character_names", "advisory_show_votes_to_kick",
-          "advisory_show_suspicious_pronouns" },
+          "advisory_show_suspicious_pronouns",
+          "advisory_translate_endpoint", "advisory_translate_api_key", "advisory_translate_now", "advisory_restore" },
 
         { "Text-to-Speech",
           "tts_voice_name", "Install Linux TTS voices", "tts_use_default_audio_device",
@@ -4526,191 +4697,6 @@ public class ScarletUI implements IScarletUI
 
     // Left-hand category list for the settings tab. One clickable row per entry in
     // SETTINGS_CATEGORIES; selecting one narrows the card list to that category.
-    // Warns about the multi-group caveats before the master setting is turned on, so it
-    // is never enabled without the user seeing what to expect. Returns true if accepted.
-    boolean confirmEnableMultiGroup()
-    {
-        return JOptionPane.showConfirmDialog(this.jframe,
-            I18n.tr("ui.multiGroupWarn"),
-            I18n.tr("ui.multiGroupWarnTitle"),
-            JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE) == JOptionPane.OK_OPTION;
-    }
-
-    // Creates a new multi-group slot by cloning THIS group's config into groups/<name>/.
-    // Copies the config as a starting point (settings + Discord config), blanks the group
-    // id so the new slot re-points, optionally drops the channel routing, and never copies
-    // operational data (watch lists, session, audit history) — the new group starts clean.
-    // Requires multi-group mode; the new group runs on the next restart.
-    private void uiCloneGroup()
-    {
-        if (!Boolean.TRUE.equals(this.scarlet.multiGroupEnabled.get()))
-        {
-            JOptionPane.showMessageDialog(this.jframe, I18n.tr("ui.cloneNeedsMultiGroup"),
-                I18n.tr("ui.cloneGroupTitle"), JOptionPane.INFORMATION_MESSAGE);
-            return;
-        }
-        boolean perAccount = Boolean.TRUE.equals(this.scarlet.multiGroupPerAccountCreds.get());
-        boolean perToken = Boolean.TRUE.equals(this.scarlet.multiGroupPerGroupToken.get());
-
-        JTextField nameField = new JTextField(22);
-        JTextField groupIdField = new JTextField(22);
-        JCheckBox carryChannelsBox = new JCheckBox(I18n.tr("ui.keepChannelMappings"), true);
-        JTextField vrcUser = new JTextField(22);
-        JPasswordField vrcPass = new JPasswordField(22);
-        JPasswordField discToken = new JPasswordField(22);
-        JTextField guildIdField = new JTextField(22);
-
-        JPanel form = new JPanel(new GridBagLayout());
-        GridBagConstraints lc = new GridBagConstraints();
-        lc.gridx = 0; lc.anchor = GridBagConstraints.WEST; lc.insets = new Insets(3, 0, 3, 8);
-        GridBagConstraints fc = new GridBagConstraints();
-        fc.gridx = 1; fc.fill = GridBagConstraints.HORIZONTAL; fc.weightx = 1.0; fc.insets = new Insets(3, 0, 3, 0);
-        int y = 0;
-        lc.gridy = y; form.add(new JLabel(I18n.tr("ui.cloneFolderName")), lc); fc.gridy = y++; form.add(nameField, fc);
-        lc.gridy = y; form.add(new JLabel(I18n.tr("ui.cloneGroupIdLabel")), lc); fc.gridy = y++; form.add(groupIdField, fc);
-        if (perAccount)
-        {
-            lc.gridy = y; form.add(new JLabel(I18n.tr("ui.cloneVrcUser")), lc); fc.gridy = y++; form.add(vrcUser, fc);
-            lc.gridy = y; form.add(new JLabel(I18n.tr("ui.cloneVrcPass")), lc); fc.gridy = y++; form.add(vrcPass, fc);
-        }
-        if (perToken)
-        {
-            lc.gridy = y; form.add(new JLabel(I18n.tr("ui.cloneDiscToken")), lc); fc.gridy = y++; form.add(discToken, fc);
-            lc.gridy = y; form.add(new JLabel(I18n.tr("ui.cloneGuildId")), lc); fc.gridy = y++; form.add(guildIdField, fc);
-        }
-        GridBagConstraints wide = new GridBagConstraints();
-        wide.gridx = 0; wide.gridwidth = 2; wide.anchor = GridBagConstraints.WEST; wide.insets = new Insets(8, 0, 0, 0);
-        wide.gridy = y++; form.add(carryChannelsBox, wide);
-        wide.gridy = y++; form.add(new JLabel(I18n.tr("ui.cloneWizardHint")), wide);
-
-        if (JOptionPane.showConfirmDialog(this.jframe, form, I18n.tr("ui.cloneGroupTitle"),
-                JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE) != JOptionPane.OK_OPTION)
-            return;
-
-        String name = nameField.getText().trim().replaceAll("[^A-Za-z0-9._-]", "_");
-        if (name.isEmpty())
-        {
-            JOptionPane.showMessageDialog(this.jframe, I18n.tr("ui.cloneGroupBadName"),
-                I18n.tr("ui.cloneGroupTitle"), JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        File slot = new File(new File(Scarlet.dir, "groups"), name);
-        if (slot.exists())
-        {
-            JOptionPane.showMessageDialog(this.jframe, I18n.tr("ui.cloneGroupExists", name),
-                I18n.tr("ui.cloneGroupTitle"), JOptionPane.WARNING_MESSAGE);
-            return;
-        }
-        String groupId = groupIdField.getText().trim();
-        try
-        {
-            slot.mkdirs();
-            for (String f : new String[]{ "settings.json", "discord_bot.json", "discord_perms.json" })
-            {
-                File src = new File(Scarlet.dir, f);
-                if (src.isFile())
-                    java.nio.file.Files.copy(src.toPath(), new File(slot, f).toPath(),
-                        java.nio.file.StandardCopyOption.REPLACE_EXISTING);
-            }
-            File slotSettings = new File(slot, "settings.json");
-            File slotDiscord = new File(slot, "discord_bot.json");
-            // Group id: use the one entered, or blank it so the group prompts on first run.
-            if (!groupId.isEmpty())
-                putJsonStringKey(slotSettings, "vrchat_group_id", groupId);
-            else
-                blankSettingKey(slotSettings, "vrchat_group_id");
-            if (!carryChannelsBox.isSelected())
-                ScarletDiscordJDA.scrubDiscordChannels(slotDiscord);
-            // Pre-seed credentials as plaintext migration keys; the new group's first
-            // login/connect moves them into its own secure store and clears the plaintext.
-            if (perAccount)
-            {
-                String u = vrcUser.getText().trim();
-                char[] pc = vrcPass.getPassword();
-                String p = new String(pc);
-                java.util.Arrays.fill(pc, '\0');
-                if (!u.isEmpty()) putJsonStringKey(slotSettings, "vrc_username", u);
-                if (!p.isEmpty()) putJsonStringKey(slotSettings, "vrc_password", p);
-            }
-            if (perToken)
-            {
-                char[] tc = discToken.getPassword();
-                String t = new String(tc).trim();
-                java.util.Arrays.fill(tc, '\0');
-                String gid = guildIdField.getText().trim();
-                if (!t.isEmpty()) putJsonStringKey(slotDiscord, "token", t);
-                if (!gid.isEmpty()) putJsonStringKey(slotDiscord, "guildSf", gid);
-            }
-            JOptionPane.showMessageDialog(this.jframe,
-                I18n.tr("ui.cloneGroupDone", slot.getAbsolutePath()),
-                I18n.tr("ui.cloneGroupTitle"), JOptionPane.INFORMATION_MESSAGE);
-        }
-        catch (Exception ex)
-        {
-            LOG.error("Could not clone group into {}", slot, ex);
-            JOptionPane.showMessageDialog(this.jframe,
-                I18n.tr("ui.cloneGroupFailed", String.valueOf(ex.getMessage())),
-                I18n.tr("ui.cloneGroupTitle"), JOptionPane.ERROR_MESSAGE);
-        }
-    }
-
-    // Sets a top-level string key in a JSON config file (settings.json / discord_bot.json),
-    // creating the file if needed. Used to pre-seed a new group's config so it needs only one
-    // restart. Values written as plaintext migration keys are secured on the group's first run.
-    private static void putJsonStringKey(File jsonFile, String key, String value)
-    {
-        if (jsonFile == null)
-            return;
-        try
-        {
-            com.google.gson.JsonObject o = new com.google.gson.JsonObject();
-            if (jsonFile.isFile())
-            {
-                try (java.io.FileReader fr = new java.io.FileReader(jsonFile))
-                {
-                    com.google.gson.JsonObject loaded = Scarlet.GSON.fromJson(fr, com.google.gson.JsonObject.class);
-                    if (loaded != null)
-                        o = loaded;
-                }
-            }
-            o.addProperty(key, value);
-            try (java.io.FileWriter fw = new java.io.FileWriter(jsonFile))
-            {
-                Scarlet.GSON_PRETTY.toJson(o, fw);
-            }
-        }
-        catch (Exception ex)
-        {
-            LOG.error("Could not set {} in {}", key, jsonFile, ex);
-        }
-    }
-
-    // Removes a top-level key from a settings.json file, if present.
-    private static void blankSettingKey(File settingsFile, String key)
-    {
-        if (!settingsFile.isFile())
-            return;
-        try
-        {
-            com.google.gson.JsonObject o;
-            try (java.io.FileReader fr = new java.io.FileReader(settingsFile))
-            {
-                o = Scarlet.GSON.fromJson(fr, com.google.gson.JsonObject.class);
-            }
-            if (o == null || !o.has(key))
-                return;
-            o.remove(key);
-            try (java.io.FileWriter fw = new java.io.FileWriter(settingsFile))
-            {
-                Scarlet.GSON_PRETTY.toJson(o, fw);
-            }
-        }
-        catch (Exception ex)
-        {
-            LOG.error("Could not blank setting {} in {}", key, settingsFile, ex);
-        }
-    }
-
     private JPanel buildSettingsSidebar()
     {
         JPanel sidebar = new JPanel();
@@ -4838,7 +4824,7 @@ public class ScarletUI implements IScarletUI
                 this.cliTabMenuItem.setSelected(showCli);
                 this.setCliTabVisible(showCli);
             }
-            if (!this.embedded && this.scarlet.showUiDuringLoad.get())
+            if (this.scarlet.showUiDuringLoad.get())
             {
                 this.jframe.setVisible(true);
             }
@@ -4971,7 +4957,7 @@ public class ScarletUI implements IScarletUI
             super(setting, new JTextField(32));
             this.background = this.render.getBackground();
             JPopupMenu cpm = new JPopupMenu();
-            cpm.add("Paste").addActionListener($ -> {
+            cpm.add(I18n.tr("common.paste")).addActionListener($ -> {
                 String cbc = MiscUtils.AWTToolkit.get();
                 if (cbc != null)
                 {
@@ -5057,7 +5043,7 @@ public class ScarletUI implements IScarletUI
                 this.text = new JTextField(32);
                 this.background = this.text.getBackground();
                 JPopupMenu cpm = new JPopupMenu();
-                cpm.add("Paste").addActionListener($ -> {
+                cpm.add(I18n.tr("common.paste")).addActionListener($ -> {
                     String cbc = MiscUtils.AWTToolkit.get();
                     if (cbc != null)
                     {
@@ -5164,7 +5150,7 @@ public class ScarletUI implements IScarletUI
         {
             super(setting, new JTextField(32));
             JPopupMenu cpm = new JPopupMenu();
-            cpm.add("Paste").addActionListener($ -> Optional.ofNullable(MiscUtils.AWTToolkit.get()).ifPresent($$ -> {
+            cpm.add(I18n.tr("common.paste")).addActionListener($ -> Optional.ofNullable(MiscUtils.AWTToolkit.get()).ifPresent($$ -> {
                 this.render.setText($$);
                 this.accept();
             }));
@@ -5242,16 +5228,7 @@ public class ScarletUI implements IScarletUI
         }
         void accept()
         {
-            boolean selected = this.render.isSelected();
-            // Enabling multi-group mode warns about the known caveats first; if the user
-            // declines, revert the checkbox so the setting is never turned on unknowingly.
-            if (selected && "multi_group_enabled".equals(this.setting.id())
-                && !ScarletUI.this.confirmEnableMultiGroup())
-            {
-                this.render.setSelected(false);
-                return;
-            }
-            this.set(selected);
+            this.set(this.render.isSelected());
         }
         @Override
         protected void update()

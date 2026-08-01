@@ -220,9 +220,9 @@ public class ScarletVRChat implements Closeable
         Configuration.getDefaultApiClient();
         
         this.scarlet = scarlet;
-        this.username = scarlet.settings.new RegistryStringEncrypted(domain+":username", true, ScarletSettings.GROUP_SCOPE_VRC);
-        this.password = scarlet.settings.new RegistryStringEncrypted(domain+":password", true, ScarletSettings.GROUP_SCOPE_VRC);
-        this.totpsecret = scarlet.settings.new RegistryStringEncrypted(domain+":totpsecret", true, ScarletSettings.GROUP_SCOPE_VRC);
+        this.username = scarlet.settings.new RegistryStringEncrypted(domain+":username", true);
+        this.password = scarlet.settings.new RegistryStringEncrypted(domain+":password", true);
+        this.totpsecret = scarlet.settings.new RegistryStringEncrypted(domain+":totpsecret", true);
         this.cookies = new ScarletVRChatCookieJar(scarlet, domain, cookieFile);
         this.legacyTrustCompatEnabled = Boolean.TRUE.equals(this.scarlet.settings.getObject(LEGACY_TLS_COMPAT_SETTING, Boolean.class));
         OkHttpClient.Builder okHttpBuilder = new OkHttpClient.Builder();
@@ -317,12 +317,7 @@ public class ScarletVRChat implements Closeable
      * so it only bites under heavy combined load; the real protection is the 429
      * backoff.
      */
-    // With per-group accounts, each group has its OWN VRChat rate budget, so it gets its
-    // own limiter. With a shared account (the default), all cores draw from one shared
-    // limiter so their combined traffic stays under the single account's limit.
-    final net.sybyline.scarlet.util.VrcRateLimiter rateLimiter = ScarletSettings.PER_ACCOUNT_VRC
-        ? new net.sybyline.scarlet.util.VrcRateLimiter(10.0, 20.0)
-        : net.sybyline.scarlet.util.VrcRateLimiter.shared(10.0, 20.0);
+    final net.sybyline.scarlet.util.VrcRateLimiter rateLimiter = new net.sybyline.scarlet.util.VrcRateLimiter(10.0, 20.0);
     final ScarletSettings.RegistryStringEncrypted username, password, totpsecret;
     final ScarletVRChatCookieJar cookies;
     final ApiClient client;
@@ -346,18 +341,6 @@ public class ScarletVRChat implements Closeable
     final ScarletJsonCache<Group> cachedGroups;
     final ScarletJsonCache<List<LimitedUserGroups>> cachedUserGroups;
 
-    /** Human-readable label for this core's group — the group name when known, else its id, else null. Used to tag Discord posts with their group when several groups run at once. */
-    public String groupDisplayName()
-    {
-        Group g = this.group;
-        if (g != null)
-        {
-            String name = g.getName();
-            if (name != null && !name.trim().isEmpty())
-                return name.trim();
-        }
-        return MiscUtils.blank(this.groupId) ? null : this.groupId.trim();
-    }
     final ScarletJsonCache<Avatar> cachedAvatars;
     final ScarletJsonCache<Print> cachedPrints;
     final ScarletJsonCache<Prop> cachedProps;
@@ -742,7 +725,6 @@ public class ScarletVRChat implements Closeable
         this.scarlet.splash.splashSubtext("Opening secure credential store");
         LOG.info("Opening secure credential store");
         this.cookies.load();
-        this.scarlet.settings.setNamespace(MiscUtils.blank(this.groupId) ? "" : this.groupId);
         this.secureStoreReady = true;
         LOG.info("Secure credential store ready");
     }
@@ -839,6 +821,13 @@ try
                         String username = this.username.getOrNull(),
                                password = this.password.getOrNull();
                         hadStoredCredentials = username != null || password != null;
+                        // Debug offline start: don't prompt for a sign-in that isn't stored — leave
+                        // the account logged out so the UI can be exercised with no VRChat/Discord setup.
+                        if ((username == null || password == null) && net.sybyline.scarlet.Debug.OFFLINE)
+                        {
+                            LOG.info("Debug offline mode: skipping VRChat sign-in prompt");
+                            return;
+                        }
                         if (username == null)
                         {
                             username = this.scarlet.settings.getStringOrRequireInput("vrc_username", "VRChat Username", false);
@@ -1342,7 +1331,6 @@ finally
             this.groupId = MiscUtils.extractTypedUuid("grp", "", resolvedGroupId);
             ExtendedUserAgent.setCurrentGroupId(this.groupId);
             this.scarlet.settings.setString("vrchat_group_id", this.groupId);
-            this.scarlet.settings.setNamespace(this.groupId);
             LOG.warn("Recovered missing VRChat group id from the logged-in user's group context: `{}`", this.groupId);
         }
     }
@@ -3161,7 +3149,7 @@ CurrentUser getCurrentUser(AuthenticationApi auth) throws ApiException
         scroll.setSize(new Dimension(500, 300));
         scroll.setPreferredSize(new Dimension(500, 300));
         scroll.setMaximumSize(new Dimension(500, 300));
-        this.scarlet.execModal.execute(() -> JOptionPane.showMessageDialog(null, scroll, "Alternate credentials", JOptionPane.INFORMATION_MESSAGE));
+        this.scarlet.execModal.execute(() -> JOptionPane.showMessageDialog(null, scroll, I18n.tr("ui.altCredsTitle"), JOptionPane.INFORMATION_MESSAGE));
     }
 
     /**

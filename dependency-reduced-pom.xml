@@ -129,6 +129,51 @@
               </filters>
             </configuration>
           </execution>
+          <execution>
+            <id>shade-debug</id>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <shadedArtifactAttached>true</shadedArtifactAttached>
+              <shadedClassifierName>debug</shadedClassifierName>
+              <transformers>
+                <transformer>
+                  <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
+                  <manifestEntries>
+                    <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
+                    <Implementation-Title>${project.artifactId}</Implementation-Title>
+                    <Implementation-Version>${project.version}</Implementation-Version>
+                    <Implementation-Vendor>${project.groupId}</Implementation-Vendor>
+                    <Scarlet-Debug>true</Scarlet-Debug>
+                  </manifestEntries>
+                </transformer>
+              </transformers>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.EC</exclude>
+                    <exclude>native/android/**</exclude>
+                    <exclude>natives/android-*/libdave-jvm.so</exclude>
+                    <exclude>natives/linux-aarch64/libdave-jvm.so</exclude>
+                    <exclude>android-*/libdave-jvm.so</exclude>
+                    <exclude>termux-*/libdave-jvm.so</exclude>
+                  </excludes>
+                </filter>
+                <filter>
+                  <artifact>moe.kyokobot.libdave:libdave-jvm-impl</artifact>
+                  <excludes>
+                    <exclude>moe/kyokobot/libdave/natives/DaveNativeBindings.class</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+            </configuration>
+          </execution>
         </executions>
       </plugin>
     </plugins>

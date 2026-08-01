@@ -28,6 +28,7 @@ import io.github.vrchatapi.JSON;
 import io.github.vrchatapi.model.GroupAccessType;
 import io.github.vrchatapi.model.GroupMember;
 import io.github.vrchatapi.model.GroupMemberStatus;
+import io.github.vrchatapi.model.GroupJoinRequestAction;
 import io.github.vrchatapi.model.GroupPermissions;
 import io.github.vrchatapi.model.Instance;
 import io.github.vrchatapi.model.InstanceRegion;
@@ -347,6 +348,55 @@ public class ScarletDiscordUI
         }
         
         hook.sendMessageFormat("Banned %s", sc.getDisplayName()).setEphemeral(false).queue();
+        return true;
+    }
+
+    // ── Group join-request actions (Accept / Reject / Block) ─────────────────────
+    // Buttons on the "Created Request" moderation post let a moderator respond to a request
+    // to join a request-gated (private) group without leaving Discord. All require the VRChat
+    // group's invite-management permission.
+    @ButtonClk("group-request-accept")
+    public void groupRequestAccept(ButtonInteractionEvent event, InteractionHook hook)
+    {
+        this._groupRequestRespond(hook, event.getMember(), event.getButton().getCustomId().split(":")[1], GroupJoinRequestAction.ACCEPT, null, "Accepted");
+    }
+
+    @ButtonClk("group-request-reject")
+    public void groupRequestReject(ButtonInteractionEvent event, InteractionHook hook)
+    {
+        this._groupRequestRespond(hook, event.getMember(), event.getButton().getCustomId().split(":")[1], GroupJoinRequestAction.REJECT, Boolean.FALSE, "Rejected");
+    }
+
+    @ButtonClk("group-request-block")
+    public void groupRequestBlock(ButtonInteractionEvent event, InteractionHook hook)
+    {
+        this._groupRequestRespond(hook, event.getMember(), event.getButton().getCustomId().split(":")[1], GroupJoinRequestAction.REJECT, Boolean.TRUE, "Blocked");
+    }
+
+    boolean _groupRequestRespond(InteractionHook hook, Member member, String vrcTargetId, GroupJoinRequestAction action, Boolean block, String pastTense)
+    {
+        String vrcActorId = this.discord.scarlet.data.globalMetadata_getSnowflakeId(member.getId());
+        if (vrcActorId == null)
+        {
+            hook.sendMessage(this.discord.linkedIdsReply(member)).setEphemeral(true).queue();
+            return false;
+        }
+        if (!this.discord.checkMemberHasVRChatPermission(GroupPermissions.group_invites_manage, member))
+        {
+            hook.sendMessage("You do not have permission to manage group join requests.").setEphemeral(true).queue();
+            return false;
+        }
+        if (!this.discord.checkSelfRespondVrcPerms(GroupPermissions.group_invites_manage, hook))
+            return false;
+
+        User sc = this.discord.scarlet.vrc.getUser(vrcTargetId, System.currentTimeMillis() - 86400_000L);
+        String name = sc != null ? sc.getDisplayName() : vrcTargetId;
+        if (!this.discord.scarlet.vrc.respondToGroupJoinRequest(vrcTargetId, action, block))
+        {
+            hook.sendMessageFormat("Failed to respond to %s's join request", name).setEphemeral(true).queue();
+            return false;
+        }
+        hook.sendMessageFormat("%s %s's join request", pastTense, name).setEphemeral(false).queue();
         return true;
     }
 

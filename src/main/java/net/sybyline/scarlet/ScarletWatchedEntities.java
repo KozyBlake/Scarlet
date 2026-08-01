@@ -26,6 +26,7 @@ import net.dv8tion.jda.api.EmbedBuilder;
 import net.sybyline.scarlet.server.discord.DEnum;
 import net.sybyline.scarlet.util.Func;
 import net.sybyline.scarlet.util.MiscUtils;
+import net.sybyline.scarlet.util.Translator;
 import net.sybyline.scarlet.util.UniqueStrings;
 
 public class ScarletWatchedEntities<E>
@@ -93,7 +94,13 @@ public class ScarletWatchedEntities<E>
         public boolean silent = false;
         public String message = null;
         public String notes = null;
-        
+        // Advisory translation state (see ScarletWatchedGroups). Originals of the translated
+        // free-text fields are kept so a translation can be restored losslessly; ids, tags and
+        // types are never translated. Null when no translation is applied.
+        public String messageOriginal = null;
+        public String notesOriginal = null;
+        public String translatedLang = null;
+
         public <E> EmbedBuilder embed(ScarletWatchedEntities<E> context, E entity)
         {
             EmbedBuilder builder = new EmbedBuilder();
@@ -285,6 +292,88 @@ public class ScarletWatchedEntities<E>
             return false;
         }
         return true;
+    }
+
+    /** Number of watched entities currently showing a translated advisory. */
+    public int countTranslated()
+    {
+        int n = 0;
+        for (WatchedEntity e : this.watchedEntities.values())
+            if (e.translatedLang != null || e.messageOriginal != null || e.notesOriginal != null)
+                n++;
+        return n;
+    }
+
+    /**
+     * Translates every watched entity's advisory ({@code message} + {@code notes}) into
+     * {@code targetLang} via a LibreTranslate-compatible endpoint, preserving originals so
+     * {@link #restoreAdvisories()} can undo it. Ids, tags and types are never translated.
+     * Re-running translates from the preserved original. Returns the number changed.
+     */
+    public int translateAdvisories(String endpoint, String apiKey, String targetLang) throws java.io.IOException
+    {
+        int changed = 0;
+        java.io.IOException failure = null;
+        try
+        {
+            for (WatchedEntity e : this.watchedEntities.values())
+            {
+                boolean any = false;
+                String srcMsg = e.messageOriginal != null ? e.messageOriginal : e.message;
+                if (srcMsg != null && !srcMsg.trim().isEmpty())
+                {
+                    String t = Translator.translate(endpoint, apiKey, targetLang, srcMsg);
+                    if (t != null && !t.equals(e.message))
+                    {
+                        if (e.messageOriginal == null) e.messageOriginal = e.message;
+                        e.message = t;
+                        any = true;
+                    }
+                }
+                String srcNotes = e.notesOriginal != null ? e.notesOriginal : e.notes;
+                if (srcNotes != null && !srcNotes.trim().isEmpty())
+                {
+                    String t = Translator.translate(endpoint, apiKey, targetLang, srcNotes);
+                    if (t != null && !t.equals(e.notes))
+                    {
+                        if (e.notesOriginal == null) e.notesOriginal = e.notes;
+                        e.notes = t;
+                        any = true;
+                    }
+                }
+                if (any)
+                {
+                    e.translatedLang = targetLang;
+                    changed++;
+                }
+            }
+        }
+        catch (java.io.IOException ex)
+        {
+            failure = ex;
+        }
+        if (changed > 0)
+            this.save();
+        if (failure != null)
+            throw failure;
+        return changed;
+    }
+
+    /** Restores original (pre-translation) advisory text for every watched entity. Returns count restored. */
+    public int restoreAdvisories()
+    {
+        int restored = 0;
+        for (WatchedEntity e : this.watchedEntities.values())
+        {
+            boolean any = false;
+            if (e.messageOriginal != null) { e.message = e.messageOriginal; e.messageOriginal = null; any = true; }
+            if (e.notesOriginal != null)   { e.notes   = e.notesOriginal;   e.notesOriginal   = null; any = true; }
+            if (e.translatedLang != null)  { e.translatedLang = null; any = true; }
+            if (any) restored++;
+        }
+        if (restored > 0)
+            this.save();
+        return restored;
     }
 
 }

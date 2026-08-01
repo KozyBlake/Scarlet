@@ -109,6 +109,10 @@ Arguments in `<>` are required and `[]` optional. Most commands require staff pe
   Stops watching an entity.  
   Example: `/watched-group remove "grp_00000000-0000-0000-0000-000000000000"`
 
+- **`watched-group remove-menu`**  
+  Posts multi-select dropdowns of the watched entities by name so you can remove several at once (handy for pruning deleted/banned avatars from a large list) instead of one `remove` per id. Shows up to 125 entries; run again for the rest if there are more.  
+  Example: `/watched-avatar remove-menu`
+
 - **`watched-group list [entries-per-page:int?]`** / **`export`** / **`import <import-file:attachment>`**  
   Lists all watched entities of that kind, exports them as a JSON file, or imports them from an attached JSON file.  
   Example: `/watched-group export`
@@ -361,7 +365,10 @@ Subcommands of **`schedule`** manage recurring VRChat group events (each stored 
 
 ### CLI Commands
 
-Scarlet's CLI tab (and the IPC pipe below) accept these text commands:
+Scarlet's CLI tab (and the IPC pipe below) accept these text commands. The English words
+below always work, but if the desktop UI language is set to a translated language, the
+command can also be typed in that language (e.g. `ayuda`/`salir` in Spanish, `hilfe`/`beenden`
+in German, `ヘルプ`/`終了` in Japanese); run `help` in that language to see its aliases.
 
 - **`info`, `help`**  
   Prints Scarlet build/runtime information and the available commands.  
@@ -385,6 +392,10 @@ Scarlet's CLI tab (and the IPC pipe below) accept these text commands:
   Fires a simulated training event (requires Training mode enabled). Kinds: `join`, `watched`, `wuser`, `new`, `mixed`, `pronouns`, `avatar`, `vtk`, `leave`.  
 - **`langlint`**  
   Validates the external `lang/messages_<lang>.properties` translation files against the English base and prints a per-file report (missing keys, unknown keys, broken `{0}` placeholders).  
+- **`translate-advisories`**  
+  Translates advisory text (watched groups/users/avatars and moderation-tag descriptions) into the current UI language. Works with no setup via the free built-in MyMemory service; set a LibreTranslate endpoint in Settings → Advisories to use that instead (e.g. a local self-hosted instance for privacy). Group names, ids and tags are left unchanged, and the English originals are preserved.  
+- **`restore-advisories`**  
+  Restores the original (untranslated) advisory text for every watched group.  
 - **`vrchatapi-test`**  
   Runs a quick check of the bundled VRChat API client against the live API.  
 - **`popup`, `popup-test`**  

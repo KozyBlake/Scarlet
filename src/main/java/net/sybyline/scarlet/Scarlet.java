@@ -219,26 +219,10 @@ public class Scarlet implements Closeable
             try
             {
                 SecurityRegressionChecks.runAll();
-                if (isMultiGroupEnabled())
+                try (Scarlet scarlet = new Scarlet())
                 {
-                    applyMultiGroupCredentialScopes();
-                    // Multi-group: the primary group keeps running from the base data dir
-                    // (nothing is moved, so the existing group is never disturbed), plus one
-                    // additional core per subfolder of groups/. Turning the master setting
-                    // off returns to the exact single-group path below.
-                    List<File> cores = new ArrayList<>();
-                    cores.add(dir);
-                    cores.addAll(discoverGroupSlots());
-                    exitCode = runSupervisor(cores);
-                }
-                else
-                {
-                    // Default single-group launch — behaves exactly as before.
-                    try (Scarlet scarlet = new Scarlet())
-                    {
-                        scarlet.run();
-                        exitCode = scarlet.exitCode;
-                    }
+                    scarlet.run();
+                    exitCode = scarlet.exitCode;
                 }
             }
             catch (Throwable t)
@@ -336,194 +320,6 @@ public class Scarlet implements Closeable
         return Scarlet.class.getName();
     }
 
-    // ── Multi-core supervisor ───────────────────────────────────────────────────
-    // Opt-in and non-breaking: if a "groups" directory exists under the install dir,
-    // each immediate subfolder is treated as one group's data directory and gets its
-    // own fully independent Scarlet core in this single process (its own settings,
-    // watch lists, VRChat session, Discord bot, IPC pipe, and window). With no such
-    // directory — the default — Scarlet launches exactly one core exactly as before.
-    // Each group folder just needs its own settings.json (its VRChat group id and,
-    // for now, its own Discord bot token, since Discord allows one gateway connection
-    // per token). Install-level data (logs, caches, tts, lang) stays shared.
-    // The single master switch for multi-group mode, read straight from the base
-    // settings.json before any core is constructed. False (the default) means the
-    // classic single-group launch, untouched. The desktop toggle sets this and asks
-    // for a restart, since the decision is made at process startup.
-    static boolean isMultiGroupEnabled()
-    {
-        try
-        {
-            File settingsFile = new File(dir, "settings.json");
-            if (!settingsFile.isFile())
-                return false;
-            try (java.io.FileReader fr = new java.io.FileReader(settingsFile))
-            {
-                com.google.gson.JsonObject o = GSON.fromJson(fr, com.google.gson.JsonObject.class);
-                return o != null
-                    && o.has("multi_group_enabled")
-                    && o.get("multi_group_enabled").getAsBoolean();
-            }
-        }
-        catch (Throwable t)
-        {
-            LOG.error("Could not read multi_group_enabled from settings; defaulting to single-group", t);
-            return false;
-        }
-    }
-
-    // Reads the two credential sub-toggles from the base settings.json and applies them
-    // process-wide before any core logs in. Off by default, so credentials stay shared
-    // (the classic behaviour) unless the user opts into per-group accounts/tokens.
-    static void applyMultiGroupCredentialScopes()
-    {
-        try
-        {
-            File settingsFile = new File(dir, "settings.json");
-            if (!settingsFile.isFile())
-                return;
-            try (java.io.FileReader fr = new java.io.FileReader(settingsFile))
-            {
-                com.google.gson.JsonObject o = GSON.fromJson(fr, com.google.gson.JsonObject.class);
-                if (o == null)
-                    return;
-                ScarletSettings.PER_ACCOUNT_VRC = o.has("multi_group_per_account_creds") && o.get("multi_group_per_account_creds").getAsBoolean();
-                ScarletSettings.PER_GROUP_TOKEN = o.has("multi_group_per_group_token") && o.get("multi_group_per_group_token").getAsBoolean();
-            }
-        }
-        catch (Throwable t)
-        {
-            LOG.error("Could not read multi-group credential scope flags; keeping shared credentials", t);
-        }
-    }
-
-    static List<File> discoverGroupSlots()
-    {
-        File groupsRoot = new File(dir, "groups");
-        File[] children = groupsRoot.isDirectory() ? groupsRoot.listFiles(File::isDirectory) : null;
-        if (children == null || children.length == 0)
-            return java.util.Collections.emptyList();
-        List<File> slots = new ArrayList<>(Arrays.asList(children));
-        slots.sort(Comparator.comparing(File::getName));
-        return slots;
-    }
-
-    static int runSupervisor(List<File> slots) throws Exception
-    {
-        LOG.info("Multi-core supervisor: starting {} group core(s)", slots.size());
-        List<Scarlet> cores = new ArrayList<>();
-        // Construct sequentially on this thread (mirrors the single-core construction
-        // path). Only the first core keeps the shared console stdin; every core is
-        // still fully controllable through its own per-group IPC pipe and window.
-        boolean primary = true;
-        for (File slot : slots)
-        {
-            try
-            {
-                // Only the first core shows the loading splash — one splash, not one per group.
-                ScarletUISplash.SUPPRESS_INITIAL = !primary;
-                Scarlet core = Scarlet.forDataDir(slot);
-                if (!primary)
-                    core.stdinUsable = false;
-                primary = false;
-                cores.add(core);
-            }
-            catch (Throwable ex)
-            {
-                LOG.error("Failed to start group core for slot '"+slot.getName()+"'", ex);
-            }
-        }
-        ScarletUISplash.SUPPRESS_INITIAL = false;
-        if (cores.isEmpty())
-            return -1;
-        // Host every core in one shared tabbed window (best-effort; falls back to
-        // per-core windows if it fails). Must run before the cores' threads start so
-        // each UI is marked embedded before it would otherwise show its own frame.
-        buildMultiGroupShell(cores);
-        java.util.concurrent.atomic.AtomicInteger aggregate = new java.util.concurrent.atomic.AtomicInteger(0);
-        List<Thread> threads = new ArrayList<>();
-        for (Scarlet core : cores)
-        {
-            final Scarlet c = core;
-            Thread t = new Thread(() ->
-            {
-                try
-                {
-                    c.run();
-                }
-                catch (Throwable ex)
-                {
-                    LOG.error("Group core failed", ex);
-                }
-                finally
-                {
-                    try { c.close(); } catch (Throwable ignored) {}
-                    int ec = c.exitCode;
-                    if (ec != 0)
-                        // Prefer update(70) over restart(69) over any other non-zero code.
-                        aggregate.updateAndGet(cur -> ec == 70 ? 70 : (ec == 69 && cur != 70 ? 69 : (cur == 0 ? ec : cur)));
-                }
-            }, "KozyBlake/Scarlet Group ["+core.dataDir.getName()+"]");
-            threads.add(t);
-        }
-        for (Thread t : threads) t.start();
-        for (Thread t : threads) t.join();
-        LOG.info("Multi-core supervisor: all group cores stopped");
-        return aggregate.get();
-    }
-
-    // Builds one shared tabbed window hosting every core's UI, so several groups appear as
-    // tabs in a single window instead of separate windows. Each core's content pane and menu
-    // bar are moved into the shell; the frame-level menu bar swaps as tabs change; closing the
-    // shell stops every core. Best-effort and fully guarded — if anything fails it is logged
-    // and cores fall back to their own windows (they were not yet marked embedded).
-    static void buildMultiGroupShell(List<Scarlet> cores)
-    {
-        if (Platform.forceHeadlessUi() || GraphicsEnvironment.isHeadless() || cores.isEmpty())
-            return;
-        try
-        {
-            javax.swing.SwingUtilities.invokeAndWait(() ->
-            {
-                javax.swing.JFrame shell = new javax.swing.JFrame(APP_NAME + " " + VERSION + " — " + I18n.tr("ui.multiGroupWindowTitle"));
-                shell.setDefaultCloseOperation(javax.swing.JFrame.DO_NOTHING_ON_CLOSE);
-                javax.swing.JTabbedPane tabs = new javax.swing.JTabbedPane(javax.swing.JTabbedPane.TOP, javax.swing.JTabbedPane.SCROLL_TAB_LAYOUT);
-                List<javax.swing.JMenuBar> menus = new ArrayList<>();
-                for (Scarlet core : cores)
-                {
-                    core.ui.setEmbedded(shell);
-                    java.awt.Container[] content = new java.awt.Container[1];
-                    javax.swing.JMenuBar[] menu = new javax.swing.JMenuBar[1];
-                    core.ui.jframe(f -> { content[0] = f.getContentPane(); menu[0] = f.getJMenuBar(); });
-                    String label = core.dataDir.equals(dir) ? I18n.tr("ui.multiGroupPrimaryTab") : core.dataDir.getName();
-                    tabs.addTab(label, content[0] != null ? content[0] : new javax.swing.JPanel());
-                    menus.add(menu[0]);
-                }
-                tabs.addChangeListener($ ->
-                {
-                    int i = tabs.getSelectedIndex();
-                    shell.setJMenuBar(i >= 0 && i < menus.size() ? menus.get(i) : null);
-                });
-                if (!menus.isEmpty())
-                    shell.setJMenuBar(menus.get(0));
-                shell.getContentPane().add(tabs, java.awt.BorderLayout.CENTER);
-                shell.setSize(1120, 740);
-                shell.setLocationRelativeTo(null);
-                shell.addWindowListener(new java.awt.event.WindowAdapter()
-                {
-                    @Override public void windowClosing(java.awt.event.WindowEvent e)
-                    {
-                        for (Scarlet core : cores)
-                            try { core.stop(); } catch (Throwable ignored) {}
-                    }
-                });
-                shell.setVisible(true);
-            });
-        }
-        catch (Throwable t)
-        {
-            LOG.error("Could not build the multi-group shell window; cores fall back to their own windows", t);
-        }
-    }
 
     public static final File user_home = new File(System.getProperty("user.home"));
     public static final File dir, LEGACY_DIR;
@@ -981,31 +777,8 @@ public class Scarlet implements Closeable
                                           execIPC = Executors.newSingleThreadScheduledExecutor(runnable -> new Thread(runnable, "KozyBlake/Scarlet IPC Thread "+this.threadidx.incrementAndGet()));
     
     // ── Multi-core data directory ───────────────────────────────────────────────
-    // Each Scarlet core keeps its per-group data (settings, watch lists, tags, staff
-    // lists, report template, session store, Discord config, mobile devices) in its
-    // own folder. A normal single-group launch uses the shared install dir exactly as
-    // before — existing installs stay byte-identical — while a hosting supervisor can
-    // start additional cores pointed at a sub-folder via forDataDir(...). Install-level
-    // data (logs, caches, tts, lang, pronoun lists) stays shared in Scarlet.dir, and
-    // the group-id plumbing is untouched: a core still moderates exactly one group.
-    private static final ThreadLocal<File> PENDING_DATA_DIR = new ThreadLocal<>();
-    /** Constructs a core whose per-group data lives in {@code dataDir} instead of the shared install dir. */
-    public static Scarlet forDataDir(File dataDir) throws IOException
-    {
-        PENDING_DATA_DIR.set(dataDir);
-        try { return new Scarlet(); }
-        finally { PENDING_DATA_DIR.remove(); }
-    }
-    private static File resolveInstanceDataDir()
-    {
-        File pending = PENDING_DATA_DIR.get();
-        if (pending == null)
-            return dir;
-        pending.mkdirs();
-        return pending;
-    }
-    /** This core's per-group data directory; equals {@link #dir} for a default single-group launch. */
-    public final File dataDir = resolveInstanceDataDir();
+    /** Scarlet's data directory (settings, watch lists, tags, session store, Discord config, etc.). */
+    public final File dataDir = dir;
 
     final ScarletSettings settings = new ScarletSettings(this, new File(dataDir, "settings.json"));
     {
@@ -1140,10 +913,7 @@ public class Scarlet implements Closeable
                                      discordKickBanPrompted = this.settings.new FileValuedBoolean("discord_kick_ban_prompted", I18n.tr("setting.discord_kick_ban_prompted"), false),
                                      autoInviteOnVerify = this.settings.new FileValuedBoolean("auto_invite_group_on_verify", I18n.tr("setting.auto_invite_group_on_verify"), true),
                                      trainingMode = this.settings.new FileValuedBoolean("training_mode_enabled", I18n.tr("setting.training_mode_enabled"), false),
-                                     uiAccentHeaders = this.settings.new FileValuedBoolean("ui_accent_headers", I18n.tr("setting.ui_accent_headers"), false),
-                                     multiGroupEnabled = this.settings.new FileValuedBoolean("multi_group_enabled", I18n.tr("setting.multi_group_enabled"), false),
-                                     multiGroupPerAccountCreds = this.settings.new FileValuedBoolean("multi_group_per_account_creds", I18n.tr("setting.multi_group_per_account_creds"), false),
-                                     multiGroupPerGroupToken = this.settings.new FileValuedBoolean("multi_group_per_group_token", I18n.tr("setting.multi_group_per_group_token"), false);
+                                     uiAccentHeaders = this.settings.new FileValuedBoolean("ui_accent_headers", I18n.tr("setting.ui_accent_headers"), false);
     /** Desktop UI language override; blank/"system" follows the operating system language. Applied at startup (restart to change). */
     final ScarletSettings.FileValued<String> uiLanguage = this.settings.new FileValuedStringChoice("ui_language", I18n.tr("setting.ui_language"), "system", () ->
     {
@@ -1210,6 +980,106 @@ public class Scarlet implements Closeable
                                               this.exec.execute(() -> this.rawCommand(cmd.trim()));
                                       });
                                   });
+
+    // Advisory translation — an optional, free, opt-in way to translate the advisory text of shared
+    // watched-group lists (usually written in English) into the moderator's own language. Blank
+    // endpoint = feature off; group names/ids/tags are never translated, and originals are kept so it
+    // can be restored. Uses a LibreTranslate-compatible endpoint (self-hostable for full privacy).
+    final ScarletSettings.FileValued<String> advisoryTranslateEndpoint = this.settings.new FileValuedStringPattern("advisory_translate_endpoint", I18n.tr("setting.advisory_translate_endpoint"), "", null, true);
+    final ScarletSettings.FileValued<String> advisoryTranslateApiKey = this.settings.new FileValuedStringPattern("advisory_translate_api_key", I18n.tr("setting.advisory_translate_api_key"), "", null, true);
+    final ScarletSettings.FileValued<Void> advisoryTranslateNow = this.settings.new FileValuedVoid("advisory_translate_now", I18n.tr("setting.advisory_translate_now.btn"), this::uiTranslateAdvisories);
+    final ScarletSettings.FileValued<Void> advisoryRestore = this.settings.new FileValuedVoid("advisory_restore", I18n.tr("setting.advisory_restore.btn"), this::uiRestoreAdvisories);
+
+    // Translates every watched group's advisory into the current UI language via the configured
+    // endpoint, off the EDT (it makes network calls), then reports how many changed. Group names,
+    // ids and tags are untouched. If no endpoint is set, explains how to enable it.
+    // Guards against overlapping translation runs. Without it, repeated button presses (with no
+    // visible progress) each launch a full translation pass at once, hammering the service and
+    // tripping its rate limit — which is exactly what an impatient click-again would cause.
+    private final java.util.concurrent.atomic.AtomicBoolean advisoryTranslating = new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    void uiTranslateAdvisories()
+    {
+        java.awt.Component parent = this.ui.getParentComponent();
+        String title = I18n.tr("advisory.translateTitle");
+        // If a run is already going, say so instead of starting another (the cause of the error
+        // storm from mashing the button).
+        if (!this.advisoryTranslating.compareAndSet(false, true))
+        {
+            javax.swing.JOptionPane.showMessageDialog(parent, I18n.tr("advisory.translateBusy"),
+                title, javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            return;
+        }
+        // Blank endpoint uses the built-in free MyMemory service, so translation always works
+        // with no setup; a configured endpoint uses LibreTranslate instead.
+        String endpoint = this.advisoryTranslateEndpoint.get();
+        String apiKey = this.advisoryTranslateApiKey.get();
+        String target = net.sybyline.scarlet.util.I18n.getLocale().getLanguage();
+        // A modal "please wait" dialog with an indeterminate bar: it shows the work is happening
+        // and blocks the button until it finishes, so there is no invisible in-progress state.
+        final javax.swing.JDialog[] progress = new javax.swing.JDialog[1];
+        net.sybyline.scarlet.ui.Swing.invokeLater(() ->
+        {
+            javax.swing.JDialog dlg = new javax.swing.JDialog(
+                javax.swing.SwingUtilities.getWindowAncestor(parent), title,
+                java.awt.Dialog.ModalityType.APPLICATION_MODAL);
+            dlg.setDefaultCloseOperation(javax.swing.WindowConstants.DO_NOTHING_ON_CLOSE);
+            javax.swing.JProgressBar bar = new javax.swing.JProgressBar();
+            bar.setIndeterminate(true);
+            javax.swing.JPanel p = new javax.swing.JPanel(new java.awt.BorderLayout(10, 10));
+            p.setBorder(javax.swing.BorderFactory.createEmptyBorder(16, 20, 16, 20));
+            p.add(new javax.swing.JLabel(I18n.tr("advisory.translating")), java.awt.BorderLayout.NORTH);
+            p.add(bar, java.awt.BorderLayout.CENTER);
+            dlg.setContentPane(p);
+            dlg.pack();
+            dlg.setLocationRelativeTo(parent);
+            progress[0] = dlg;
+            dlg.setVisible(true); // starts a nested event loop; ends when disposed below
+        });
+        this.exec.execute(() ->
+        {
+            String result;
+            try
+            {
+                // Every moderation data file with safe human-readable advisory text: watched
+                // groups, watched users, watched avatars, and moderation-tag descriptions.
+                int n = this.watchedGroups.translateAdvisories(endpoint, apiKey, target)
+                      + this.watchedUsers.translateAdvisories(endpoint, apiKey, target)
+                      + this.watchedAvatars.translateAdvisories(endpoint, apiKey, target)
+                      + this.moderationTags.translateAdvisories(endpoint, apiKey, target);
+                result = I18n.tr("advisory.translateDone", Integer.valueOf(n), target);
+            }
+            catch (Exception ex)
+            {
+                LOG.error("Advisory translation failed", ex);
+                result = I18n.tr("advisory.translateFailed", String.valueOf(ex.getMessage()));
+            }
+            finally
+            {
+                this.advisoryTranslating.set(false);
+            }
+            final String msg = result;
+            net.sybyline.scarlet.ui.Swing.invokeLater(() ->
+            {
+                if (progress[0] != null)
+                    progress[0].dispose();
+                javax.swing.JOptionPane.showMessageDialog(parent, msg, title,
+                    javax.swing.JOptionPane.INFORMATION_MESSAGE);
+            });
+        });
+    }
+
+    // Restores the original (pre-translation) advisory text for every watched group.
+    void uiRestoreAdvisories()
+    {
+        int n = this.watchedGroups.restoreAdvisories()
+              + this.watchedUsers.restoreAdvisories()
+              + this.watchedAvatars.restoreAdvisories()
+              + this.moderationTags.restoreAdvisories();
+        javax.swing.JOptionPane.showMessageDialog(this.ui.getParentComponent(),
+            I18n.tr("advisory.restoreDone", Integer.valueOf(n)),
+            I18n.tr("advisory.translateTitle"), javax.swing.JOptionPane.INFORMATION_MESSAGE);
+    }
 
     /**
      * Initialize the TTS service with user consent dialogs.
@@ -1906,6 +1776,53 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
         rawCommand(line, null);
     }
 
+    // The English command words the CLI switch handles directly; these always work, in every
+    // language, so scripts and documentation never break.
+    private static final java.util.Set<String> CLI_CANONICAL = new java.util.HashSet<>(java.util.Arrays.asList(
+        "info", "help", "logout", "exit", "halt", "quit", "stop", "reboot", "restart", "langlint",
+        "simulate", "explore", "tts", "link", "importgroups", "importgroupsjson",
+        "translate-advisories", "restore-advisories",
+        "vrchatapi-test", "popup", "popups", "popup-test"));
+
+    // Canonical command → i18n key whose value is a comma/space-separated list of that command's
+    // aliases in the active UI language. Lets a native speaker type, say, "ayuda" or "salir"
+    // instead of "help"/"exit". English keeps working regardless (see CLI_CANONICAL).
+    private static final String[][] CLI_ALIAS_KEYS = {
+        { "help",             "cli.alias.help" },
+        { "logout",           "cli.alias.logout" },
+        { "exit",             "cli.alias.exit" },
+        { "reboot",           "cli.alias.reboot" },
+        { "langlint",         "cli.alias.langlint" },
+        { "simulate",         "cli.alias.simulate" },
+        { "explore",          "cli.alias.explore" },
+        { "tts",              "cli.alias.tts" },
+        { "link",             "cli.alias.link" },
+        { "importgroups",     "cli.alias.importgroups" },
+        { "importgroupsjson", "cli.alias.importgroupsjson" },
+    };
+
+    // Resolves a possibly-localized command word to its canonical English form. Canonical words
+    // resolve to themselves; a localized alias for the active language resolves to its command;
+    // anything else is returned lower-cased so the switch reports it as unknown. Case-insensitive.
+    static String canonicalizeCliCommand(String op)
+    {
+        if (op == null)
+            return "";
+        String low = op.trim().toLowerCase(java.util.Locale.ROOT);
+        if (low.isEmpty() || CLI_CANONICAL.contains(low))
+            return low;
+        for (String[] pair : CLI_ALIAS_KEYS)
+        {
+            String aliases = I18n.tr(pair[1]);
+            if (aliases == null || aliases.isEmpty() || aliases.equals(pair[1]))
+                continue; // no localized aliases defined for this command
+            for (String alias : aliases.split("[,\\s]+"))
+                if (!alias.isEmpty() && alias.trim().toLowerCase(java.util.Locale.ROOT).equals(low))
+                    return pair[0];
+        }
+        return low;
+    }
+
     void rawCommand(String line, java.util.function.Consumer<String> out)
     {
         if (line == null || line.isEmpty())
@@ -1913,11 +1830,11 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
         Scanner ls = new Scanner(new StringReader(line));
         try
         {
-            String op = ls.next();
+            String op = canonicalizeCliCommand(ls.next());
             switch (op)
             {
             default: {
-                String msg = "Unknown CLI command: " + op;
+                String msg = I18n.tr("cli.unknown", op);
                 LOG.info(msg);
                 if (out != null) out.accept(msg);
             } break;
@@ -1933,6 +1850,21 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
                 sb.append("\n  importgroups <file|URL>     — import watched groups (legacy CSV)");
                 sb.append("\n  importgroupsjson <file|URL> — import watched groups (JSON)");
                 sb.append("\n  reboot             - fully restart KozyBlake/Scarlet (alternate: restart)");
+                sb.append("\n  translate-advisories        — translate watched-group advisories to your UI language");
+                sb.append("\n  restore-advisories          — restore original (untranslated) advisories");
+                // If the active UI language defines command aliases, list them so a native
+                // speaker can discover the words they can type instead of the English ones.
+                StringBuilder localized = new StringBuilder();
+                for (String[] pair : CLI_ALIAS_KEYS)
+                {
+                    String aliases = I18n.tr(pair[1]);
+                    if (aliases == null || aliases.isEmpty() || aliases.equals(pair[1]))
+                        continue;
+                    localized.append(localized.length() > 0 ? "\n  " : "\n  ")
+                             .append(pair[0]).append(" → ").append(aliases.trim());
+                }
+                if (localized.length() > 0)
+                    sb.append("\n").append(I18n.tr("cli.help.localizedHeader")).append(localized);
                 String msg = sb.toString();
                 System.out.println(msg);
                 if (out != null) out.accept(msg);
@@ -1965,6 +1897,46 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
                     LOG.info(lintLine);
                     if (out != null) out.accept(lintLine);
                 }
+            } break;
+            case "translate-advisories": {
+                if (!this.advisoryTranslating.compareAndSet(false, true))
+                {
+                    if (out != null) out.accept(I18n.tr("advisory.translateBusy"));
+                    break;
+                }
+                String endpoint = this.advisoryTranslateEndpoint.get();
+                String apiKey = this.advisoryTranslateApiKey.get();
+                String target = I18n.getLocale().getLanguage();
+                try
+                {
+                    if (out != null) out.accept(I18n.tr("advisory.translating"));
+                    int n = this.watchedGroups.translateAdvisories(endpoint, apiKey, target)
+                          + this.watchedUsers.translateAdvisories(endpoint, apiKey, target)
+                          + this.watchedAvatars.translateAdvisories(endpoint, apiKey, target)
+                          + this.moderationTags.translateAdvisories(endpoint, apiKey, target);
+                    String msg = I18n.tr("advisory.translateDone", Integer.valueOf(n), target);
+                    LOG.info(msg);
+                    if (out != null) out.accept(msg);
+                }
+                catch (Exception ex)
+                {
+                    String msg = I18n.tr("advisory.translateFailed", String.valueOf(ex.getMessage()));
+                    LOG.error(msg, ex);
+                    if (out != null) out.accept("[error] " + msg);
+                }
+                finally
+                {
+                    this.advisoryTranslating.set(false);
+                }
+            } break;
+            case "restore-advisories": {
+                int n = this.watchedGroups.restoreAdvisories()
+                      + this.watchedUsers.restoreAdvisories()
+                      + this.watchedAvatars.restoreAdvisories()
+                      + this.moderationTags.restoreAdvisories();
+                String msg = I18n.tr("advisory.restoreDone", Integer.valueOf(n));
+                LOG.info(msg);
+                if (out != null) out.accept(msg);
             } break;
             case "simulate": {
                 if (this.trainingMode == null || !this.trainingMode.get())

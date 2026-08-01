@@ -199,7 +199,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
     {
         scarlet.splash.splashSubtext("Configuring Discord");
         this.scarlet = scarlet;
-        this.token = scarlet.settings.new RegistryStringEncrypted("discord.token", true, ScarletSettings.GROUP_SCOPE_DISCORD);
+        this.token = scarlet.settings.new RegistryStringEncrypted("discord.token", true);
         this.discordBotFile = discordBotFile;
         this.audio = new JDAAudioSendingHandler();
         this.requestingEmail = scarlet.settings.new FileValuedStringPattern("vrchat_report_email", "VRChat Help Desk report email", "", ".+@.+", false);
@@ -2417,30 +2417,38 @@ public class ScarletDiscordJDA implements ScarletDiscord
             .setColor(GroupAuditType.color(this.auditType2color, entryMeta.entry.getEventType()))
             .setTimestamp(entryMeta.entry.getCreatedAt())
             .setAuthor(entryMeta.hasAuxActor() ? entryMeta.auxActorDisplayName : entryMeta.entry.getActorDisplayName(), "https://vrchat.com/home/user/"+(entryMeta.hasAuxActor() ? entryMeta.auxActorId : entryMeta.entry.getActorId()))
-            .setFooter(this.footerWithGroup(entryMeta.entry.getId()))
+            .setFooter(ScarletDiscord.FOOTER_PREFIX + entryMeta.entry.getId())
         ;
         if (addTargetIdField)
             embed.addField("Target id", entryMeta.entry.getTargetId(), false);
         return embed;
     }
 
-    // Prepends this core's group label to the standard footer, so when several groups
-    // run at once (and especially if their posts share a bot or a channel) a moderator
-    // can tell at a glance which group an action belongs to. Harmless in the single-
-    // group case — it just names the one group.
-    private String footerWithGroup(String entryId)
-    {
-        String base = ScarletDiscord.FOOTER_PREFIX + entryId;
-        String label = null;
-        try { label = this.scarlet.vrc.groupDisplayName(); } catch (Throwable ignored) {}
-        return (label != null && !label.isEmpty()) ? label + "  •  " + base : base;
-    }
     @FunctionalInterface interface CondEmitEmbed { void emitEmbed(String channelSf, Guild guild, TextChannel channel, EmbedBuilder embed); }
+    // Debug Event Console: one-line summary of what an event would post, mirrored to the console
+    // sink so a tester can see output without a live Discord bot/channel.
+    static String debugEventSummary(String kind, ScarletData.AuditEntryMetadata entryMeta, String title)
+    {
+        String actor = entryMeta.hasAuxActor() ? entryMeta.auxActorDisplayName : entryMeta.entry.getActorDisplayName();
+        String desc = entryMeta.entry.getDescription();
+        return String.format("[%s] %s%s | actor=%s target=%s%s",
+            kind,
+            entryMeta.entry.getEventType(),
+            title != null && !title.isEmpty() ? " “" + title + "”" : "",
+            String.valueOf(actor),
+            String.valueOf(entryMeta.entry.getTargetId()),
+            desc != null && !desc.isEmpty() ? " | " + desc : "");
+    }
+
     void condEmitEmbed(ScarletData.AuditEntryMetadata entryMeta, boolean addTargetIdField, String title, String url, Map<String, GroupAuditType.UpdateSubComponent> updates, Consumer<EmbedBuilder> condEmitEmbed)
     {
         EmbedBuilder embed = this.embed(entryMeta, addTargetIdField);
         if (title != null)
             embed.setTitle(title, url);
+        // Capture the summary before any component-dependent embed decoration, so the Event Console
+        // still shows the event even if that decoration needs live data we don't have offline.
+        if (net.sybyline.scarlet.Debug.ENABLED)
+            net.sybyline.scarlet.Debug.emit(debugEventSummary("EMBED", entryMeta, title));
         if (condEmitEmbed != null)
             condEmitEmbed.accept(embed);
         this.condEmit(entryMeta, (channelSf, guild, channel) ->
@@ -2518,6 +2526,8 @@ public class ScarletDiscordJDA implements ScarletDiscord
     @Override
     public void emitUserModeration(Scarlet scarlet, ScarletData.AuditEntryMetadata entryMeta, User actor, User target, ScarletData.UserMetadata actorMeta, ScarletData.UserMetadata targetMeta, String history, String recent, ScarletData.AuditEntryMetadata parentEntryMeta, boolean reactiveKickFromBan)
     {
+        if (net.sybyline.scarlet.Debug.ENABLED)
+            net.sybyline.scarlet.Debug.emit(debugEventSummary("MODERATION", entryMeta, GroupAuditType.of(entryMeta.entry.getEventType()) != null ? GroupAuditType.of(entryMeta.entry.getEventType()).title : null));
         this.condEmit(entryMeta, (channelSf, guild, channel) ->
         {
             {
@@ -2966,7 +2976,20 @@ public class ScarletDiscordJDA implements ScarletDiscord
     @Override
     public void emitRequestCreate(Scarlet scarlet, AuditEntryMetadata entryMeta)
     {
-        this.condEmitEmbed(entryMeta, false, "Created Request", "https://vrchat.com/home/user/"+entryMeta.entry.getTargetId(), null, null);
+        // A "request to join" only happens when the group is set to require approval, so this
+        // post is where a moderator handles it. Attach Accept / Reject / Block buttons that act
+        // on the requesting user directly from the moderation channel.
+        String targetId = entryMeta.entry.getTargetId();
+        EmbedBuilder embed = this.embed(entryMeta, false);
+        embed.setTitle("Created Request", "https://vrchat.com/home/user/"+targetId);
+        this.condEmit(entryMeta, (channelSf, guild, channel) ->
+            channel.sendMessageEmbeds(embed.build())
+                .addComponents(ActionRow.of(
+                    Button.success("group-request-accept:"+targetId, "Accept"),
+                    Button.secondary("group-request-reject:"+targetId, "Reject"),
+                    Button.danger("group-request-block:"+targetId, "Block")
+                ))
+                .complete());
     }
 
     @Override

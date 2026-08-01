@@ -395,26 +395,6 @@ public class ScarletSettings
         }
     }
 
-    public void setNamespace(String namespace)
-    {
-        this.awaitPrefs("setting VRChat group namespace");
-        String ns = namespace == null ? "" : namespace;
-        if (this.globalPreferences == null)
-        {
-            throw new IllegalStateException("Java Preferences are unavailable");
-        }
-        this.preferences = ns.length() == 0 ? this.globalPreferences : this.globalPreferences.node(ns);
-        try
-        {
-            this.encrypted = this.createSecurePrefs(this.preferences, ns);
-        }
-        catch (Throwable t)
-        {
-            LOG.error("Exception initializing namespace secure preference wrapper; reusing global compatibility store", t);
-            this.encrypted = this.globalEncrypted;
-        }
-    }
-
     private EncryptedPrefs createSecurePrefs(Preferences prefs, String namespace)
     {
         return new EncryptedPrefs(prefs, globalPW);
@@ -816,44 +796,19 @@ public class ScarletSettings
             }
         }
     }
-    // Multi-group credential scoping. A group-scoped encrypted field is stored in the
-    // per-group (namespaced) store instead of the shared root store when its sub-toggle
-    // is on, so each group can use its own VRChat account / Discord bot token. The root
-    // store stays the read fallback, so existing single-group credentials keep loading.
-    public static final int GROUP_SCOPE_NONE = 0, GROUP_SCOPE_VRC = 1, GROUP_SCOPE_DISCORD = 2;
-    public static volatile boolean PER_ACCOUNT_VRC = false;
-    public static volatile boolean PER_GROUP_TOKEN = false;
-
     public class RegistryStringValuedEncrypted<T> extends RegistryStringValued<T>
     {
         RegistryStringValuedEncrypted(String name, boolean globalOnly, Supplier<T> ifNull, Function<String, T> parse, Function<T, String> stringify)
         {
-            this(name, globalOnly, GROUP_SCOPE_NONE, ifNull, parse, stringify);
-        }
-        RegistryStringValuedEncrypted(String name, boolean globalOnly, int groupScope, Supplier<T> ifNull, Function<String, T> parse, Function<T, String> stringify)
-        {
             super(name, ifNull, parse, stringify);
             this.globalOnly = globalOnly;
-            this.groupScope = groupScope;
         }
         protected final boolean globalOnly;
-        protected final int groupScope;
-        // Where this field actually lives: normally the root store for globalOnly fields,
-        // but the per-group (namespaced) store when it is group-scoped and its sub-toggle
-        // is on.
-        private boolean effectiveGlobalOnly()
-        {
-            if (!this.globalOnly)
-                return false;
-            boolean namespaced = (this.groupScope == GROUP_SCOPE_VRC && PER_ACCOUNT_VRC)
-                              || (this.groupScope == GROUP_SCOPE_DISCORD && PER_GROUP_TOKEN);
-            return !namespaced;
-        }
         @Override
         protected String read()
         {
             ScarletSettings.this.awaitPrefs("reading encrypted preference " + this.name);
-            String string = this.effectiveGlobalOnly() ? null : ScarletSettings.this.encrypted.get(this.name);
+            String string = this.globalOnly ? null : ScarletSettings.this.encrypted.get(this.name);
             if (string == null) string = ScarletSettings.this.globalEncrypted.get(this.name);
             return string;
         }
@@ -861,7 +816,7 @@ public class ScarletSettings
         protected void write(String string)
         {
             ScarletSettings.this.awaitPrefs("writing encrypted preference " + this.name);
-            (this.effectiveGlobalOnly() ? ScarletSettings.this.globalEncrypted : ScarletSettings.this.encrypted).put(this.name, string);
+            (this.globalOnly ? ScarletSettings.this.globalEncrypted : ScarletSettings.this.encrypted).put(this.name, string);
         }
         /**
          * Removes this encrypted value from both the global and namespace
@@ -933,10 +888,6 @@ public class ScarletSettings
         RegistryStringEncrypted(String name, boolean globalOnly)
         {
             super(name, globalOnly, null, Function.identity(), Function.identity());
-        }
-        RegistryStringEncrypted(String name, boolean globalOnly, int groupScope)
-        {
-            super(name, globalOnly, groupScope, null, Function.identity(), Function.identity());
         }
     }
     public class RegistryJsonEncrypted<T> extends RegistryStringValuedEncrypted<T>

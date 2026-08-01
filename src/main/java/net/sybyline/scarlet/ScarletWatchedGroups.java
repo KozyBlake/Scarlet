@@ -26,6 +26,7 @@ import net.dv8tion.jda.api.EmbedBuilder;
 import net.dv8tion.jda.api.utils.MarkdownSanitizer;
 import net.sybyline.scarlet.server.discord.DEnum;
 import net.sybyline.scarlet.util.MiscUtils;
+import net.sybyline.scarlet.util.Translator;
 import net.sybyline.scarlet.util.UniqueStrings;
 
 public class ScarletWatchedGroups
@@ -81,7 +82,13 @@ public class ScarletWatchedGroups
         public boolean silent = false;
         public String message = null;
         public String notes = null;
-        
+        // Advisory translation state. When advisories are translated on request, the English
+        // originals are preserved here so the translation can be restored losslessly; the group's
+        // id, type, tags and name are never translated. Null when no translation is applied.
+        public String messageOriginal = null;
+        public String notesOriginal = null;
+        public String translatedLang = null;
+
         public EmbedBuilder embed(Group group)
         {
             String code = group != null ? (group.getShortCode()+"."+group.getDiscriminator()) : null,
@@ -278,6 +285,94 @@ public class ScarletWatchedGroups
             return false;
         }
         return true;
+    }
+
+    /** Number of watched groups whose advisory is currently showing a translation. */
+    public int countTranslated()
+    {
+        int n = 0;
+        for (WatchedGroup g : this.watchedGroups.values())
+            if (g.translatedLang != null || g.messageOriginal != null || g.notesOriginal != null)
+                n++;
+        return n;
+    }
+
+    /**
+     * Translates every watched group's advisory text (the {@code message} and {@code notes} fields)
+     * into {@code targetLang} via a LibreTranslate-compatible endpoint, preserving the English
+     * originals so {@link #restoreAdvisories()} can undo it. Group ids, types, tags and names are
+     * never translated. Re-running always translates from the preserved original, so switching
+     * languages never compounds. Saves once at the end. Returns the number of groups changed.
+     *
+     * @throws IOException if the endpoint fails; already-translated groups up to that point are kept.
+     */
+    public int translateAdvisories(String endpoint, String apiKey, String targetLang) throws IOException
+    {
+        int changed = 0;
+        IOException failure = null;
+        try
+        {
+            for (WatchedGroup g : this.watchedGroups.values())
+            {
+                boolean any = false;
+                String srcMsg = g.messageOriginal != null ? g.messageOriginal : g.message;
+                if (srcMsg != null && !srcMsg.trim().isEmpty())
+                {
+                    String t = Translator.translate(endpoint, apiKey, targetLang, srcMsg);
+                    if (t != null && !t.equals(g.message))
+                    {
+                        if (g.messageOriginal == null) g.messageOriginal = g.message;
+                        g.message = t;
+                        any = true;
+                    }
+                }
+                String srcNotes = g.notesOriginal != null ? g.notesOriginal : g.notes;
+                if (srcNotes != null && !srcNotes.trim().isEmpty())
+                {
+                    String t = Translator.translate(endpoint, apiKey, targetLang, srcNotes);
+                    if (t != null && !t.equals(g.notes))
+                    {
+                        if (g.notesOriginal == null) g.notesOriginal = g.notes;
+                        g.notes = t;
+                        any = true;
+                    }
+                }
+                if (any)
+                {
+                    g.translatedLang = targetLang;
+                    changed++;
+                }
+            }
+        }
+        catch (IOException ex)
+        {
+            failure = ex;
+        }
+        if (changed > 0)
+            this.save();
+        if (failure != null)
+            throw failure;
+        return changed;
+    }
+
+    /**
+     * Restores the original (pre-translation) advisory text for every watched group, dropping the
+     * translation. Saves once if anything changed. Returns the number of groups restored.
+     */
+    public int restoreAdvisories()
+    {
+        int restored = 0;
+        for (WatchedGroup g : this.watchedGroups.values())
+        {
+            boolean any = false;
+            if (g.messageOriginal != null) { g.message = g.messageOriginal; g.messageOriginal = null; any = true; }
+            if (g.notesOriginal != null)   { g.notes   = g.notesOriginal;   g.notesOriginal   = null; any = true; }
+            if (g.translatedLang != null)  { g.translatedLang = null; any = true; }
+            if (any) restored++;
+        }
+        if (restored > 0)
+            this.save();
+        return restored;
     }
 
 }

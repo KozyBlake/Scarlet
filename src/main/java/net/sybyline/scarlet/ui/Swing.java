@@ -608,10 +608,31 @@ public class Swing
             return;
 
         Font localeFont = findFontForText(sample, base, localePreferredFamilies(locale));
-        if (localeFont == null)
+        if (localeFont == null || !fontCovers(localeFont, sample))
             localeFont = fontForText(sample, base);
-        if (localeFont == null || localeFont == base || !fontCovers(localeFont, sample))
+        // Last resort: Java's logical composite fonts (Dialog/SansSerif/Serif) aggregate the
+        // platform's physical fonts, so on any system that has *some* font for this script
+        // known to the font subsystem they render it even when no named physical family
+        // matched above. This is what saves a minimal Linux desktop from all-boxes text.
+        if (localeFont == null || !fontCovers(localeFont, sample))
+            for (String logical : new String[]{ Font.DIALOG, Font.SANS_SERIF, Font.SERIF })
+            {
+                Font candidate = new Font(logical, base.getStyle(), base.getSize());
+                if (fontCovers(candidate, sample))
+                {
+                    localeFont = candidate;
+                    break;
+                }
+            }
+        if (localeFont == null || !fontCovers(localeFont, sample))
+        {
+            // Nothing installed can draw this language; leave the default so at least ASCII
+            // shows, and tell the user how to fix it instead of failing silently to boxes.
+            LOG.warn("No installed font can render the '{}' UI language — text may appear as empty boxes. "
+                   + "Install a font that covers it (on Linux: the 'fonts-noto-cjk' package for Japanese/Chinese/Korean), then restart.",
+                     locale == null ? Locale.getDefault() : locale);
             return;
+        }
 
         String family = localeFont.getFamily();
         UIDefaults defaults = UIManager.getDefaults();

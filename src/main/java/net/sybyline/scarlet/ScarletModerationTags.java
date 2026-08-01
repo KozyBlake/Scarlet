@@ -46,6 +46,11 @@ public class ScarletModerationTags
             this.description = description != null ? description : "";
         }
         public String value, label, description;
+        // Advisory translation state for the human-readable description only. The stable `value`
+        // (used everywhere as the tag key) and `label` (the Discord command choice name) are never
+        // translated, so tagging keeps working exactly as before. Original kept for restore.
+        public String descriptionOriginal = null;
+        public String translatedLang = null;
     }
 
     synchronized List<Tag> getJson()
@@ -180,6 +185,70 @@ public class ScarletModerationTags
         if (tag == null)
             return value;
         return tag.label;
+    }
+
+    /** Number of tags currently showing a translated description. */
+    public int countTranslated()
+    {
+        int n = 0;
+        for (Tag t : this.getJson())
+            if (t.translatedLang != null || t.descriptionOriginal != null)
+                n++;
+        return n;
+    }
+
+    /**
+     * Translates each moderation tag's human-readable {@code description} into {@code targetLang}
+     * via a LibreTranslate-compatible endpoint, keeping the original for restore. The tag
+     * {@code value} (its key) and {@code label} (the Discord command choice name) are deliberately
+     * left untouched so tagging and command routing keep working. Returns the number changed.
+     */
+    public int translateAdvisories(String endpoint, String apiKey, String targetLang) throws java.io.IOException
+    {
+        int changed = 0;
+        java.io.IOException failure = null;
+        try
+        {
+            for (Tag t : this.getJson())
+            {
+                String src = t.descriptionOriginal != null ? t.descriptionOriginal : t.description;
+                if (src == null || src.trim().isEmpty())
+                    continue;
+                String tr = net.sybyline.scarlet.util.Translator.translate(endpoint, apiKey, targetLang, src);
+                if (tr != null && !tr.equals(t.description))
+                {
+                    if (t.descriptionOriginal == null) t.descriptionOriginal = t.description;
+                    t.description = tr;
+                    t.translatedLang = targetLang;
+                    changed++;
+                }
+            }
+        }
+        catch (java.io.IOException ex)
+        {
+            failure = ex;
+        }
+        if (changed > 0)
+            this.saveJson();
+        if (failure != null)
+            throw failure;
+        return changed;
+    }
+
+    /** Restores original (pre-translation) descriptions for every tag. Returns count restored. */
+    public int restoreAdvisories()
+    {
+        int restored = 0;
+        for (Tag t : this.getJson())
+        {
+            boolean any = false;
+            if (t.descriptionOriginal != null) { t.description = t.descriptionOriginal; t.descriptionOriginal = null; any = true; }
+            if (t.translatedLang != null)      { t.translatedLang = null; any = true; }
+            if (any) restored++;
+        }
+        if (restored > 0)
+            this.saveJson();
+        return restored;
     }
 
 }

@@ -121,6 +121,7 @@ import net.sybyline.scarlet.server.discord.DInteractions.SlashOption;
 import net.sybyline.scarlet.server.discord.DInteractions.SlashOptionStrings;
 import net.sybyline.scarlet.server.discord.DInteractions.SlashOptionsChoicesUnsanitized;
 import net.sybyline.scarlet.server.discord.DInteractions.StringSel;
+import net.dv8tion.jda.api.events.interaction.component.StringSelectInteractionEvent;
 import net.sybyline.scarlet.server.discord.DOptionEnum;
 import net.sybyline.scarlet.util.Func.F1;
 import net.sybyline.scarlet.util.tts.TtsProvider;
@@ -464,6 +465,18 @@ public class ScarletDiscordCommands
             ;
             
             ScarletDiscordCommands.this.discord.interactions.new Pagination(event.getId(), embeds, entriesPerPage).queue(hook);
+        }
+        @SlashCmd("remove-menu")
+        @Desc("Remove watched groups from a dropdown of their names")
+        public void removeMenu(SlashCommandInteractionEvent event, InteractionHook hook)
+        {
+            ScarletDiscordCommands.this.emitWatchedRemoveMenu(hook, "group", "groups",
+                new java.util.ArrayList<>(ScarletDiscordCommands.this.discord.scarlet.watchedGroups.watchedGroups.keySet()),
+                id ->
+                {
+                    Group g = ScarletDiscordCommands.this.discord.scarlet.vrc.getGroup(id);
+                    return g == null ? null : g.getName();
+                });
         }
         @SlashCmd("export")
         @Desc("Exports watched groups as a JSON file")
@@ -928,6 +941,85 @@ public class ScarletDiscordCommands
         }
     }
 
+    // ── Bulk remove-from-watch-list via dropdown ────────────────────────────────
+    // A convenience for pruning large watch lists (e.g. deleted/banned avatars): posts
+    // multi-select dropdowns of the watched entries by resolved name, and removing the
+    // ticked ones in one action instead of one /...-remove per id. Discord caps a single
+    // dropdown at 25 options and a message at 5 rows, so up to 125 entries are shown; if
+    // there are more, remove some and run it again for the rest.
+    static final int WATCH_REMOVE_PER_MENU = 25, WATCH_REMOVE_MAX_MENUS = 5;
+
+    void emitWatchedRemoveMenu(InteractionHook hook, String kind, String plural, List<String> ids, Function<String, String> nameOf)
+    {
+        if (ids == null || ids.isEmpty())
+        {
+            hook.sendMessageFormat("There are no watched %s to remove.", plural).setEphemeral(true).queue();
+            return;
+        }
+        // Stable, name-sorted order so the same entry stays in the same place run to run.
+        Map<String, String> names = new HashMap<>();
+        for (String id : ids)
+        {
+            String n = null;
+            try { n = nameOf.apply(id); } catch (Throwable ignored) {}
+            names.put(id, n != null && !n.trim().isEmpty() ? n.trim() : id);
+        }
+        ids.sort(java.util.Comparator.comparing(id -> names.get(id).toLowerCase(java.util.Locale.ROOT)));
+
+        List<ActionRow> rows = new java.util.ArrayList<>();
+        int cap = WATCH_REMOVE_PER_MENU * WATCH_REMOVE_MAX_MENUS;
+        for (int menu = 0; menu < WATCH_REMOVE_MAX_MENUS && menu * WATCH_REMOVE_PER_MENU < ids.size(); menu++)
+        {
+            int start = menu * WATCH_REMOVE_PER_MENU, end = Math.min(start + WATCH_REMOVE_PER_MENU, ids.size());
+            StringSelectMenu.Builder builder = StringSelectMenu.create("watched-remove:"+kind+":"+menu)
+                .setPlaceholder(String.format("Remove watched %s (%d–%d of %d)", plural, start + 1, end, ids.size()))
+                .setMinValues(0)
+                .setMaxValues(end - start);
+            for (int i = start; i < end; i++)
+            {
+                String id = ids.get(i);
+                builder.addOption(MiscUtils.maybeEllipsis(100, names.get(id)), id, MiscUtils.maybeEllipsis(100, id));
+            }
+            rows.add(ActionRow.of(builder.build()));
+        }
+        String note = ids.size() > cap
+            ? String.format("%nShowing the first %d of %d; remove some and run this again for the rest.", cap, ids.size())
+            : "";
+        hook.sendMessageFormat("Select watched %s to remove — they'll be deleted from the list immediately.%s", plural, note)
+            .addComponents(rows)
+            .setEphemeral(true)
+            .queue();
+    }
+
+    boolean removeWatchedByKind(String kind, String id)
+    {
+        switch (kind)
+        {
+        case "avatar": return this.discord.scarlet.watchedAvatars.removeWatchedEntity(id);
+        case "user":   return this.discord.scarlet.watchedUsers.removeWatchedEntity(id);
+        case "group":  return this.discord.scarlet.watchedGroups.removeWatchedGroup(id);
+        default:       return false;
+        }
+    }
+
+    @StringSel("watched-remove")
+    public void watchedRemoveSelect(StringSelectInteractionEvent event)
+    {
+        String kind = event.getSelectMenu().getCustomId().split(":")[1];
+        List<String> selected = event.getValues();
+        if (selected == null || selected.isEmpty())
+        {
+            event.deferEdit().queue();
+            return;
+        }
+        int removed = 0;
+        for (String id : selected)
+            if (this.removeWatchedByKind(kind, id))
+                removed++;
+        String plural = "group".equals(kind) ? "groups" : kind + "s";
+        event.reply(String.format("Removed %d watched %s from the list.", removed, plural)).setEphemeral(true).queue();
+    }
+
     final Map<String, WatchedEntity_<?>> watchedEntityCommands = new HashMap<>();
     protected abstract class WatchedEntity_<E>
     {
@@ -954,6 +1046,16 @@ public class ScarletDiscordCommands
             ;
             
             ScarletDiscordCommands.this.discord.interactions.new Pagination(event.getId(), embeds, entriesPerPage).queue(hook);
+        }
+        protected void _removeMenu(SlashCommandInteractionEvent event, InteractionHook hook)
+        {
+            ScarletDiscordCommands.this.emitWatchedRemoveMenu(hook, this._singular(), this._plural(),
+                new java.util.ArrayList<>(this._watchedEntities().watchedEntities.keySet()),
+                id ->
+                {
+                    E entity = this._getEntity(id, ScarletJsonCache.ALWAYS_PREFER_CACHED);
+                    return entity == null ? null : this._getEntityName(entity);
+                });
         }
 //        @SlashCmd("export")
 //        @Desc("Exports watched groups as a JSON file")
@@ -1455,6 +1557,10 @@ public class ScarletDiscordCommands
         @Desc("Lists all watched users")
         public void list(SlashCommandInteractionEvent event, InteractionHook hook, @SlashOpt("entries-per-page") int entriesPerPage)
         { super._list(event, hook, entriesPerPage); }
+        @SlashCmd("remove-menu")
+        @Desc("Remove watched users from a dropdown of their names")
+        public void removeMenu(SlashCommandInteractionEvent event, InteractionHook hook)
+        { super._removeMenu(event, hook); }
         @SlashCmd("export")
         @Desc("Exports watched users as a JSON file")
         public void export(SlashCommandInteractionEvent event, InteractionHook hook)
@@ -1548,6 +1654,10 @@ public class ScarletDiscordCommands
         @Desc("Lists all watched avatars")
         public void list(SlashCommandInteractionEvent event, InteractionHook hook, @SlashOpt("entries-per-page") int entriesPerPage)
         { super._list(event, hook, entriesPerPage); }
+        @SlashCmd("remove-menu")
+        @Desc("Remove watched avatars from a dropdown of their names")
+        public void removeMenu(SlashCommandInteractionEvent event, InteractionHook hook)
+        { super._removeMenu(event, hook); }
         @SlashCmd("export")
         @Desc("Exports watched avatars as a JSON file")
         public void export(SlashCommandInteractionEvent event, InteractionHook hook)
