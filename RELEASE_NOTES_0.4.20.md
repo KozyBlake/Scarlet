@@ -102,3 +102,13 @@ No API key, no new dependency, and nothing that can quietly die on you the way `
 Worth stating plainly: Scarlet's whole avatar-search feature — text search, author lookup, and the rebuilt reverse-image — runs on the **VRCX avatar-search provider format**. That's the query convention ([VRCX](https://github.com/vrcx-team/VRCX)'s `?search=` / `?authorId=` / `?fileId=` shape, `n=5000`, and the tolerant JSON response) and the same community provider ecosystem VRCX popularised (nekosunevr, VRCDB, WorldBalancer, paw, KitsuneDB). The reverse-image rebuild also follows VRCX's own documented behaviour: try a direct file-ID lookup, otherwise resolve the owner and match by author.
 
 To be precise about it: Scarlet **implements** that format — it doesn't bundle, fork, or import VRCX's code. Building to the shared convention is what keeps Scarlet interoperable with the same providers VRCX uses, and lets it benefit from (and contribute back to) that ecosystem.
+
+## First-launch notice (a "vibe-coded" disclosure)
+
+Scarlet now greets first-time users with an honest heads-up: this fork is **maintained by KozyBlake and developed largely with AI assistance** — a "vibe-coded" project — with a **Continue** or **Close Scarlet** choice. If running AI-assisted software isn't for you, you can bow out right there, no questions asked.
+
+- Shown **once**, then remembered (`vibecoded_notice_acknowledged` in `settings.json`).
+- **Headless / scheduled** bots don't get a dialog they can't answer — they log the notice once and keep running.
+- The same note now sits at the top of the README.
+
+To be clear about accountability: KozyBlake maintains and stands behind the project; the AI is a tool in that process, not the maintainer.

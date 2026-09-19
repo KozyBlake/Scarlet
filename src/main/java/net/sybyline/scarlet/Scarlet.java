@@ -1125,6 +1125,8 @@ public class Scarlet implements Closeable
                                      announceVerifyComplete = this.settings.new FileValuedBoolean("announce_verify_complete", I18n.tr("setting.announce_verify_complete"), true),
                                      trainingMode = this.settings.new FileValuedBoolean("training_mode_enabled", I18n.tr("setting.training_mode_enabled"), false),
                                      uiAccentHeaders = this.settings.new FileValuedBoolean("ui_accent_headers", I18n.tr("setting.ui_accent_headers"), false);
+    /** One-time first-launch flag: the user has seen and accepted the "vibe-coded / AI-assisted" disclosure. */
+    final ScarletSettings.FileValued<Boolean> vibecodedNoticeAcknowledged = this.settings.new FileValuedBoolean("vibecoded_notice_acknowledged", I18n.tr("setting.vibecoded_notice_acknowledged"), false);
     /** Desktop UI language override; blank/"system" follows the operating system language. Applied at startup (restart to change). */
     final ScarletSettings.FileValued<String> uiLanguage = this.settings.new FileValuedStringChoice("ui_language", I18n.tr("setting.ui_language"), "system", () ->
     {
@@ -1597,12 +1599,52 @@ public class Scarlet implements Closeable
         return file == null ? "(unavailable)" : file.getAbsolutePath();
     }
 
+    /**
+     * First-launch disclosure. Scarlet (this fork) is maintained by KozyBlake and developed largely
+     * with AI assistance -- a "vibe-coded" project. Shown once; the user may decline and close.
+     * Headless runs log the notice once and continue, since a scheduled bot has no one to click.
+     */
+    void showVibecodedNoticeIfNeeded()
+    {
+        if (Boolean.TRUE.equals(this.vibecodedNoticeAcknowledged.get()))
+            return;
+        String title = "Scarlet \u2014 a note before you start";
+        String plain = "This fork of Scarlet is maintained by KozyBlake and developed largely with AI"
+            + " assistance \u2014 a \"vibe-coded\" project. Code is written and reasoned through with an"
+            + " AI pair, then reviewed and built by KozyBlake.\n\n"
+            + "That isn't for everyone, and that's completely fair. If you would rather not run a"
+            + " vibe-coded project, you can close Scarlet now \u2014 no hard feelings.";
+        if (Platform.forceHeadlessUi() || GraphicsEnvironment.isHeadless())
+        {
+            LOG.warn("{}: {}", title, plain.replace("\n\n", " "));
+            LOG.warn("(Headless: continuing. Shown once; remove 'vibecoded_notice_acknowledged' from settings.json to see it again.)");
+            this.vibecodedNoticeAcknowledged.set(Boolean.TRUE, "first-run-notice");
+            return;
+        }
+        int result = JOptionPane.showOptionDialog(
+            null,
+            Swing.dialogMessage(plain),
+            title,
+            JOptionPane.YES_NO_OPTION,
+            JOptionPane.INFORMATION_MESSAGE,
+            null,
+            new Object[]{ "Continue", "Close Scarlet" },
+            "Continue");
+        if (result != 0) // index 0 == "Continue"; "Close Scarlet" (1) or dismissed (-1) both exit
+        {
+            LOG.info("User declined the vibe-coded notice; exiting.");
+            System.exit(0);
+        }
+        this.vibecodedNoticeAcknowledged.set(Boolean.TRUE, "first-run-notice");
+    }
+
     public void run()
     {
         System.out.println("===========================================");
         System.out.println("  " + APP_NAME + " " + VERSION);
         System.out.println("  Type 'help' for available CLI commands.");
         System.out.println("===========================================");
+        this.showVibecodedNoticeIfNeeded();
         this.ui.loadSettings();
         this.maybeShowDataFolderMigrationNotice();
         this.eventListener.settingsLoaded();
