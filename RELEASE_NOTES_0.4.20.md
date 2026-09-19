@@ -85,7 +85,7 @@ Now a failing provider logs **one** warning when it first goes down and **one** 
 Two concrete results from the reported logs:
 
 - **`vrcx.avtr.zip` is removed.** Its hostname no longer resolves, so it could only ever fail — it was the biggest single source of the spam.
-- **avtrDB is removed entirely** — text search *and* reverse-image — because its search API now requires an API key. Text search continues on the five remaining providers, and **"search by picture" was rebuilt without avtrDB** (next section) rather than left broken.
+- **avtrDB is removed entirely** — text search *and* reverse-image — because its search now blocks datacenter/VPNs IP's. Text search continues on the five remaining providers, and **"search by picture" was rebuilt without avtrDB** (next section) rather than left broken.
 
 ## Reverse-image search, rebuilt dependency-free
 
