@@ -105,7 +105,7 @@ avtrDB was the only provider that answered "here's an avatar image, which avatar
 
 No new API key, no new dependency, and nothing that can quietly die on you the way `avtr.zip` did. Author-lookup state is tracked **separately** from text search, so if a provider doesn't support author lookup it backs off quietly for that mode without touching its text search. If the owner can't be resolved or no provider indexes them, it returns no match and falls back to name search — exactly as before.
 
-> **Correction:** An earlier version of these notes said avtrDB required an API key. That was a misunderstanding by KozyBlake and Claude. The avtrDB maintainer confirmed that datacenter IPs (and likely VPNs) were being blocked and has since provided a bypass for Scarlet users.
+> **Correction:** An earlier version of these notes said avtrDB required an API key. That was a misunderstanding by KozyBlake and Claude. The avtrDB maintainer confirmed that datacenter IPs (and likely VPNs) were being blocked and has since provided a bypass for Scarlet users. avtrDB can be brought back if the Scarlet community asks for it.
 
 ## Built on the VRCX avatar-search ecosystem
 

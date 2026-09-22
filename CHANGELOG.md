@@ -37,7 +37,7 @@ Adds **VRChat trust ranks** to the player list with Nuisance/Visitor advisories 
 ### Removed
 
 - **Dropped the dead `vrcx.avtr.zip` avatar-search provider.** Its hostname no longer resolves (NXDOMAIN), so every lookup could only ever throw `UnknownHostException` — it was the single largest source of avatar-search log spam.
-- **Removed avtrDB entirely — text search *and* reverse-image.** Its endpoint was rejecting requests from datacenter IPs and likely VPNs. Text search continues on the five remaining providers (nekosunevr, VRCDB, WorldBalancer, paw, KitsuneDB), and reverse-image ("search by picture") was rebuilt without it (see Changed). The avtrDB maintainer has since supplied a bypass for Scarlet users; the earlier API-key explanation was a misunderstanding by KozyBlake and Claude.
+- **Removed avtrDB entirely — text search *and* reverse-image.** Its endpoint was rejecting requests from datacenter IPs and likely VPNs. Text search continues on the five remaining providers (nekosunevr, VRCDB, WorldBalancer, paw, KitsuneDB), and reverse-image ("search by picture") was rebuilt without it (see Changed). The avtrDB maintainer has since supplied a bypass for Scarlet users; the earlier API-key explanation was a misunderstanding by KozyBlake and Claude. It can be restored if the Scarlet community requests it.
 
 ### Notes
 
