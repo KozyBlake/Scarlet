@@ -144,6 +144,60 @@ public class ScarletDiscordUI
             .queue();
     }
 
+    /**
+     * Optional browse-first moderation-tag picker. Based on Chloethecat's
+     * contribution in https://github.com/Chloethecat/Scarlet (commit 62dc2d4).
+     * The existing search-first picker above remains the default flow.
+     */
+    @ButtonClk("browse-tags")
+    @Ephemeral
+    public void browseTags(ButtonInteractionEvent event, InteractionHook hook)
+    {
+        String[] parts = event.getButton().getCustomId().split(":");
+        String auditEntryId = parts[1];
+        if (!this.checkAuditEntryModerationAccess(event.getMember(), hook, auditEntryId))
+            return;
+
+        List<ScarletModerationTags.Tag> tags = this.discord.scarlet.moderationTags.getTags();
+        if (tags == null || tags.isEmpty())
+        {
+            hook.sendMessage("No moderation tags!").setEphemeral(true).queue();
+            return;
+        }
+
+        // Discord supports up to 25 options per menu and five action rows.
+        StringSelectMenu.Builder[] builders = new StringSelectMenu.Builder[(tags.size() - 1) / 25 + 1];
+        for (int i = 0; i < builders.length; i++)
+            builders[i] = StringSelectMenu.create((i == 0 ? "select-tags:" : "select-tags-"+i+":") + auditEntryId);
+
+        for (int i = 0; i < tags.size(); i++)
+        {
+            ScarletModerationTags.Tag tag = tags.get(i);
+            String label = tag.label != null ? tag.label : tag.value;
+            if (tag.description == null || tag.description.isEmpty())
+                builders[i / 25].addOption(label, MiscUtils.maybeEllipsis(100, tag.value));
+            else
+                builders[i / 25].addOption(label, MiscUtils.maybeEllipsis(100, tag.value), MiscUtils.maybeEllipsis(50, tag.description));
+        }
+
+        ScarletData.AuditEntryMetadata auditEntryMeta = this.discord.scarlet.data.auditEntryMetadata(auditEntryId);
+        for (int i = 0; i < builders.length; i++)
+        {
+            StringSelectMenu.Builder builder = builders[i];
+            builder.setMinValues(0).setMaxValues(builder.getOptions().size())
+                .setPlaceholder("Select tags ("+(i * 25 + 1)+"-"+(i * 25 + builder.getOptions().size())+")");
+            if (auditEntryMeta != null && auditEntryMeta.hasTags())
+            {
+                List<String> optionValues = builder.getOptions().stream().map(SelectOption::getValue).collect(Collectors.toList());
+                builder.setDefaultValues(auditEntryMeta.entryTags.stream().filter(optionValues::contains).collect(Collectors.toList()));
+            }
+        }
+
+        hook.sendMessageComponents(Arrays.asList(MiscUtils.map(builders, ActionRow[]::new, $ -> ActionRow.of($.build()))))
+            .setEphemeral(true)
+            .queue();
+    }
+
     @ModalSub("tag-search")
     @Ephemeral
     public void tagSearch(ModalInteractionEvent event, InteractionHook hook)

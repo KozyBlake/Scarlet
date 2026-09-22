@@ -2821,6 +2821,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
             .addContent(contentExtra)
             .addComponents(ActionRow.of(
                 Button.primary("edit-tags:"+entryMeta.entry.getId(), "Edit tags"),
+                Button.secondary("browse-tags:"+entryMeta.entry.getId(), "Browse tags"),
                 Button.primary("edit-desc:"+entryMeta.entry.getId(), "Edit description"),
                 Button.primary("vrchat-report:"+entryMeta.entry.getId()+timeext, "Get report link")
             ))

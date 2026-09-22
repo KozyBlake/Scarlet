@@ -52,7 +52,7 @@ public class DPerms
     {
         allowDefaults(PermType.BUTTON_PRESS,
             "pagination", "pagination-first", "pagination-last", "pagination-select", "pagination-cancel", "pagination-submit",
-            "edit-tags",
+            "edit-tags", "browse-tags",
             "vrchat-user-edit-manager-notes",
             "vrchat-user-ban",
             "immediate-ban-edit-desc", "immediate-ban-cancel", "immediate-ban-confirm",
