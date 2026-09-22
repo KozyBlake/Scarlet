@@ -93,17 +93,19 @@ Now a failing provider logs **one** warning when it first goes down and **one** 
 Two concrete results from the reported logs:
 
 - **`vrcx.avtr.zip` is removed.** Its hostname no longer resolves, so it could only ever fail — it was the biggest single source of the spam.
-- **avtrDB is removed entirely** — text search *and* reverse-image — because its search now blocks datacenter/VPNs IP's. Text search continues on the five remaining providers, and **"search by picture" was rebuilt without avtrDB** (next section) rather than left broken.
+- **avtrDB is removed entirely** — text search *and* reverse-image — because its search was rejecting requests from datacenter IPs and likely VPNs. Text search continues on the five remaining providers, and **"search by picture" was rebuilt without avtrDB** (next section) rather than left broken.
 
 ## Reverse-image search, rebuilt dependency-free
 
-avtrDB was the only provider that answered "here's an avatar image, which avatar is it?" directly, and it now needs an API key. Rather than wire in another third party, "search by picture" is rebuilt from pieces Scarlet already trusts:
+avtrDB was the only provider that answered "here's an avatar image, which avatar is it?" directly. At the time, its endpoint was unavailable to Scarlet because of datacenter/VPN filtering, so rather than leave the feature broken, "search by picture" is rebuilt from pieces Scarlet already trusts:
 
 1. The avatar image's file ID is resolved to its **owner** via VRChat's own (authenticated) file API.
 2. Each remaining provider is queried **by author** — the standard VRCX `authorId` lookup.
 3. Only the avatar whose image references that same file ID is kept.
 
-No API key, no new dependency, and nothing that can quietly die on you the way `avtr.zip` did. Author-lookup state is tracked **separately** from text search, so if a provider doesn't support author lookup it backs off quietly for that mode without touching its text search. If the owner can't be resolved or no provider indexes them, it returns no match and falls back to name search — exactly as before.
+No new API key, no new dependency, and nothing that can quietly die on you the way `avtr.zip` did. Author-lookup state is tracked **separately** from text search, so if a provider doesn't support author lookup it backs off quietly for that mode without touching its text search. If the owner can't be resolved or no provider indexes them, it returns no match and falls back to name search — exactly as before.
+
+> **Correction:** An earlier version of these notes said avtrDB required an API key. That was a misunderstanding by KozyBlake and Claude. The avtrDB maintainer confirmed that datacenter IPs (and likely VPNs) were being blocked and has since provided a bypass for Scarlet users.
 
 ## Built on the VRCX avatar-search ecosystem
 
