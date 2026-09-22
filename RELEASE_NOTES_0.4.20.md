@@ -4,6 +4,14 @@ A feature release focused on **spotting the right people faster** and **reacting
 
 > Version header is provisional (0.4.20) — rename if you'd rather cut this as something else.
 
+## Post-release compatibility and moderation-tag updates
+
+- **VRChat avatar-tag compatibility.** Scarlet now accepts the current VRChat response where `presence.currentAvatarTags` is an array, even though the bundled `vrchatapi-java` 1.21.0 SDK still expects a string. This prevents the current-user response from failing to deserialize while leaving the correctly typed top-level avatar-tags field untouched.
+- **Optional moderation-tag browser.** **Edit tags** remains the existing search-first flow. A new **Browse tags** button is available alongside it for moderators who prefer to scan all configured tags; it splits up to 125 tags into Discord's supported five 25-option menus and preserves selections already on the audit entry.
+- **Desktop build workflow.** Pushes to `main` that affect source, the Maven project, vendored libdave, or the workflow now build Scarlet with Java 21 and attach the desktop JAR as a 30-day GitHub Actions artifact.
+
+These contributions are adapted from [Chloethecat's Scarlet fork](https://github.com/Chloethecat/Scarlet), with the search-first tag editor intentionally retained as the default experience.
+
 ## Trust ranks
 
 The player list now has a **Rank** column showing each player's VRChat trust rank — Visitor, New User, User, Known, Trusted — plus **Nuisance** for troll-flagged accounts. It's derived from the account's own tags, so it costs no extra API calls. VRChat only returns a complete tag set for some users, so treat it as a strong hint rather than a guarantee; in practice it's right for the large majority of joins.
