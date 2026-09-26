@@ -12,11 +12,11 @@ public class DaveCommitResult implements Closeable
 
     public DaveCommitResult(DaveLibrary.DAVESessionHandle handle, Pointer commit, long length)
     {
-        this(DaveLibrary.INSTANCE.daveSessionProcessCommit(handle, commit, length));
+        this(DaveLibrary.INSTANCE.daveSessionProcessCommit(handle, commit, new DaveLibrary.SizeT(length)));
     }
     public DaveCommitResult(DaveLibrary.DAVESessionHandle handle, ByteBuffer commit, long length)
     {
-        this(DaveLibrary.INSTANCE.daveSessionProcessCommit(handle, commit, length));
+        this(DaveLibrary.INSTANCE.daveSessionProcessCommit(handle, commit, new DaveLibrary.SizeT(length)));
     }
     public DaveCommitResult(DaveLibrary.DAVESessionHandle handle, ByteBuffer commit)
     { this(handle, commit, commit.remaining()); }
@@ -46,7 +46,7 @@ public class DaveCommitResult implements Closeable
     public long[] getRosterMemberIds()
     {
         PointerByReference rosterIds = new PointerByReference();
-        LongByReference rosterIdsLength = new LongByReference();
+        DaveLibrary.SizeTByReference rosterIdsLength = new DaveLibrary.SizeTByReference();
         DaveLibrary.INSTANCE.daveCommitResultGetRosterMemberIds(this.handle, rosterIds, rosterIdsLength);
         Pointer rosterIdsBuffer = rosterIds.getValue();
         try
@@ -62,7 +62,7 @@ public class DaveCommitResult implements Closeable
     public byte[] getRosterMemberSignature(long rosterId)
     {
         PointerByReference signature = new PointerByReference();
-        LongByReference signatureLength = new LongByReference();
+        DaveLibrary.SizeTByReference signatureLength = new DaveLibrary.SizeTByReference();
         DaveLibrary.INSTANCE.daveCommitResultGetRosterMemberSignature(this.handle, rosterId, signature, signatureLength);
         Pointer signatureBuffer = signature.getValue();
         try

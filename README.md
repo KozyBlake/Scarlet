@@ -52,6 +52,8 @@ Arguments in `<>` are required and `[]` optional. Most commands require staff pe
 
 #### Moderation Commands
 
+> **Can't tag kicks, bans or warns on 0.4.19?** Tag search was shipped without being allowed by default. Update to 0.4.20, or have an admin run the two one-time commands under [*Tag search refused on 0.4.19*](#configuration-commands).
+
 - **`moderation-tags list [entries-per-page:int?]`**  
   Lists your custom moderation tags (up to 125 tags).  
   Example: `/moderation-tags list`
@@ -340,6 +342,19 @@ Subcommands of **`schedule`** manage recurring VRChat group events (each stored 
 - **`server-restart restart-now`** / **`server-restart update-now [target-version:string?]`**  
   Restarts the Scarlet application immediately, or updates it (optionally to a specific version) and restarts.  
   Example: `/server-restart update-now`
+
+- **`scarlet-discord-permissions set <target:role/user> <type> <name:string> <value:Allow|Deny|Default>`** / **`scarlet-discord-permissions list <target:role/user> [type]`**  
+  Controls who can use each Discord command and each Scarlet button, menu and pop-up. `type` is one of **Slash Command**, **Message Command**, **User Command**, **Button Press**, **String Select**, **Entity Select**, **Modal Submit** or **Other**; `name` is the command or interaction ID (the command autocompletes). **Default** falls through to Scarlet's built-in behaviour: every moderation button, menu and pop-up Scarlet ships is allowed by default, and each one still checks the member's own VRChat/Discord permissions, so you normally only need this to *restrict* something. Scarlet logs a startup warning if a build contains an interaction that isn't allowed by default.  
+  Example: `/scarlet-discord-permissions set target:@Moderators type:Button Press name:timed-ban value:Deny`
+
+  > **Tag search refused on 0.4.19 (tagging kicks, bans and warns).** Version 0.4.19 shipped the tag search without allowing it by default, so **Edit tags → search** is refused for everyone. **Update to 0.4.20 or later** to fix it. Until you can, a server admin can unlock it by running these two commands once (use your moderator role, or `@everyone` — moderator permissions are still checked):
+  >
+  > ```
+  > /scarlet-discord-permissions set target:@Moderators type:Modal Submit name:tag-search value:Allow
+  > /scarlet-discord-permissions set target:@Moderators type:String Select name:select-tags-search value:Allow
+  > ```
+  >
+  > On 0.4.19 the timed-ban buttons (`timed-ban`, `timed-ban-custom`), the group join-request buttons (`group-request-accept`, `group-request-reject`, `group-request-block`) and the `watched-remove` menu are also refused by default and can be unlocked the same way (`type:Button Press`, `type:Modal Submit` for the `timed-ban-custom` pop-up, `type:String Select` for `watched-remove`). All of these are allowed by default from 0.4.20.
 
 - **Scarlet permissions**  
   Scarlet's own permissions (for example `event.set_tags`) are mapped to Discord roles in Scarlet's configuration; the current mapping is shown by `/config-info`. (There is no longer a standalone `scarlet-permission` command.)

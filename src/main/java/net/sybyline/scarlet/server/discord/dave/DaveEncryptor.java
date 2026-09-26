@@ -55,7 +55,7 @@ public class DaveEncryptor implements Closeable
 
     public long getMaxCiphertextByteSize(int mediaType, long frameSize)
     {
-        return DaveLibrary.INSTANCE.daveEncryptorGetMaxCiphertextByteSize(this.handle, mediaType, frameSize);
+        return DaveLibrary.INSTANCE.daveEncryptorGetMaxCiphertextByteSize(this.handle, mediaType, new DaveLibrary.SizeT(frameSize)).longValue();
     }
 
     public boolean hasKeyRatchet()
@@ -70,11 +70,17 @@ public class DaveEncryptor implements Closeable
 
     public int encrypt(int mediaType, int ssrc, Pointer frame, long frameLength, Pointer encryptedFrame, long encryptedFrameCapacity, LongByReference bytesWritten)
     {
-        return DaveLibrary.INSTANCE.daveEncryptorEncrypt(this.handle, mediaType, ssrc, frame, frameLength, encryptedFrame, encryptedFrameCapacity, bytesWritten);
+        DaveLibrary.SizeTByReference bytesWrittenNative = new DaveLibrary.SizeTByReference();
+        int result = DaveLibrary.INSTANCE.daveEncryptorEncrypt(this.handle, mediaType, ssrc, frame, new DaveLibrary.SizeT(frameLength), encryptedFrame, new DaveLibrary.SizeT(encryptedFrameCapacity), bytesWrittenNative);
+        if (bytesWritten != null) bytesWritten.setValue(bytesWrittenNative.getValue());
+        return result;
     }
     public int encrypt(int mediaType, int ssrc, ByteBuffer frame, long frameLength, ByteBuffer encryptedFrame, long encryptedFrameCapacity, LongByReference bytesWritten)
     {
-        return DaveLibrary.INSTANCE.daveEncryptorEncrypt(this.handle, mediaType, ssrc, frame, frameLength, encryptedFrame, encryptedFrameCapacity, bytesWritten);
+        DaveLibrary.SizeTByReference bytesWrittenNative = new DaveLibrary.SizeTByReference();
+        int result = DaveLibrary.INSTANCE.daveEncryptorEncrypt(this.handle, mediaType, ssrc, frame, new DaveLibrary.SizeT(frameLength), encryptedFrame, new DaveLibrary.SizeT(encryptedFrameCapacity), bytesWrittenNative);
+        if (bytesWritten != null) bytesWritten.setValue(bytesWrittenNative.getValue());
+        return result;
     }
     public int encrypt(int mediaType, int ssrc, ByteBuffer frame, ByteBuffer encryptedFrame, LongByReference bytesWritten)
     { return this.encrypt(mediaType, ssrc, frame, frame.remaining(), encryptedFrame, encryptedFrame.remaining(), bytesWritten); }

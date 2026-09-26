@@ -218,7 +218,10 @@ public class Scarlet implements Closeable
         {
             try
             {
-                SecurityRegressionChecks.runAll();
+                if (Platform.isPowerPC() && Platform.isPpcEdition())
+                    LOG.warn("PowerPC edition on a PowerPC CPU: skipping startup security self-tests (their PBKDF2 derivations take many minutes without a JIT). Real encryption is unchanged.");
+                else
+                    SecurityRegressionChecks.runAll();
                 try (Scarlet scarlet = new Scarlet())
                 {
                     scarlet.run();

@@ -39,6 +39,60 @@
         <version>3.2.4</version>
         <executions>
           <!-- ================================================================
+               PowerPC edition - attached as a classifier, always built.
+               Output: target/scarlet-${version}-ppc.jar
+               Identical desktop payload to shade-full, but its manifest carries
+               Scarlet-Edition=ppc. When that jar runs on a PowerPC CPU (e.g. a
+               Wii on Wii-Linux, where Java has no JIT), Scarlet skips the
+               startup SecurityRegressionChecks self-tests, whose 100k-round
+               PBKDF2 derivations take many minutes in the interpreter.
+               ================================================================ -->
+          <execution>
+            <id>shade-ppc</id>
+            <phase>package</phase>
+            <goals>
+              <goal>shade</goal>
+            </goals>
+            <configuration>
+              <shadedArtifactAttached>true</shadedArtifactAttached>
+              <shadedClassifierName>ppc</shadedClassifierName>
+              <transformers>
+                <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
+                  <mainClass>net.sybyline.scarlet.Scarlet</mainClass>
+                  <manifestEntries>
+                    <Scarlet-VRChatApi-Version>${vrchatapi.version}</Scarlet-VRChatApi-Version>
+                    <Implementation-Title>${project.artifactId}</Implementation-Title>
+                    <Implementation-Version>${project.version}</Implementation-Version>
+                    <Implementation-Vendor>${project.groupId}</Implementation-Vendor>
+                    <Scarlet-Edition>ppc</Scarlet-Edition>
+                  </manifestEntries>
+                </transformer>
+              </transformers>
+              <filters>
+                <filter>
+                  <artifact>*:*</artifact>
+                  <excludes>
+                    <exclude>META-INF/*.SF</exclude>
+                    <exclude>META-INF/*.RSA</exclude>
+                    <exclude>META-INF/*.DSA</exclude>
+                    <exclude>META-INF/*.EC</exclude>
+                    <exclude>native/android/**</exclude>
+                    <exclude>natives/android-*/libdave-jvm.so</exclude>
+                    <exclude>natives/linux-aarch64/libdave-jvm.so</exclude>
+                    <exclude>android-*/libdave-jvm.so</exclude>
+                    <exclude>termux-*/libdave-jvm.so</exclude>
+                  </excludes>
+                </filter>
+                <filter>
+                  <artifact>moe.kyokobot.libdave:libdave-jvm-impl</artifact>
+                  <excludes>
+                    <exclude>moe/kyokobot/libdave/natives/DaveNativeBindings.class</exclude>
+                  </excludes>
+                </filter>
+              </filters>
+            </configuration>
+          </execution>
+          <!-- ================================================================
                Main distribution jar. Replaces the Maven main artifact.
                Output: target/scarlet-${version}.jar
                ================================================================ -->
@@ -65,6 +119,7 @@
                   <artifact>*:*</artifact>
                   <excludes>
                     <exclude>META-INF/*.SF</exclude>
+                    <exclude>linux-ppc/**</exclude>
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.EC</exclude>
@@ -134,6 +189,7 @@
                   <artifact>*:*</artifact>
                   <excludes>
                     <exclude>META-INF/*.SF</exclude>
+                    <exclude>linux-ppc/**</exclude>
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.EC</exclude>
@@ -193,6 +249,7 @@
                   <artifact>*:*</artifact>
                   <excludes>
                     <exclude>META-INF/*.SF</exclude>
+                    <exclude>linux-ppc/**</exclude>
                     <exclude>META-INF/*.RSA</exclude>
                     <exclude>META-INF/*.DSA</exclude>
                     <exclude>META-INF/*.EC</exclude>
@@ -212,6 +269,7 @@
               </filters>
             </configuration>
           </execution>
+          
 
         </executions>
       </plugin>

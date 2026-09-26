@@ -13,13 +13,13 @@ public class DaveWelcomeResult implements Closeable
 
     public DaveWelcomeResult(DaveLibrary.DAVESessionHandle handle, Pointer welcome, long length, StringArray recognizedUserIds, long recognizedUserIdsLength)
     {
-        this(DaveLibrary.INSTANCE.daveSessionProcessWelcome(handle, welcome, length, recognizedUserIds, recognizedUserIdsLength));
+        this(DaveLibrary.INSTANCE.daveSessionProcessWelcome(handle, welcome, new DaveLibrary.SizeT(length), recognizedUserIds, new DaveLibrary.SizeT(recognizedUserIdsLength)));
     }
     public DaveWelcomeResult(DaveLibrary.DAVESessionHandle handle, Pointer welcome, long length, String... recognizedUserIds)
     { this(handle, welcome, length, new StringArray(recognizedUserIds), recognizedUserIds.length); }
     public DaveWelcomeResult(DaveLibrary.DAVESessionHandle handle, ByteBuffer welcome, long length, StringArray recognizedUserIds, long recognizedUserIdsLength)
     {
-        this(DaveLibrary.INSTANCE.daveSessionProcessWelcome(handle, welcome, length, recognizedUserIds, recognizedUserIdsLength));
+        this(DaveLibrary.INSTANCE.daveSessionProcessWelcome(handle, welcome, new DaveLibrary.SizeT(length), recognizedUserIds, new DaveLibrary.SizeT(recognizedUserIdsLength)));
     }
     public DaveWelcomeResult(DaveLibrary.DAVESessionHandle handle, ByteBuffer welcome, long length, String... recognizedUserIds)
     { this(handle, welcome, length, new StringArray(recognizedUserIds), recognizedUserIds.length); }
@@ -43,7 +43,7 @@ public class DaveWelcomeResult implements Closeable
     public long[] getRosterMemberIds()
     {
         PointerByReference rosterIds = new PointerByReference();
-        LongByReference rosterIdsLength = new LongByReference();
+        DaveLibrary.SizeTByReference rosterIdsLength = new DaveLibrary.SizeTByReference();
         DaveLibrary.INSTANCE.daveWelcomeResultGetRosterMemberIds(this.handle, rosterIds, rosterIdsLength);
         Pointer rosterIdsBuffer = rosterIds.getValue();
         try
@@ -59,7 +59,7 @@ public class DaveWelcomeResult implements Closeable
     public byte[] daveWelcomeResultGetRosterMemberSignature(long rosterId)
     {
         PointerByReference signature = new PointerByReference();
-        LongByReference signatureLength = new LongByReference();
+        DaveLibrary.SizeTByReference signatureLength = new DaveLibrary.SizeTByReference();
         DaveLibrary.INSTANCE.daveWelcomeResultGetRosterMemberSignature(this.handle, rosterId, signature, signatureLength);
         Pointer signatureBuffer = signature.getValue();
         try

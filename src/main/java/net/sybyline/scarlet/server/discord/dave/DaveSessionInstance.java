@@ -61,7 +61,7 @@ public class DaveSessionInstance implements Closeable
     public byte[] getLastEpochAuthenticator()
     {
         PointerByReference authenticator = new PointerByReference();
-        LongByReference length = new LongByReference();
+        DaveLibrary.SizeTByReference length = new DaveLibrary.SizeTByReference();
         DaveLibrary.INSTANCE.daveSessionGetLastEpochAuthenticator(this.handle, authenticator, length);
         Pointer authenticatorBuffer = authenticator.getValue();
         try
@@ -76,11 +76,11 @@ public class DaveSessionInstance implements Closeable
 
     public void setExternalSender(Pointer externalSender, long length)
     {
-        DaveLibrary.INSTANCE.daveSessionSetExternalSender(this.handle, externalSender, length);
+        DaveLibrary.INSTANCE.daveSessionSetExternalSender(this.handle, externalSender, new DaveLibrary.SizeT(length));
     }
     public void setExternalSender(ByteBuffer externalSender, long length)
     {
-        DaveLibrary.INSTANCE.daveSessionSetExternalSender(this.handle, externalSender, length);
+        DaveLibrary.INSTANCE.daveSessionSetExternalSender(this.handle, externalSender, new DaveLibrary.SizeT(length));
     }
     public void setExternalSender(ByteBuffer externalSender)
     { this.setExternalSender(externalSender, externalSender.remaining()); }
@@ -88,8 +88,8 @@ public class DaveSessionInstance implements Closeable
     public byte[] processProposals(Pointer proposals, long length, StringArray recognizedUserIds, long recognizedUserIdsLength)
     {
         PointerByReference commitWelcomeBytes = new PointerByReference();
-        LongByReference commitWelcomeBytesLength = new LongByReference();
-        DaveLibrary.INSTANCE.daveSessionProcessProposals(handle, proposals, length, recognizedUserIds, recognizedUserIdsLength, commitWelcomeBytes, commitWelcomeBytesLength);
+        DaveLibrary.SizeTByReference commitWelcomeBytesLength = new DaveLibrary.SizeTByReference();
+        DaveLibrary.INSTANCE.daveSessionProcessProposals(handle, proposals, new DaveLibrary.SizeT(length), recognizedUserIds, new DaveLibrary.SizeT(recognizedUserIdsLength), commitWelcomeBytes, commitWelcomeBytesLength);
         Pointer commitWelcomeBytesBuffer = commitWelcomeBytes.getValue();
         try
         {
@@ -105,8 +105,8 @@ public class DaveSessionInstance implements Closeable
     public byte[] processProposals(ByteBuffer proposals, long length, StringArray recognizedUserIds, long recognizedUserIdsLength)
     {
         PointerByReference commitWelcomeBytes = new PointerByReference();
-        LongByReference commitWelcomeBytesLength = new LongByReference();
-        DaveLibrary.INSTANCE.daveSessionProcessProposals(handle, proposals, length, recognizedUserIds, recognizedUserIdsLength, commitWelcomeBytes, commitWelcomeBytesLength);
+        DaveLibrary.SizeTByReference commitWelcomeBytesLength = new DaveLibrary.SizeTByReference();
+        DaveLibrary.INSTANCE.daveSessionProcessProposals(handle, proposals, new DaveLibrary.SizeT(length), recognizedUserIds, new DaveLibrary.SizeT(recognizedUserIdsLength), commitWelcomeBytes, commitWelcomeBytesLength);
         Pointer commitWelcomeBytesBuffer = commitWelcomeBytes.getValue();
         try
         {
@@ -126,8 +126,8 @@ public class DaveSessionInstance implements Closeable
     public void processProposals(ByteBuffer proposals, String[] recognizedUserIds, Consumer<ByteBuffer> consumer)
     { 
         PointerByReference commitWelcomeBytes = new PointerByReference();
-        LongByReference commitWelcomeBytesLength = new LongByReference();
-        DaveLibrary.INSTANCE.daveSessionProcessProposals(this.handle, proposals, proposals.remaining(), new StringArray(recognizedUserIds), recognizedUserIds.length, commitWelcomeBytes, commitWelcomeBytesLength);
+        DaveLibrary.SizeTByReference commitWelcomeBytesLength = new DaveLibrary.SizeTByReference();
+        DaveLibrary.INSTANCE.daveSessionProcessProposals(this.handle, proposals, new DaveLibrary.SizeT(proposals.remaining()), new StringArray(recognizedUserIds), new DaveLibrary.SizeT(recognizedUserIds.length), commitWelcomeBytes, commitWelcomeBytesLength);
         Pointer commitWelcomeBytesBuffer = commitWelcomeBytes.getValue();
         try
         {
@@ -170,7 +170,7 @@ public class DaveSessionInstance implements Closeable
     public byte[] getMarshalledKeyPackage()
     {
         PointerByReference keyPackage = new PointerByReference();
-        LongByReference length = new LongByReference();
+        DaveLibrary.SizeTByReference length = new DaveLibrary.SizeTByReference();
         DaveLibrary.INSTANCE.daveSessionGetMarshalledKeyPackage(this.handle, keyPackage, length);
         Pointer keyPackageBuffer = keyPackage.getValue();
         try
@@ -185,7 +185,7 @@ public class DaveSessionInstance implements Closeable
     public void getMarshalledKeyPackage(Consumer<ByteBuffer> consumer)
     {
         PointerByReference keyPackage = new PointerByReference();
-        LongByReference length = new LongByReference();
+        DaveLibrary.SizeTByReference length = new DaveLibrary.SizeTByReference();
         DaveLibrary.INSTANCE.daveSessionGetMarshalledKeyPackage(this.handle, keyPackage, length);
         Pointer keyPackageBuffer = keyPackage.getValue();
         try

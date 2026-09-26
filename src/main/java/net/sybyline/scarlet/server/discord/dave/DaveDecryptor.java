@@ -44,18 +44,24 @@ public class DaveDecryptor implements Closeable
 
     public int decrypt(int mediaType, Pointer encryptedFrame, long encryptedFrameLength, Pointer frame, long frameCapacity, LongByReference bytesWritten)
     {
-        return DaveLibrary.INSTANCE.daveDecryptorDecrypt(this.handle, mediaType, encryptedFrame, encryptedFrameLength, frame, frameCapacity, bytesWritten);
+        DaveLibrary.SizeTByReference bytesWrittenNative = new DaveLibrary.SizeTByReference();
+        int result = DaveLibrary.INSTANCE.daveDecryptorDecrypt(this.handle, mediaType, encryptedFrame, new DaveLibrary.SizeT(encryptedFrameLength), frame, new DaveLibrary.SizeT(frameCapacity), bytesWrittenNative);
+        if (bytesWritten != null) bytesWritten.setValue(bytesWrittenNative.getValue());
+        return result;
     }
     public int decrypt(int mediaType, ByteBuffer encryptedFrame, long encryptedFrameLength, ByteBuffer frame, long frameCapacity, LongByReference bytesWritten)
     {
-        return DaveLibrary.INSTANCE.daveDecryptorDecrypt(this.handle, mediaType, encryptedFrame, encryptedFrameLength, frame, frameCapacity, bytesWritten);
+        DaveLibrary.SizeTByReference bytesWrittenNative = new DaveLibrary.SizeTByReference();
+        int result = DaveLibrary.INSTANCE.daveDecryptorDecrypt(this.handle, mediaType, encryptedFrame, new DaveLibrary.SizeT(encryptedFrameLength), frame, new DaveLibrary.SizeT(frameCapacity), bytesWrittenNative);
+        if (bytesWritten != null) bytesWritten.setValue(bytesWrittenNative.getValue());
+        return result;
     }
     public int decrypt(int mediaType, ByteBuffer encryptedFrame, ByteBuffer frame, LongByReference bytesWritten)
     { return this.decrypt(mediaType, encryptedFrame, encryptedFrame.remaining(), frame, frame.remaining(), bytesWritten); }
 
     public long getMaxPlaintextByteSize(int mediaType, long encryptedFrameSize)
     {
-        return DaveLibrary.INSTANCE.daveDecryptorGetMaxPlaintextByteSize(this.handle, mediaType, encryptedFrameSize);
+        return DaveLibrary.INSTANCE.daveDecryptorGetMaxPlaintextByteSize(this.handle, mediaType, new DaveLibrary.SizeT(encryptedFrameSize)).longValue();
     }
 
     public DaveLibrary.DAVEDecryptorStats getStats(int mediaType)

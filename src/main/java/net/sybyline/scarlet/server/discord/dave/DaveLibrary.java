@@ -3,6 +3,7 @@ package net.sybyline.scarlet.server.discord.dave;
 import java.nio.ByteBuffer;
 
 import com.sun.jna.Callback;
+import com.sun.jna.IntegerType;
 import com.sun.jna.Library;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
@@ -27,6 +28,33 @@ public interface DaveLibrary extends Library
             public void setHandle(OH handle)
             { this.getPointer().setPointer(0L, handle == null ? null : handle.getPointer()); }
             protected abstract OH create(Pointer p);
+        }
+    }
+
+
+    /**
+     * C {@code size_t}: 32-bit on 32-bit platforms (i386, arm32, PowerPC), 64-bit on 64-bit ones.
+     * A Java {@code long} is always 64-bit, which misaligns every size_t argument on 32-bit ABIs.
+     */
+    class SizeT extends IntegerType
+    {
+        private static final long serialVersionUID = 1L;
+        public SizeT() { this(0L); }
+        public SizeT(long value) { super(Native.SIZE_T_SIZE, value, true); }
+    }
+    /** C {@code size_t*} out-parameter, sized and read correctly on 32- and 64-bit, either endianness. */
+    class SizeTByReference extends com.sun.jna.ptr.ByReference
+    {
+        public SizeTByReference() { this(0L); }
+        public SizeTByReference(long value) { super(Native.SIZE_T_SIZE); this.setValue(value); }
+        public void setValue(long value)
+        {
+            if (Native.SIZE_T_SIZE == 8) this.getPointer().setLong(0L, value);
+            else this.getPointer().setInt(0L, (int)value);
+        }
+        public long getValue()
+        {
+            return Native.SIZE_T_SIZE == 8 ? this.getPointer().getLong(0L) : (this.getPointer().getInt(0L) & 0xFFFFFFFFL);
         }
     }
 
@@ -112,7 +140,7 @@ public interface DaveLibrary extends Library
     { void callback(String source, String reason, Pointer userData); }
 
     @FunctionalInterface interface DAVEPairwiseFingerprintCallback extends Callback
-    { void callback(Pointer fingerprint, long length, Pointer userData); }
+    { void callback(Pointer fingerprint, SizeT length, Pointer userData); }
 
     @FunctionalInterface interface DAVEEncryptorProtocolVersionChangedCallback extends Callback
     { void callback(Pointer userData); }
@@ -170,21 +198,21 @@ public interface DaveLibrary extends Library
 
     short daveSessionGetProtocolVersion(DAVESessionHandle session);
 
-    void daveSessionGetLastEpochAuthenticator(DAVESessionHandle session, PointerByReference authenticator, LongByReference length);
+    void daveSessionGetLastEpochAuthenticator(DAVESessionHandle session, PointerByReference authenticator, SizeTByReference length);
 
-    void daveSessionSetExternalSender(DAVESessionHandle session, Pointer externalSender, long length);
-    void daveSessionSetExternalSender(DAVESessionHandle session, ByteBuffer externalSender, long length);
+    void daveSessionSetExternalSender(DAVESessionHandle session, Pointer externalSender, SizeT length);
+    void daveSessionSetExternalSender(DAVESessionHandle session, ByteBuffer externalSender, SizeT length);
 
-    void daveSessionProcessProposals(DAVESessionHandle session, Pointer proposals, long length, StringArray recognizedUserIds, long recognizedUserIdsLength, PointerByReference commitWelcomeBytes, LongByReference commitWelcomeBytesLength);
-    void daveSessionProcessProposals(DAVESessionHandle session, ByteBuffer proposals, long length, StringArray recognizedUserIds, long recognizedUserIdsLength, PointerByReference commitWelcomeBytes, LongByReference commitWelcomeBytesLength);
+    void daveSessionProcessProposals(DAVESessionHandle session, Pointer proposals, SizeT length, StringArray recognizedUserIds, SizeT recognizedUserIdsLength, PointerByReference commitWelcomeBytes, SizeTByReference commitWelcomeBytesLength);
+    void daveSessionProcessProposals(DAVESessionHandle session, ByteBuffer proposals, SizeT length, StringArray recognizedUserIds, SizeT recognizedUserIdsLength, PointerByReference commitWelcomeBytes, SizeTByReference commitWelcomeBytesLength);
 
-    DAVECommitResultHandle daveSessionProcessCommit(DAVESessionHandle session, Pointer commit, long length);
-    DAVECommitResultHandle daveSessionProcessCommit(DAVESessionHandle session, ByteBuffer commit, long length);
+    DAVECommitResultHandle daveSessionProcessCommit(DAVESessionHandle session, Pointer commit, SizeT length);
+    DAVECommitResultHandle daveSessionProcessCommit(DAVESessionHandle session, ByteBuffer commit, SizeT length);
 
-    DAVEWelcomeResultHandle daveSessionProcessWelcome(DAVESessionHandle session, Pointer welcome, long length, StringArray recognizedUserIds, long recognizedUserIdsLength);
-    DAVEWelcomeResultHandle daveSessionProcessWelcome(DAVESessionHandle session, ByteBuffer welcome, long length, StringArray recognizedUserIds, long recognizedUserIdsLength);
+    DAVEWelcomeResultHandle daveSessionProcessWelcome(DAVESessionHandle session, Pointer welcome, SizeT length, StringArray recognizedUserIds, SizeT recognizedUserIdsLength);
+    DAVEWelcomeResultHandle daveSessionProcessWelcome(DAVESessionHandle session, ByteBuffer welcome, SizeT length, StringArray recognizedUserIds, SizeT recognizedUserIdsLength);
 
-    void daveSessionGetMarshalledKeyPackage(DAVESessionHandle session, PointerByReference keyPackage, LongByReference length);
+    void daveSessionGetMarshalledKeyPackage(DAVESessionHandle session, PointerByReference keyPackage, SizeTByReference length);
 
     DAVEKeyRatchetHandle daveSessionGetKeyRatchet(DAVESessionHandle session, String userId);
 
@@ -196,15 +224,15 @@ public interface DaveLibrary extends Library
 
     boolean daveCommitResultIsIgnored(DAVECommitResultHandle commitResultHandle);
 
-    void daveCommitResultGetRosterMemberIds(DAVECommitResultHandle commitResultHandle, PointerByReference rosterIds, LongByReference rosterIdsLength);
+    void daveCommitResultGetRosterMemberIds(DAVECommitResultHandle commitResultHandle, PointerByReference rosterIds, SizeTByReference rosterIdsLength);
 
-    void daveCommitResultGetRosterMemberSignature(DAVECommitResultHandle commitResultHandle, long rosterId, PointerByReference signature, LongByReference signatureLength);
+    void daveCommitResultGetRosterMemberSignature(DAVECommitResultHandle commitResultHandle, long rosterId, PointerByReference signature, SizeTByReference signatureLength);
 
     void daveCommitResultDestroy(DAVECommitResultHandle commitResultHandle);
 
-    void daveWelcomeResultGetRosterMemberIds(DAVEWelcomeResultHandle welcomeResultHandle, PointerByReference rosterIds, LongByReference rosterIdsLength);
+    void daveWelcomeResultGetRosterMemberIds(DAVEWelcomeResultHandle welcomeResultHandle, PointerByReference rosterIds, SizeTByReference rosterIdsLength);
 
-    void daveWelcomeResultGetRosterMemberSignature(DAVEWelcomeResultHandle welcomeResultHandle, long rosterId, PointerByReference signature, LongByReference signatureLength);
+    void daveWelcomeResultGetRosterMemberSignature(DAVEWelcomeResultHandle welcomeResultHandle, long rosterId, PointerByReference signature, SizeTByReference signatureLength);
 
     void daveWelcomeResultDestroy(DAVEWelcomeResultHandle welcomeResultHandle);
 
@@ -220,14 +248,14 @@ public interface DaveLibrary extends Library
 
     short daveEncryptorGetProtocolVersion(DAVEEncryptorHandle encryptor);
 
-    long daveEncryptorGetMaxCiphertextByteSize(DAVEEncryptorHandle encryptor, int mediaType, long frameSize);
+    SizeT daveEncryptorGetMaxCiphertextByteSize(DAVEEncryptorHandle encryptor, int mediaType, SizeT frameSize);
 
     boolean daveEncryptorHasKeyRatchet(DAVEEncryptorHandle encryptor);
 
     boolean daveEncryptorIsPassthroughMode(DAVEEncryptorHandle encryptor);
 
-    int daveEncryptorEncrypt(DAVEEncryptorHandle encryptor, int mediaType, int ssrc, Pointer frame, long frameLength, Pointer encryptedFrame, long encryptedFrameCapacity, LongByReference bytesWritten);
-    int daveEncryptorEncrypt(DAVEEncryptorHandle encryptor, int mediaType, int ssrc, ByteBuffer frame, long frameLength, ByteBuffer encryptedFrame, long encryptedFrameCapacity, LongByReference bytesWritten);
+    int daveEncryptorEncrypt(DAVEEncryptorHandle encryptor, int mediaType, int ssrc, Pointer frame, SizeT frameLength, Pointer encryptedFrame, SizeT encryptedFrameCapacity, SizeTByReference bytesWritten);
+    int daveEncryptorEncrypt(DAVEEncryptorHandle encryptor, int mediaType, int ssrc, ByteBuffer frame, SizeT frameLength, ByteBuffer encryptedFrame, SizeT encryptedFrameCapacity, SizeTByReference bytesWritten);
 
     void daveEncryptorSetProtocolVersionChangedCallback(DAVEEncryptorHandle encryptor, DAVEEncryptorProtocolVersionChangedCallback callback);
 
@@ -241,10 +269,10 @@ public interface DaveLibrary extends Library
 
     void daveDecryptorTransitionToPassthroughMode(DAVEDecryptorHandle decryptor, boolean passthroughMode);
 
-    int daveDecryptorDecrypt(DAVEDecryptorHandle decryptor, int mediaType, Pointer encryptedFrame, long encryptedFrameLength, Pointer frame, long frameCapacity, LongByReference bytesWritten);
-    int daveDecryptorDecrypt(DAVEDecryptorHandle decryptor, int mediaType, ByteBuffer encryptedFrame, long encryptedFrameLength, ByteBuffer frame, long frameCapacity, LongByReference bytesWritten);
+    int daveDecryptorDecrypt(DAVEDecryptorHandle decryptor, int mediaType, Pointer encryptedFrame, SizeT encryptedFrameLength, Pointer frame, SizeT frameCapacity, SizeTByReference bytesWritten);
+    int daveDecryptorDecrypt(DAVEDecryptorHandle decryptor, int mediaType, ByteBuffer encryptedFrame, SizeT encryptedFrameLength, ByteBuffer frame, SizeT frameCapacity, SizeTByReference bytesWritten);
 
-    long daveDecryptorGetMaxPlaintextByteSize(DAVEDecryptorHandle decryptor, int mediaType, long encryptedFrameSize);
+    SizeT daveDecryptorGetMaxPlaintextByteSize(DAVEDecryptorHandle decryptor, int mediaType, SizeT encryptedFrameSize);
 
     void daveDecryptorGetStats(DAVEDecryptorHandle decryptor, int mediaType, DAVEDecryptorStats.ByReference stats);
 

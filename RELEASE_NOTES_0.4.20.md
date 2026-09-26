@@ -4,6 +4,33 @@ A feature release focused on **spotting the right people faster** and **reacting
 
 > Version header is provisional (0.4.20) — rename if you'd rather cut this as something else.
 
+## ⚠️ Tagging kicks, bans and warns is fixed (broken in 0.4.19)
+
+**This is the big one.** In 0.4.19, tagging moderation events from Discord was broken for everyone: clicking **Edit tags**, typing a search and submitting was refused. I'm sorry for shipping that.
+
+**What went wrong:** Scarlet only lets a Discord button, menu or pop-up through if its ID is on a built-in default allow-list; anything else is refused unless a server admin grants it with `/scarlet-discord-permissions`. 0.4.19 added tag search with two new IDs — the search pop-up (`tag-search`) and its results menu (`select-tags-search`) — and neither was added to that list.
+
+**In 0.4.20 it just works.** Both are allowed by default, so you don't need to do anything after updating. Moderators still need ban-management / moderator permissions to tag, same as before.
+
+**Still on 0.4.19? Run these once** (as a server admin, replacing `@Moderators` with your moderator role, or use `@everyone` — the tag handlers still check moderator permissions themselves):
+
+```
+/scarlet-discord-permissions set target:@Moderators type:Modal Submit name:tag-search value:Allow
+/scarlet-discord-permissions set target:@Moderators type:String Select name:select-tags-search value:Allow
+```
+
+The same mistake had also locked a few older buttons unless an admin had granted them by hand. They're all allowed by default in 0.4.20:
+
+- the **Timed ban** buttons (6h / 24h / 3d / 7d) and the **Timed ban…** custom-duration pop-up (`timed-ban`, `timed-ban-custom`) — still require ban-management permission
+- the **Accept / Reject / Block** buttons on group join requests (`group-request-accept`, `group-request-reject`, `group-request-block`) — still require invite-management permission
+- the **watched-remove** menu (`watched-remove`) — only ever shown privately to whoever ran the command
+
+On 0.4.19 these can be unlocked the same way (`type:Button Press` for the buttons, `type:Modal Submit` for `timed-ban-custom`'s pop-up, `type:String Select` for `watched-remove`).
+
+**So it can't happen quietly again:** Scarlet now logs a warning at startup naming any button, menu or pop-up that isn't on the default allow-list. A correct build logs none, so a forgotten entry shows up on the first launch of a test build instead of in your servers.
+
+Also fixed alongside it: a tag whose label is longer than 100 characters no longer stops the whole tag menu from appearing (Discord's limit; long labels are now shortened with "…"), and the tag search's "you don't have permission" reply now actually shows instead of erroring.
+
 ## Post-release compatibility and moderation-tag updates
 
 - **VRChat avatar-tag compatibility.** Scarlet now accepts the current VRChat response where `presence.currentAvatarTags` is an array, even though the bundled `vrchatapi-java` 1.21.0 SDK still expects a string. This prevents the current-user response from failing to deserialize while leaving the correctly typed top-level avatar-tags field untouched.

@@ -175,9 +175,9 @@ public class ScarletDiscordUI
             ScarletModerationTags.Tag tag = tags.get(i);
             String label = tag.label != null ? tag.label : tag.value;
             if (tag.description == null || tag.description.isEmpty())
-                builders[i / 25].addOption(label, MiscUtils.maybeEllipsis(100, tag.value));
+                builders[i / 25].addOption(MiscUtils.maybeEllipsis(100, label), MiscUtils.maybeEllipsis(100, tag.value));
             else
-                builders[i / 25].addOption(label, MiscUtils.maybeEllipsis(100, tag.value), MiscUtils.maybeEllipsis(50, tag.description));
+                builders[i / 25].addOption(MiscUtils.maybeEllipsis(100, label), MiscUtils.maybeEllipsis(100, tag.value), MiscUtils.maybeEllipsis(50, tag.description));
         }
 
         ScarletData.AuditEntryMetadata auditEntryMeta = this.discord.scarlet.data.auditEntryMetadata(auditEntryId);
@@ -204,7 +204,7 @@ public class ScarletDiscordUI
     {
         String[] parts = event.getModalId().split(":");
         String auditEntryId = parts[1];
-        if (!this.checkAuditEntryModerationAccess(event.getMember(), event, auditEntryId))
+        if (!this.checkAuditEntryModerationAccess(event.getMember(), hook, auditEntryId))
             return;
 
         String query = event.getValue("tag-search-query") == null ? "" : event.getValue("tag-search-query").getAsString();
@@ -223,9 +223,9 @@ public class ScarletDiscordUI
                    label = tag.label != null ? tag.label : tag.value,
                    desc = tag.description;
             if (desc == null || desc.isEmpty())
-                menu.addOption(label, MiscUtils.maybeEllipsis(100, value));
+                menu.addOption(MiscUtils.maybeEllipsis(100, label), MiscUtils.maybeEllipsis(100, value));
             else
-                menu.addOption(label, MiscUtils.maybeEllipsis(100, value), MiscUtils.maybeEllipsis(50, desc));
+                menu.addOption(MiscUtils.maybeEllipsis(100, label), MiscUtils.maybeEllipsis(100, value), MiscUtils.maybeEllipsis(50, desc));
         }
         menu.setMinValues(0).setMaxValues(menu.getOptions().size());
         String qtrim = query == null ? "" : query.trim();

@@ -55,6 +55,8 @@ public class DPerms
             "edit-tags", "browse-tags",
             "vrchat-user-edit-manager-notes",
             "vrchat-user-ban",
+            "timed-ban", "timed-ban-custom",
+            "group-request-accept", "group-request-reject", "group-request-block",
             "immediate-ban-edit-desc", "immediate-ban-cancel", "immediate-ban-confirm",
             "vrchat-user-unban",
             "event-redact", "event-unredact",
@@ -69,7 +71,8 @@ public class DPerms
             "linkvrc-verify");
         allowDefaults(PermType.STRING_SELECT,
             "pagination-submission",
-            "select-tags", "select-tags-1", "select-tags-2", "select-tags-3", "select-tags-4",
+            "select-tags", "select-tags-1", "select-tags-2", "select-tags-3", "select-tags-4", "select-tags-search",
+            "watched-remove",
             "immediate-ban-select-tags",
             "new-instance-region", "new-instance-access-type", "new-instance-roles", "new-instance-flags",
             "set-audit-aux-webhooks",
@@ -78,6 +81,8 @@ public class DPerms
             "pagination-select",
             "watched-group-set-notes", "watched-entity-set-notes",
             "vrchat-user-edit-manager-notes",
+            "tag-search",
+            "timed-ban-custom",
             "immediate-ban-edit-desc",
             "vrchat-user-ban-multi", "vrchat-user-unban-multi",
             "new-instance-modal",
@@ -565,6 +570,21 @@ public class DPerms
     {
         Boolean value = this.get(permType, member, perm);
         return value == null ? (fallback || this.isDefaultAllowedInteractionOp(permType, perm)) : value.booleanValue();
+    }
+    /**
+     * Returns the given interaction ids that are NOT on the default allow-list for {@code permType}.
+     * Such ids are refused for everyone until an admin grants them explicitly, which is almost never
+     * intended for a newly added button/menu/modal - callers log these at startup so a forgotten
+     * entry is caught before release instead of by users.
+     */
+    public List<String> notDefaultAllowed(PermType permType, String... ops)
+    {
+        List<String> missing = new ArrayList<>();
+        for (String op : ops)
+            if (!this.isDefaultAllowedInteractionOp(permType, op))
+                missing.add(op);
+        Collections.sort(missing);
+        return missing;
     }
     boolean isDefaultAllowedInteractionOp(PermType permType, String perm)
     {

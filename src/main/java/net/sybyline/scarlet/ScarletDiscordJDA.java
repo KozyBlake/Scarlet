@@ -244,13 +244,29 @@ public class ScarletDiscordJDA implements ScarletDiscord
             else if (Features.DAVE_ENABLED)
                 LOG.warn("DAVE session factory unavailable on {}; continuing without Discord voice E2EE support",
                     net.sybyline.scarlet.util.Platform.describe());
-            jda = JDABuilder
+            JDABuilder jdaBuilder = JDABuilder
             .createDefault(token0)
             .enableIntents(GatewayIntent.MESSAGE_CONTENT, GatewayIntent.GUILD_MEMBERS)
             .addEventListeners(new JDAEvents())
             .enableCache(CacheFlag.VOICE_STATE)
-            .setAudioModuleConfig(audioModuleConfig)
-            .build();
+            .setAudioModuleConfig(audioModuleConfig);
+            if (net.sybyline.scarlet.util.Platform.isPowerPC() && net.sybyline.scarlet.util.Platform.isPpcEdition())
+            {
+                // PowerPC edition (e.g. a Wii, no JIT): every gateway event is parsed in the bytecode
+                // interpreter, and a busy server starves the heartbeat. Stop Discord sending event
+                // types Scarlet never handles (no listeners exist for typing, reactions, emoji/sticker
+                // updates, AutoMod or polls). Nothing Scarlet uses is removed.
+                jdaBuilder
+                    .disableIntents(
+                        GatewayIntent.GUILD_MESSAGE_TYPING, GatewayIntent.DIRECT_MESSAGE_TYPING,
+                        GatewayIntent.GUILD_MESSAGE_REACTIONS, GatewayIntent.DIRECT_MESSAGE_REACTIONS,
+                        GatewayIntent.GUILD_EXPRESSIONS,
+                        GatewayIntent.AUTO_MODERATION_CONFIGURATION, GatewayIntent.AUTO_MODERATION_EXECUTION,
+                        GatewayIntent.GUILD_MESSAGE_POLLS, GatewayIntent.DIRECT_MESSAGE_POLLS)
+                    .disableCache(CacheFlag.EMOJI, CacheFlag.STICKER);
+                LOG.warn("PowerPC edition: not subscribing to Discord typing/reaction/emoji/sticker/AutoMod/poll events (Scarlet has no handlers for them)");
+            }
+            jda = jdaBuilder.build();
         }
         catch (InvalidTokenException ex)
         {
@@ -481,6 +497,11 @@ public class ScarletDiscordJDA implements ScarletDiscord
                                   resetAvatarSearchProviders;
     final ScarletSettings.FileValued<String[]> avatarSearchProviders;
     final DInteractions interactions;
+    void warnNotDefaultAllowed(DPerms.PermType permType, String... ids)
+    {
+        for (String id : this.perms.notDefaultAllowed(permType, ids))
+            LOG.warn("Discord interaction `"+id+"` ("+permType+") is not in DPerms' default allow-list: it will be refused for everyone unless an admin grants it with /scarlet-discord-permissions");
+    }
     final DPerms perms;
     final Map<String, InstanceCreation> instanceCreation = new ConcurrentHashMap<>();
     final Map<String, Map<String, Integer>> guildInviteUses = new ConcurrentHashMap<>();
@@ -505,6 +526,9 @@ public class ScarletDiscordJDA implements ScarletDiscord
 
     void init()
     {
+        if (this.jda != null && (this.guildSf == null || this.guildSf.trim().isEmpty()))
+            throw new IllegalStateException("Discord bot token is set but no guild snowflake is configured: set \"guildSf\" in discord_bot.json to your server ID "
+                + "(or clear the bot token for staff mode). Previously this failed later with JDA's cryptic 'ID may not be empty'.");
         this.perms.getGuildSnowflakesMutable().add(this.guildSf);
         this.discordCommands = new ScarletDiscordCommands(this);
         this.discordUI = new ScarletDiscordUI(this);
@@ -513,6 +537,12 @@ public class ScarletDiscordJDA implements ScarletDiscord
             this.perms.registerSuggestion(DPerms.PermType.STRING_SELECT, this.interactions.getStringSelectIds());
             this.perms.registerSuggestion(DPerms.PermType.ENTITY_SELECT, this.interactions.getEntitySelectIds());
             this.perms.registerSuggestion(DPerms.PermType.MODAL_SUBMIT, this.interactions.getModalSubmitIds());
+            // Any registered interaction missing from DPerms' default allow-list is silently refused for
+            // everyone without an explicit grant. Surface it loudly so it's caught before a release.
+            this.warnNotDefaultAllowed(DPerms.PermType.BUTTON_PRESS, this.interactions.getButtonClickIds());
+            this.warnNotDefaultAllowed(DPerms.PermType.STRING_SELECT, this.interactions.getStringSelectIds());
+            this.warnNotDefaultAllowed(DPerms.PermType.ENTITY_SELECT, this.interactions.getEntitySelectIds());
+            this.warnNotDefaultAllowed(DPerms.PermType.MODAL_SUBMIT, this.interactions.getModalSubmitIds());
         }
         if (this.jda == null)
         {
@@ -1225,9 +1255,14 @@ public class ScarletDiscordJDA implements ScarletDiscord
             }, null)
         );
         
-        if (spec.guildSf == null)
+        if (spec.guildSf == null || (spec.guildSf.trim().isEmpty() && token0 != null && !token0.isEmpty()))
         {
-            spec.guildSf = this.scarlet.settings.requireInput("Discord guild snowflake (leave empty for staff mode)", false);
+            // A blank guild only makes sense in staff mode (no token). With a token set, ask again
+            // instead of letting JDA fail later with "ID may not be empty" (headless has no Reset button).
+            spec.guildSf = this.scarlet.settings.requireInput(token0 != null && !token0.isEmpty()
+                ? "Discord guild snowflake (required: a bot token is set)"
+                : "Discord guild snowflake (leave empty for staff mode)", false);
+            if (spec.guildSf != null) spec.guildSf = spec.guildSf.trim();
             save = true;
         }
         this.scarlet.settings.new FileValuedVoid("Discord guild snowflake", "Reset", () -> 
@@ -1577,11 +1612,18 @@ public class ScarletDiscordJDA implements ScarletDiscord
         @Override
         public void onSlashCommandInteraction(SlashCommandInteractionEvent event)
         {
+            final boolean ppcTiming = net.sybyline.scarlet.util.Platform.isPowerPC() && net.sybyline.scarlet.util.Platform.isPpcEdition();
+            final long ppcArrived = System.currentTimeMillis();
+            if (ppcTiming)
+                LOG.info("PPC timing: /{} reached Scarlet {} ms after Discord created it (Discord allows 3000 ms to acknowledge; local clock skew not corrected)",
+                    event.getName(), Long.valueOf(ppcArrived - event.getTimeCreated().toInstant().toEpochMilli()));
             if (!ScarletDiscordJDA.this.perms.check(event))
             {
                 this.interactionPerms(event);
                 return;
             }
+            if (ppcTiming)
+                LOG.info("PPC timing: /{} permission check took {} ms", event.getName(), Long.valueOf(System.currentTimeMillis() - ppcArrived));
             if (ScarletDiscordJDA.this.interactions.handle(event))
                 return;
             if ("scarlet-discord-permissions".equals(event.getName())) try
