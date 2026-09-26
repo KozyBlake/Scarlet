@@ -32,7 +32,7 @@ Scarlet does talk to a small number of outside services — VRChat and Discord b
 
 ## Highlights
 
-- **Cross-platform.** Runs on Windows and Linux (this is the Linux-compatible fork). The desktop app is Java/Swing; the VRChat-log features work when VRChat runs on the same machine, including under Proton/Wine on Linux.
+- **Cross-platform.** Runs on Windows and Linux (this is the Linux-compatible fork). There is also an **experimental PowerPC edition** (`scarlet-<version>-ppc.jar`) for 32-bit PowerPC Linux; it is heavily untested and has so far only been run on a Nintendo Wii running Wii-Linux. The desktop app is Java/Swing; the VRChat-log features work when VRChat runs on the same machine, including under Proton/Wine on Linux.
 - **Near-instant moderation posts.** Moderation actions (Discord command, UI, or bulk-ban queue) and in-game warns/kicks/bans post to Discord within seconds via burst polling, then settle back to the idle interval.
 - **Watched users, groups, and avatars** with per-category advisories, spoken TTS callouts, native desktop notifications, and optional mobile push — each independently toggleable.
 - **Avatar statuses with or without VRChat's `[API]` launch options.** When the launch options aren't set, Scarlet reconstructs avatar/performance info through avatar-search databases plus current-avatar-image confirmation and the VRChat API, and tells you honestly when something can't be resolved.
@@ -470,7 +470,7 @@ Scarlet can generate a link that will autopopulate the fields of the VRChat Help
 ### Training mode
 
 - Enable **Settings -> Training** to unlock an event simulator (Edit -> *Simulate event (training)...*, or the `simulate` CLI command) that fires realistic events on demand — so new moderators can learn on a screenshare instead of a live incident, and nobody has to actually join a bad group.
-- The simulator can also fire **moderator warn / kick / ban** events. Each produces a genuine moderation post and thread with the real **Edit tags**, **Browse tags**, **Edit description**, **Ban / Unban** and **Timed ban** buttons, so a trainer (or a maintainer testing a build) can exercise the whole Discord tagging workflow from a moderator's account without banning anyone. These posts go **only** to the training channel set with `set-training-channel` (nothing is posted if none is set), Ban / Unban / Timed ban on a training user run the real permission checks and then reply with a simulated result without calling VRChat, and drills never appear in moderation summaries (those are counted from VRChat's own audit log).
+- The simulator can also fire **moderator warn / kick / ban** events. Each produces a genuine moderation post and thread with the real **Edit tags**, **Edit description**, **Ban / Unban** and **Timed ban** buttons (and `/tag` works in its thread), so a trainer (or a maintainer testing a build) can exercise the whole Discord tagging workflow from a moderator's account without banning anyone. These posts go **only** to the training channel set with `set-training-channel` (nothing is posted if none is set), Ban / Unban / Timed ban on a training user run the real permission checks and then reply with a simulated result without calling VRChat, and drills never appear in moderation summaries (those are counted from VRChat's own audit log).
 - Simulated events run the **real** pipeline — the player-list row, TTS callout, desktop/mobile notification, and a genuine Discord post with its ban/unban buttons — so the whole workflow, including tagging in Discord, is practiceable.
 - While training, Scarlet behaves as a **separate client**: the real instance is parked and kept updated in the background, actions on training players show real success feedback but make no VRChat call, and turning training off restores the live instance instantly. Everything training-related is marked `[TRAINING]` and, with `set-training-channel`, posts to its own channel — a drill can never be mistaken for a real record.
 
@@ -480,6 +480,7 @@ Scarlet can generate a link that will autopopulate the fields of the VRChat Help
 
 - A background watchdog turns Scarlet's silent failure modes into loud, recoverable ones: if the VRChat log goes quiet while the game is running, or the VRChat session expires mid-run, Scarlet raises a popup, attempts unattended re-login, and (with `set-ops-alert-channel`) posts a Discord health alert.
 - Data files (watched lists, settings, Discord config, moderation tags, ...) are written crash-safely and keep the last several dated backups in a `backups/` folder beside each file, so a crash mid-write can't lose a blocklist.
+- After downtime, Scarlet catches up on the missed audit log quickly and at most `audit_catchup_max_days` back (default 14, see [SETTINGS.md](SETTINGS.md)), so live moderation posts resume within minutes rather than replaying months of old events.
 - The **Diagnostics** view (Help -> Scarlet: Diagnostics...) shows connectivity, rate-limit, and avatar-provider status without making extra API calls.
 
 ---

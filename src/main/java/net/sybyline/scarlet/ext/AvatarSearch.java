@@ -54,6 +54,11 @@ public interface AvatarSearch
     // requests from creators. All of these are queried politely: cached per
     // search, identified by User-Agent, and backed off on 429/timeout/garbage.
     String
+        // avtrDB (restored in 0.4.20): it had been rejecting datacenter/VPN IPs; its maintainer now
+        // lets requests identified as Scarlet (our User-Agent) through, so it's a text-search
+        // provider again. Deliberately NOT used for author lookup / "search by picture", which were
+        // rebuilt without it (see AUTHOR_LOOKUP_URL_ROOTS and BY_IMAGE_URL_ROOTS).
+        URL_ROOT_AVTRDB = "https://api.avtrdb.com/v2/avatar/search/vrcx",
         URL_ROOT_NEKOSUNEVR = AvatarSearch_VRCDS.SEARCH_ROOT+"/vrcx_search",
         URL_ROOT_VRCDB = "https://vrcx.vrcdb.com/avatars/Avatar/VRCX",
         URL_ROOT_WORLDBALANCER = "https://avatarwbvrcxsearch.worldbalancer.com/vrcx_search",
@@ -61,6 +66,7 @@ public interface AvatarSearch
         URL_ROOT_KITSUNEDB = "https://avtr.fumikoecho.net/api/integrations/avatars/vrcx",
         URL_ROOTS[] =
         {
+            URL_ROOT_AVTRDB,
             URL_ROOT_NEKOSUNEVR,
             URL_ROOT_VRCDB,
             URL_ROOT_WORLDBALANCER,
@@ -749,11 +755,11 @@ public interface AvatarSearch
 
     interface ByImage
     {
-        // avtrDB was the only by-image (reverse-image / "search by picture")
-        // provider, and it now requires an API key, so it was removed. No
-        // replacement is wired yet; by-image search returns no results until one
-        // is. Left as an explicit empty list rather than deleted so a new
-        // provider can be dropped straight in.
+        // No provider answers ?fileId= directly any more: "search by picture" resolves the
+        // image's owner through VRChat's file API and does an author lookup instead (see
+        // AUTHOR_LOOKUP_URL_ROOTS). avtrDB is back for name search only and is intentionally
+        // not listed here. Left as an explicit empty list so a by-image provider can be
+        // dropped straight in.
         String BY_IMAGE_URL_ROOTS[] =
         {
         };
@@ -857,7 +863,10 @@ public interface AvatarSearch
         // only the avatars whose own image references the same file id.
 
         /** Providers queried for author lookups; same endpoints as text search. */
-        String[] AUTHOR_LOOKUP_URL_ROOTS = URL_ROOTS;
+        // Every text-search provider except avtrDB, which is restored for name search only.
+        String[] AUTHOR_LOOKUP_URL_ROOTS = java.util.Arrays.stream(URL_ROOTS)
+            .filter(url -> !URL_ROOT_AVTRDB.equals(url))
+            .toArray(String[]::new);
 
         /** Backoff/state key for a provider's author-lookup mode, kept separate from its text-search state so one can't block the other. */
         static String authorStateKey(String urlRoot)

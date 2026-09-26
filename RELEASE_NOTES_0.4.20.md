@@ -12,7 +12,7 @@ A feature release focused on **spotting the right people faster** and **reacting
 
 **Tagging in 0.4.20:** **Edit tags** is back to the familiar dropdowns of every tag with descriptions (split into groups of 25, Discord's per-dropdown limit; type in a dropdown to filter it). To search **all** tags at once, run **`/tag add`** inside the moderation thread: as you type, it narrows every tag down to the matches, with descriptions, and you can add up to five in one go (`/tag remove` works the same way). The 0.4.19 search pop-up is gone.
 
-**In 0.4.20 it just works.** Both are allowed by default, so you don't need to do anything after updating. Moderators still need ban-management / moderator permissions to tag, same as before.
+**In 0.4.20 it just works.** Both are allowed by default, so you don't need to do anything after updating. **Who can tag is now simpler:** if your Discord role can **post in the moderation thread**, you can tag that event. Your existing staff role and channel permissions decide it, with nothing to grant in Scarlet. Before, tagging needed ban-level access, so instance hosts who warn and kick got "You do not have permission to modify audit event moderation state." even on their own kicks. Also allowed: full moderators, the moderator who took the action (via a linked VRChat account), anyone with VRChat instance-moderation permission, and a new `groupex-tags-edit` override. Read-only viewers of a moderation channel still can't tag, and redacting still needs full moderation access. Keep your moderation channels hidden or read-only for non-staff.
 
 **Still on 0.4.19? Run these once** (as a server admin, replacing `@Moderators` with your moderator role, or use `@everyone` — the tag handlers still check moderator permissions themselves):
 
@@ -38,10 +38,34 @@ Also fixed alongside it: a tag whose label is longer than 100 characters no long
 ## Post-release compatibility and moderation-tag updates
 
 - **VRChat avatar-tag compatibility.** Scarlet now accepts the current VRChat response where `presence.currentAvatarTags` is an array, even though the bundled `vrchatapi-java` 1.21.0 SDK still expects a string. This prevents the current-user response from failing to deserialize while leaving the correctly typed top-level avatar-tags field untouched.
-- **Optional moderation-tag browser.** **Edit tags** remains the existing search-first flow. A new **Browse tags** button is available alongside it for moderators who prefer to scan all configured tags; it splits up to 125 tags into Discord's supported five 25-option menus and preserves selections already on the audit entry.
+- **Moderation-tag browser.** Chloethecat's browse-all-tags picker (every tag split into Discord's five 25-option menus, with the entry's existing tags preselected) is now what **Edit tags** opens by default, replacing the 0.4.19 search pop-up. The separate Browse tags button is folded into it (it still works on older posts); searching across all tags is done with `/tag add`.
 - **Desktop build workflow.** Pushes to `main` that affect source, the Maven project, vendored libdave, or the workflow now build Scarlet with Java 21 and attach the desktop JAR as a 30-day GitHub Actions artifact.
 
-These contributions are adapted from [Chloethecat's Scarlet fork](https://github.com/Chloethecat/Scarlet), with the search-first tag editor intentionally retained as the default experience.
+These contributions are adapted from [Chloethecat's Scarlet fork](https://github.com/Chloethecat/Scarlet); the tag browser is now the default Edit tags experience.
+
+## PowerPC support (experimental)
+
+Scarlet now has a **PowerPC edition** for 32-bit PowerPC Linux: `scarlet-0.4.20-ppc.jar`, published next to the normal jar. It's **heavily untested**; so far it has been run on exactly one machine, a Nintendo Wii running Wii-Linux. Yes, really.
+
+What's different in the PowerPC edition:
+
+- It bundles a PowerPC build of the Discord voice (DAVE) library.
+- These CPUs have no Java JIT, so everything runs slowly. To keep up, it skips the startup security self-tests (they'd take many minutes), and asks Discord not to send event types Scarlet never uses (typing, reactions and so on).
+- The local credential store uses fewer key-derivation rounds. Its key is a random key file, so stretching it adds nothing; but **secrets saved by the PowerPC edition can only be read by the PowerPC edition**, so you can't move that data folder to a normal install and keep your saved logins.
+
+Expect it to be slow and to have rough edges. If you try it, reports are very welcome. Everyone else: use the normal jar, which is unchanged and contains no PowerPC files.
+
+## avtrDB is back
+
+avtrDB is an avatar-search provider again, alongside nekosunevr, VRCDB, WorldBalancer, PAW and KitsuneDB. It had been dropped because it was rejecting requests from datacenter IPs and VPNs; its maintainer now lets Scarlet's requests through. It's used for avatar name lookups; "search by picture" keeps the rebuilt method described further down. If you use the default provider list there's nothing to do. If you set a custom list, tick avtrDB in the avatar search providers settings.
+
+## Back online faster after downtime
+
+After Scarlet had been offline, it caught up on the missed audit log one day per poll (once a minute) with no limit, so an install idle for months spent hours replaying old events before live kicks, bans and warns posted again. Catch-up now goes back at most **`audit_catchup_max_days`** (new setting, default 14, range 1-90; anything older is skipped with a warning in the log) and polls every 10 seconds while behind, so a two-week backlog clears in a few minutes.
+
+## New commands show up without extra steps
+
+Scarlet only synced its slash commands with Discord when the version number changed. It now checks on every start and sends only commands that are new or changed. If a new command like `/tag` doesn't appear right away, press Ctrl+R in Discord (or restart the app).
 
 ## Trust ranks
 
@@ -124,7 +148,7 @@ Now a failing provider logs **one** warning when it first goes down and **one** 
 Two concrete results from the reported logs:
 
 - **`vrcx.avtr.zip` is removed.** Its hostname no longer resolves, so it could only ever fail — it was the biggest single source of the spam.
-- **avtrDB is removed entirely** — text search *and* reverse-image — because its search was rejecting requests from datacenter IPs and likely VPNs. Text search continues on the five remaining providers, and **"search by picture" was rebuilt without avtrDB** (next section) rather than left broken.
+- **avtrDB no longer powers "search by picture"**, because at the time its search was rejecting requests from datacenter IPs and likely VPNs, so **"search by picture" was rebuilt without it** (next section). avtrDB is **back for avatar name search** now that its maintainer lets Scarlet's requests through (see below).
 
 ## Reverse-image search, rebuilt dependency-free
 
@@ -136,7 +160,9 @@ avtrDB was the only provider that answered "here's an avatar image, which avatar
 
 No new API key, no new dependency, and nothing that can quietly die on you the way `avtr.zip` did. Author-lookup state is tracked **separately** from text search, so if a provider doesn't support author lookup it backs off quietly for that mode without touching its text search. If the owner can't be resolved or no provider indexes them, it returns no match and falls back to name search — exactly as before.
 
-> **Correction:** An earlier version of these notes said avtrDB required an API key. That was a misunderstanding by KozyBlake and Claude. The avtrDB maintainer confirmed that datacenter IPs (and likely VPNs) were being blocked and has since provided a bypass for Scarlet users. avtrDB can be brought back if the Scarlet community asks for it.
+> **Correction:** An earlier version of these notes said avtrDB required an API key. That was a misunderstanding by KozyBlake and Claude. The avtrDB maintainer confirmed that datacenter IPs (and likely VPNs) were being blocked, and now lets requests identified as Scarlet through even from those networks.
+>
+> **avtrDB is back as an avatar name-search provider** in this release, alongside the other five. It isn't used for "search by picture", which keeps the rebuilt method above. If you use the default provider list you don't need to do anything; if you set a custom list, tick avtrDB in the avatar search providers settings.
 
 ## Built on the VRCX avatar-search ecosystem
 
