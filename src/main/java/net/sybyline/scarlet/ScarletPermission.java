@@ -9,6 +9,7 @@ public enum ScarletPermission implements DEnum.DEnumString<ScarletPermission>
 {
 
     GROUPEX_BANS_MANAGE("groupex-bans-manage", "Override: Manage Bans"),
+    GROUPEX_TAGS_EDIT("groupex-tags-edit", "Override: Tag and describe moderation events"),
     ;
 
     ScarletPermission(String id, String title)

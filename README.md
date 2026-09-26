@@ -66,6 +66,11 @@ Arguments in `<>` are required and `[]` optional. Most commands require staff pe
   Removes a custom moderation tag. (Replaces the old `delete-moderation-tag`.)  
   Example: `/moderation-tags delete "trolling"`
 
+- **`tag add <tag> [tag-2] [tag-3] [tag-4] [tag-5]`** / **`tag remove <tag> [tag-2…tag-5]`**  
+  Run inside a moderation event's thread to add or remove tags on that kick, ban or warn. Each tag option searches **every** moderation tag as you type (name, id or description, typos allowed) and shows its description, so you don't need to know the tags by heart or scroll through several dropdowns. The **Edit tags** button on the post still opens all tags as dropdowns.  
+  Example: `/tag add tag:harassment tag-2:mic-spam`
+  **Who can tag:** anyone whose Discord role can **send messages in the moderation thread** — so your existing staff role and channel permissions decide, with nothing to set up in Scarlet. (Also: full moderators, the moderator who took the action via their linked VRChat account, VRChat instance moderators, and the `groupex-tags-edit` override.) Keep moderation channels read-only or hidden for non-staff.
+
 - **`vrchat-user-info <vrchat-user:string>`**  
   Lists internal and audit information for a specific VRChat user.  
   Example: `/vrchat-user-info "usr_00000000-0000-0000-0000-000000000000"`
@@ -465,6 +470,7 @@ Scarlet can generate a link that will autopopulate the fields of the VRChat Help
 ### Training mode
 
 - Enable **Settings -> Training** to unlock an event simulator (Edit -> *Simulate event (training)...*, or the `simulate` CLI command) that fires realistic events on demand — so new moderators can learn on a screenshare instead of a live incident, and nobody has to actually join a bad group.
+- The simulator can also fire **moderator warn / kick / ban** events. Each produces a genuine moderation post and thread with the real **Edit tags**, **Browse tags**, **Edit description**, **Ban / Unban** and **Timed ban** buttons, so a trainer (or a maintainer testing a build) can exercise the whole Discord tagging workflow from a moderator's account without banning anyone. These posts go **only** to the training channel set with `set-training-channel` (nothing is posted if none is set), Ban / Unban / Timed ban on a training user run the real permission checks and then reply with a simulated result without calling VRChat, and drills never appear in moderation summaries (those are counted from VRChat's own audit log).
 - Simulated events run the **real** pipeline — the player-list row, TTS callout, desktop/mobile notification, and a genuine Discord post with its ban/unban buttons — so the whole workflow, including tagging in Discord, is practiceable.
 - While training, Scarlet behaves as a **separate client**: the real instance is parked and kept updated in the background, actions on training players show real success feedback but make no VRChat call, and turning training off restores the live instance instantly. Everything training-related is marked `[TRAINING]` and, with `set-training-channel`, posts to its own channel — a drill can never be mistaken for a real record.
 

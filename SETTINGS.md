@@ -479,6 +479,11 @@ General settings for Scarlet:
 
     // The time, in seconds, between successive polls for audit events (10-300 inclusive)
     "audit_polling_interval": 60,
+
+    // After Scarlet has been offline, how many days of missed audit log it catches up on (1-90 inclusive).
+    // Anything older is skipped with a warning in the log, so a long-idle install doesn't spend hours
+    // replaying months of old events before live moderation posts resume.
+    "audit_catchup_max_days": 14,
     
     // Whether to only list staff with activity on a Moderation Summary
     "moderation_summary_only_activity": false,

@@ -183,8 +183,9 @@ public interface ScarletDiscord extends Closeable
         
         ScarletData.UserMetadata actorMeta = scarlet.data.userMetadata(actorId),
                                  targetMeta = scarlet.data.userMetadata(targetId);
-        User actor = scarlet.vrc.getUser(actorId),
-             target = scarlet.vrc.getUser(targetId);
+        // Training (simulated) users don't exist on VRChat: skip the lookup rather than spend API calls on a 404.
+        User actor = ScarletSimulation.isTrainingId(actorId) ? null : scarlet.vrc.getUser(actorId),
+             target = ScarletSimulation.isTrainingId(targetId) ? null : scarlet.vrc.getUser(targetId);
         
         if (targetMeta == null)
             targetMeta = new ScarletData.UserMetadata();

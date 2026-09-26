@@ -10,6 +10,8 @@ A feature release focused on **spotting the right people faster** and **reacting
 
 **What went wrong:** Scarlet only lets a Discord button, menu or pop-up through if its ID is on a built-in default allow-list; anything else is refused unless a server admin grants it with `/scarlet-discord-permissions`. 0.4.19 added tag search with two new IDs — the search pop-up (`tag-search`) and its results menu (`select-tags-search`) — and neither was added to that list.
 
+**Tagging in 0.4.20:** **Edit tags** is back to the familiar dropdowns of every tag with descriptions (split into groups of 25, Discord's per-dropdown limit; type in a dropdown to filter it). To search **all** tags at once, run **`/tag add`** inside the moderation thread: as you type, it narrows every tag down to the matches, with descriptions, and you can add up to five in one go (`/tag remove` works the same way). The 0.4.19 search pop-up is gone.
+
 **In 0.4.20 it just works.** Both are allowed by default, so you don't need to do anything after updating. Moderators still need ban-management / moderator permissions to tag, same as before.
 
 **Still on 0.4.19? Run these once** (as a server admin, replacing `@Moderators` with your moderator role, or use `@everyone` — the tag handlers still check moderator permissions themselves):
@@ -26,6 +28,8 @@ The same mistake had also locked a few older buttons unless an admin had granted
 - the **watched-remove** menu (`watched-remove`) — only ever shown privately to whoever ran the command
 
 On 0.4.19 these can be unlocked the same way (`type:Button Press` for the buttons, `type:Modal Submit` for `timed-ban-custom`'s pop-up, `type:String Select` for `watched-remove`).
+
+**Testing it yourself, even on a tiny server:** the training simulator (Settings → Training, then Edit → *Simulate event (training)…*) now has **Moderator warns / kicks / bans player** events. Each one creates a real moderation post, with Edit tags and the Timed ban buttons (and `/tag` works in its thread), in your training channel (`/set-training-channel`). No real moderation action ever happens. Click through it from a moderator account that is **not** a server admin or owner: admins and owners skip Scarlet's interaction permission check entirely, which is exactly how this bug went unnoticed.
 
 **So it can't happen quietly again:** Scarlet now logs a warning at startup naming any button, menu or pop-up that isn't on the default allow-list. A correct build logs none, so a forgotten entry shows up on the first launch of a test build instead of in your servers.
 

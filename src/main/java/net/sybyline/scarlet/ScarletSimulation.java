@@ -35,6 +35,9 @@ public final class ScarletSimulation
     /** The id namespace simulated players live in — the canonical "is this a drill?" check. */
     public static final String TRAINING_ID_PREFIX = "usr_training-";
 
+    /** The audit-entry id namespace for simulated moderation actions. */
+    public static final String TRAINING_AUDIT_ID_PREFIX = "gaud_training-";
+
     /** True if {@code id} belongs to a simulated (training) player rather than a real one. */
     public static boolean isTrainingId(String id)
     {
@@ -55,6 +58,9 @@ public final class ScarletSimulation
         WATCHED_AVATAR      ("avatar",   "sim.kind.watchedAvatar"),
         VTK                 ("vtk",      "sim.kind.vtk"),
         LEAVE               ("leave",    "sim.kind.leave"),
+        MOD_WARN            ("warn",     "sim.kind.modWarn"),
+        MOD_KICK            ("kick",     "sim.kind.modKick"),
+        MOD_BAN             ("ban",      "sim.kind.modBan"),
         ;
         public final String cliAlias;
         public final String i18nKey;
@@ -204,6 +210,49 @@ public final class ScarletSimulation
             scarlet.mobile.notifyVoteToKick(name, userId, null, null, location);
             scarlet.discord.emitExtendedVtkInitiated(scarlet, now, location, userId, taggedName, null, null);
             scarlet.data.customEvent_new(GroupAuditTypeEx.VTK_START, odt, null, null, userId, taggedName);
+            break;
+        }
+        case MOD_WARN:
+        case MOD_KICK:
+        case MOD_BAN:
+        {
+            // A simulated group moderation action, fed through the REAL audit-entry pipeline so the
+            // Discord post, its thread and every button on it (Edit tags, Browse tags, Edit description,
+            // Ban/Unban, Timed ban...) behave exactly as they would live. Safety boundaries:
+            //  - ids live in the training namespaces (gaud_training-/usr_training-), so the post is routed
+            //    ONLY to the training channel (ScarletDiscordJDA.condEmit), never the real moderation log;
+            //  - Ban/Unban/Timed-ban on a training user run the real permission checks, then short-circuit
+            //    with a "simulated" reply and never call VRChat (ScarletDiscordUI);
+            //  - mod summaries/history counts come from VRChat's own audit log, so drills never appear there.
+            GroupAuditType type = kind == Kind.MOD_WARN ? GroupAuditType.INSTANCE_WARN
+                                : kind == Kind.MOD_KICK ? GroupAuditType.INSTANCE_KICK
+                                : GroupAuditType.USER_BAN;
+            String verb = kind == Kind.MOD_WARN ? "warned" : kind == Kind.MOD_KICK ? "kicked" : "banned";
+            io.github.vrchatapi.model.GroupAuditLogEntry entry = new io.github.vrchatapi.model.GroupAuditLogEntry();
+            entry.setId(TRAINING_AUDIT_ID_PREFIX + Long.toUnsignedString(System.nanoTime(), 16));
+            entry.setEventType(type.id);
+            entry.setGroupId(scarlet.vrc.groupId != null ? scarlet.vrc.groupId : "grp_training");
+            entry.setActorId(TRAINING_ID_PREFIX + "trainer");
+            entry.setActorDisplayName(TRAINING_PREFIX + "Trainer");
+            entry.setTargetId(userId);
+            entry.setCreatedAt(odt);
+            entry.setDescription(MiscUtils.maybeEllipsis(100, TRAINING_PREFIX + name + " was " + verb));
+            scarlet.exec.execute(() ->
+            {
+                try
+                {
+                    scarlet.discord.process(scarlet, entry);
+                }
+                catch (Throwable ex)
+                {
+                    Scarlet.LOG.error("Simulated moderation event failed", ex);
+                }
+            });
+            if (!(scarlet.discord instanceof ScarletDiscordJDA) || MiscUtils.blank(((ScarletDiscordJDA)scarlet.discord).trainingChannelSf))
+            {
+                Scarlet.LOG.info("SIMULATED training event: {} name=`{}` ({})", kind, name, userId);
+                return I18n.tr("sim.needTrainingChannel");
+            }
             break;
         }
         case LEAVE:

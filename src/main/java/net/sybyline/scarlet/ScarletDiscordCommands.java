@@ -444,6 +444,103 @@ public class ScarletDiscordCommands
         }
     }
 
+    // tag
+
+    /**
+     * {@code /tag add|remove} inside a moderation event's thread. Each tag option autocompletes
+     * live across EVERY moderation tag (label, id and description, typo-tolerant), so a moderator
+     * can type "harass" and see only the harassment tags - no 25-per-dropdown limit in the way.
+     */
+    @SlashCmd("tag")
+    @Desc("Tag the moderation event this thread belongs to")
+    @DefaultPerms(Permission.USE_APPLICATION_COMMANDS)
+    public class Tag_
+    {
+        public final SlashOption<String> _tag1 = SlashOption.ofString("tag", "Start typing to search every moderation tag", true, null, this::_complete);
+        public final SlashOption<String> _tag2 = SlashOption.ofString("tag-2", "Another tag (optional)", false, null, this::_complete);
+        public final SlashOption<String> _tag3 = SlashOption.ofString("tag-3", "Another tag (optional)", false, null, this::_complete);
+        public final SlashOption<String> _tag4 = SlashOption.ofString("tag-4", "Another tag (optional)", false, null, this::_complete);
+        public final SlashOption<String> _tag5 = SlashOption.ofString("tag-5", "Another tag (optional)", false, null, this::_complete);
+
+        void _complete(CommandAutoCompleteInteractionEvent event)
+        {
+            String typing = event.getFocusedOption().getValue();
+            // Don't suggest a tag already picked in one of the other tag options.
+            java.util.Set<String> picked = new java.util.HashSet<>();
+            for (net.dv8tion.jda.api.interactions.commands.OptionMapping om : event.getOptions())
+                if (!om.getName().equals(event.getFocusedOption().getName()))
+                    picked.add(om.getAsString());
+            List<Command.Choice> choices = new ArrayList<>();
+            for (ScarletModerationTags.Tag tag : ScarletDiscordCommands.this.discord.scarlet.moderationTags.searchTags(typing, 125))
+            {
+                if (picked.contains(tag.value) || tag.value == null || tag.value.isEmpty() || tag.value.length() > 100)
+                    continue;
+                String label = tag.label != null && !tag.label.isEmpty() ? tag.label : tag.value;
+                String shown = tag.description == null || tag.description.isEmpty() ? label : label + " — " + tag.description;
+                choices.add(new Command.Choice(MiscUtils.maybeEllipsis(100, shown), tag.value));
+                if (choices.size() >= 25)
+                    break;
+            }
+            event.replyChoices(choices).queue();
+        }
+
+        @SlashCmd("add")
+        @Desc("Add tags to this thread's moderation event (type to search all tags)")
+        @Ephemeral
+        public void add(SlashCommandInteractionEvent event, InteractionHook hook, @SlashOpt("_tag1") String tag1, @SlashOpt("_tag2") String tag2, @SlashOpt("_tag3") String tag3, @SlashOpt("_tag4") String tag4, @SlashOpt("_tag5") String tag5)
+        {
+            this._apply(event, hook, true, tag1, tag2, tag3, tag4, tag5);
+        }
+
+        @SlashCmd("remove")
+        @Desc("Remove tags from this thread's moderation event")
+        @Ephemeral
+        public void remove(SlashCommandInteractionEvent event, InteractionHook hook, @SlashOpt("_tag1") String tag1, @SlashOpt("_tag2") String tag2, @SlashOpt("_tag3") String tag3, @SlashOpt("_tag4") String tag4, @SlashOpt("_tag5") String tag5)
+        {
+            this._apply(event, hook, false, tag1, tag2, tag3, tag4, tag5);
+        }
+
+        void _apply(SlashCommandInteractionEvent event, InteractionHook hook, boolean add, String... inputs)
+        {
+            String auditEntryId = ScarletDiscordCommands.this.discord.discordUI.auditEntryIdForThread(event.getChannel());
+            if (auditEntryId == null)
+            {
+                hook.sendMessage("Run `/tag` inside the thread of the kick, ban or warn you want to tag.").setEphemeral(true).queue();
+                return;
+            }
+            if (!ScarletDiscordCommands.this.discord.discordUI.checkAuditEntryTagAccess(event.getMember(), event.getMessageChannel(), hook, auditEntryId))
+                return;
+            ScarletModerationTags tagsDb = ScarletDiscordCommands.this.discord.scarlet.moderationTags;
+            List<String> values = new ArrayList<>(), unknown = new ArrayList<>();
+            for (String input : inputs)
+            {
+                if (input == null || input.trim().isEmpty())
+                    continue;
+                ScarletModerationTags.Tag tag = tagsDb.getTag(input.trim());
+                if (tag == null) // typed a label instead of picking a suggestion
+                    tag = tagsDb.getTags().stream().filter($ -> $.label != null && $.label.equalsIgnoreCase(input.trim())).findFirst().orElse(null);
+                if (tag == null)
+                    unknown.add(input.trim());
+                else if (!values.contains(tag.value))
+                    values.add(tag.value);
+            }
+            if (!unknown.isEmpty())
+            {
+                hook.sendMessage("Unknown tag" + (unknown.size() == 1 ? "" : "s") + ": `" + String.join("`, `", unknown) + "` - pick from the suggestions as you type.").setEphemeral(true).queue();
+                return;
+            }
+            String[] arr = values.toArray(new String[0]);
+            ScarletData.AuditEntryMetadata meta = add
+                ? ScarletDiscordCommands.this.discord.scarlet.data.auditEntryMetadata_editTags(auditEntryId, new String[0], arr)
+                : ScarletDiscordCommands.this.discord.scarlet.data.auditEntryMetadata_editTags(auditEntryId, arr, new String[0]);
+            String now = meta.entryTags == null || meta.entryTags.size() == 0
+                ? "*(none)*"
+                : meta.entryTags.strings().stream().map(tagsDb::getTagLabel).collect(Collectors.joining(", "));
+            hook.sendMessage((add ? "Added. " : "Removed. ") + "Tags on this event now: " + now).setEphemeral(true).queue();
+            ScarletDiscordCommands.this.discord.discordUI.updateAuxMessage(event.getChannel(), meta);
+        }
+    }
+
     // watched-group
 
     @SlashCmd("watched-group")

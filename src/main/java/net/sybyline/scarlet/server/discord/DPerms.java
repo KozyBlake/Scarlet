@@ -91,7 +91,8 @@ public class DPerms
             "schedule-set-roles", "schedule-set-platforms");
         allowDefaults(PermType.ENTITY_SELECT);
         allowDefaults(PermType.SLASH_COMMAND,
-            "link-vrchat-account", "unlink-vrchat-account");
+            "link-vrchat-account", "unlink-vrchat-account",
+            "tag");
     }
     static void allowDefaults(PermType permType, String... ops)
     {

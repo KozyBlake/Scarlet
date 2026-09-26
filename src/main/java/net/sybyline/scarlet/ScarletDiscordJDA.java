@@ -290,7 +290,7 @@ public class ScarletDiscordJDA implements ScarletDiscord
         this.jda = jda;
         this.livePlayerlist = new ScarletLivePlayerlist(scarlet);
         this.perms = new DPerms(permsFile);
-        this.perms.registerOther(ScarletPermission.GROUPEX_BANS_MANAGE.id);
+        this.perms.registerOther(ScarletPermission.GROUPEX_BANS_MANAGE.id, ScarletPermission.GROUPEX_TAGS_EDIT.id);
         this.perms.load();
         this.interactions = new DInteractions(false, scarlet.exec);
         this.init();
@@ -583,10 +583,11 @@ public class ScarletDiscordJDA implements ScarletDiscord
         this.jda.retrieveCommands().queue($ ->
         {
             this.setCurrentCommands($);
-            if (this.scarlet.settings.checkHasVersionChangedSinceLastRun())
-            {
-                this.updateCommandList();
-            }
+            // Always reconcile: DCommands.delta only sends commands that are new or changed (identical
+            // ones are skipped), so this is cheap. Gating it on a version bump meant a build that added
+            // a command without changing the version number (e.g. /tag during 0.4.20 testing) never
+            // registered it with Discord.
+            this.updateCommandList();
         });
         this.jda.getPresence().setPresence(OnlineStatus.ONLINE, Activity.playing(Scarlet.NAME+" \u2014 KozyBlake's Fork").withState(Scarlet.FORK_GITHUB_URL));
         this.audio.init();
@@ -2464,9 +2465,13 @@ public class ScarletDiscordJDA implements ScarletDiscord
             return false;
         boolean isSecretStaff = this.scarlet.secretStaffList.isSecretStaffId(entryMeta.entry.getActorId())
                 || this.scarlet.secretStaffList.isSecretStaffId(entryMeta.auxActorId);
-        String channelSf = isSecretStaff ? this.auditType2secretChannelSf.get(entryMeta.entry.getEventType())
+        // Simulated (training) moderation entries go ONLY to the dedicated training channel, never
+        // the real moderation log; with no training channel configured they are dropped.
+        boolean training = entryMeta.entry.getId() != null && entryMeta.entry.getId().startsWith(ScarletSimulation.TRAINING_AUDIT_ID_PREFIX);
+        String channelSf = training ? this.trainingChannelSf
+                         : isSecretStaff ? this.auditType2secretChannelSf.get(entryMeta.entry.getEventType())
                                          : this.auditType2channelSf.get(entryMeta.entry.getEventType());
-        if (channelSf == null)
+        if (channelSf == null || channelSf.trim().isEmpty())
             return false;
         Guild guild = this.jda.getGuildById(this.guildSf);
         if (guild == null)
@@ -2699,10 +2704,12 @@ public class ScarletDiscordJDA implements ScarletDiscord
             EmbedBuilder embed = this.embed(entryMeta, true)
                 .setTitle(MarkdownSanitizer.escape(targetName), targetId != null ? "https://vrchat.com/home/user/"+targetId : null)
             ;
-            if (targetId != null)
+            boolean trainingTarget = ScarletSimulation.isTrainingId(targetId);
+            if (targetId != null && !trainingTarget)
                 embed.setImage(this.scarlet.vrc.getUserImageUrl(targetId));
             
-            List<LimitedUserGroups> lugs = this.scarlet.vrc.snapshot(entryMeta);
+            // Simulated (training) users don't exist on VRChat - don't spend API calls on guaranteed 404s.
+            List<LimitedUserGroups> lugs = trainingTarget ? null : this.scarlet.vrc.snapshot(entryMeta);
             
             if (target != null)
             {
@@ -2863,7 +2870,6 @@ public class ScarletDiscordJDA implements ScarletDiscord
             .addContent(contentExtra)
             .addComponents(ActionRow.of(
                 Button.primary("edit-tags:"+entryMeta.entry.getId(), "Edit tags"),
-                Button.secondary("browse-tags:"+entryMeta.entry.getId(), "Browse tags"),
                 Button.primary("edit-desc:"+entryMeta.entry.getId(), "Edit description"),
                 Button.primary("vrchat-report:"+entryMeta.entry.getId()+timeext, "Get report link")
             ))

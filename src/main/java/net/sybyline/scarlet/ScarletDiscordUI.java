@@ -118,30 +118,12 @@ public class ScarletDiscordUI
     }
 
     @ButtonClk("edit-tags")
-    public void editTags(ButtonInteractionEvent event)
+    @Ephemeral
+    public void editTags(ButtonInteractionEvent event, InteractionHook hook)
     {
-        String[] parts = event.getButton().getCustomId().split(":");
-        String auditEntryId = parts[1];
-        if (!this.checkAuditEntryModerationAccess(event.getMember(), event, auditEntryId))
-            return;
-
-        if (this.discord.scarlet.moderationTags.getTags().isEmpty())
-        {
-            event.reply("No moderation tags!").setEphemeral(true).queue();
-            return;
-        }
-
-        // Search-then-pick: rather than dumping every tag into stacked 25-option
-        // menus (which forces multiple boxes once there are more than 25 tags), pop
-        // a search box. The submit handler renders ONE menu of just the matches, so
-        // any number of tags works and it is the same flow for everyone.
-        event.replyModal(Modal.create("tag-search:" + auditEntryId, "Search moderation tags")
-            .addComponents(Label.of("Search", TextInput.create("tag-search-query", TextInputStyle.SHORT)
-                .setRequired(false)
-                .setPlaceholder("Type a name or description - leave blank to browse")
-                .build()))
-            .build())
-            .queue();
+        // Every tag in dropdowns (25 per dropdown, up to five), like the original Edit tags. Each
+        // dropdown filters as you type in it; `/tag add` in the thread searches ALL tags at once.
+        this.sendAllTagMenus(event, hook);
     }
 
     /**
@@ -153,9 +135,15 @@ public class ScarletDiscordUI
     @Ephemeral
     public void browseTags(ButtonInteractionEvent event, InteractionHook hook)
     {
+        // Kept so the Browse tags button on older posts still works; same as Edit tags now.
+        this.sendAllTagMenus(event, hook);
+    }
+
+    void sendAllTagMenus(ButtonInteractionEvent event, InteractionHook hook)
+    {
         String[] parts = event.getButton().getCustomId().split(":");
         String auditEntryId = parts[1];
-        if (!this.checkAuditEntryModerationAccess(event.getMember(), hook, auditEntryId))
+        if (!this.checkAuditEntryTagAccess(event.getMember(), event.getMessageChannel(), hook, auditEntryId))
             return;
 
         List<ScarletModerationTags.Tag> tags = this.discord.scarlet.moderationTags.getTags();
@@ -165,6 +153,44 @@ public class ScarletDiscordUI
             return;
         }
 
+        String tip = tags.size() > 25
+            ? "Type in a dropdown to filter it. To search **all " + tags.size() + " tags** at once, use `/tag add` in this thread."
+            : "Type in the dropdown to filter it. You can also use `/tag add` in this thread.";
+        hook.sendMessage(tip)
+            .addComponents(this.allTagMenus(tags, auditEntryId))
+            .setEphemeral(true)
+            .queue();
+    }
+
+    /** The audit entry a moderation thread belongs to, read from the Edit tags button on the thread's first message (works across restarts). */
+    String auditEntryIdForThread(net.dv8tion.jda.api.entities.channel.middleman.MessageChannel channel)
+    {
+        if (channel == null || !channel.getType().isThread())
+            return null;
+        try
+        {
+            return channel.getHistoryFromBeginning(3).complete().getRetrievedHistory().stream()
+                .map(Message::getComponentTree)
+                .map($ -> $.findAll(Button.class))
+                .flatMap(List::stream)
+                .map(Button::getCustomId)
+                .filter($ -> $ != null && $.startsWith("edit-tags:"))
+                .map($ -> $.split(":")[1])
+                .findFirst()
+                .orElse(null);
+        }
+        catch (Exception ex)
+        {
+            LOG.warn("Could not read moderation thread "+channel.getId()+" to find its audit entry", ex);
+            return null;
+        }
+    }
+
+    /** Every tag, split across Discord's 25-option menus (max five rows = 125 tags, Scarlet's tag cap), with existing tags pre-ticked. */
+    List<ActionRow> allTagMenus(List<ScarletModerationTags.Tag> tags, String auditEntryId)
+    {
+        if (tags.size() > 125)
+            tags = tags.subList(0, 125);
         // Discord supports up to 25 options per menu and five action rows.
         StringSelectMenu.Builder[] builders = new StringSelectMenu.Builder[(tags.size() - 1) / 25 + 1];
         for (int i = 0; i < builders.length; i++)
@@ -177,7 +203,7 @@ public class ScarletDiscordUI
             if (tag.description == null || tag.description.isEmpty())
                 builders[i / 25].addOption(MiscUtils.maybeEllipsis(100, label), MiscUtils.maybeEllipsis(100, tag.value));
             else
-                builders[i / 25].addOption(MiscUtils.maybeEllipsis(100, label), MiscUtils.maybeEllipsis(100, tag.value), MiscUtils.maybeEllipsis(50, tag.description));
+                builders[i / 25].addOption(MiscUtils.maybeEllipsis(100, label), MiscUtils.maybeEllipsis(100, tag.value), MiscUtils.maybeEllipsis(100, tag.description));
         }
 
         ScarletData.AuditEntryMetadata auditEntryMeta = this.discord.scarlet.data.auditEntryMetadata(auditEntryId);
@@ -193,62 +219,7 @@ public class ScarletDiscordUI
             }
         }
 
-        hook.sendMessageComponents(Arrays.asList(MiscUtils.map(builders, ActionRow[]::new, $ -> ActionRow.of($.build()))))
-            .setEphemeral(true)
-            .queue();
-    }
-
-    @ModalSub("tag-search")
-    @Ephemeral
-    public void tagSearch(ModalInteractionEvent event, InteractionHook hook)
-    {
-        String[] parts = event.getModalId().split(":");
-        String auditEntryId = parts[1];
-        if (!this.checkAuditEntryModerationAccess(event.getMember(), hook, auditEntryId))
-            return;
-
-        String query = event.getValue("tag-search-query") == null ? "" : event.getValue("tag-search-query").getAsString();
-
-        List<ScarletModerationTags.Tag> matches = this.discord.scarlet.moderationTags.searchTags(query, 25);
-        if (matches.isEmpty())
-        {
-            hook.sendMessageFormat("No moderation tags matched `%s` - reopen with the Edit tags button to search again.", query).setEphemeral(true).queue();
-            return;
-        }
-
-        StringSelectMenu.Builder menu = StringSelectMenu.create("select-tags-search:" + auditEntryId);
-        for (ScarletModerationTags.Tag tag : matches)
-        {
-            String value = tag.value,
-                   label = tag.label != null ? tag.label : tag.value,
-                   desc = tag.description;
-            if (desc == null || desc.isEmpty())
-                menu.addOption(MiscUtils.maybeEllipsis(100, label), MiscUtils.maybeEllipsis(100, value));
-            else
-                menu.addOption(MiscUtils.maybeEllipsis(100, label), MiscUtils.maybeEllipsis(100, value), MiscUtils.maybeEllipsis(50, desc));
-        }
-        menu.setMinValues(0).setMaxValues(menu.getOptions().size());
-        String qtrim = query == null ? "" : query.trim();
-        menu.setPlaceholder(qtrim.isEmpty()
-            ? ("Tags (showing " + matches.size() + ")")
-            : MiscUtils.maybeEllipsis(150, "Matches for \"" + qtrim + "\""));
-
-        // Pre-tick the tags already on this entry that appear in the current matches.
-        ScarletData.AuditEntryMetadata auditEntryMeta = this.discord.scarlet.data.auditEntryMetadata(auditEntryId);
-        if (auditEntryMeta != null && auditEntryMeta.hasTags())
-        {
-            List<String> preselect = new ArrayList<>();
-            for (ScarletModerationTags.Tag tag : matches)
-                if (auditEntryMeta.entryTags.contains(tag.value))
-                    preselect.add(tag.value);
-            menu.setDefaultValues(preselect);
-        }
-
-        hook.sendMessageComponents(Arrays.asList(
-                ActionRow.of(menu.build()),
-                ActionRow.of(Button.secondary("edit-tags:" + auditEntryId, "Search again"))))
-            .setEphemeral(true)
-            .queue();
+        return new ArrayList<>(Arrays.asList(MiscUtils.map(builders, ActionRow[]::new, $ -> ActionRow.of($.build()))));
     }
 
     @StringSel("select-tags-search")
@@ -293,7 +264,7 @@ public class ScarletDiscordUI
         String[] parts = event.getSelectMenu().getCustomId().split(":");
         
         String auditEntryId = parts[1];
-        if (!this.checkAuditEntryModerationAccess(event.getMember(), hook, auditEntryId))
+        if (!this.checkAuditEntryTagAccess(event.getMember(), event.getMessageChannel(), hook, auditEntryId))
             return;
         
         ScarletData.AuditEntryMetadata auditEntryMeta = this.discord.scarlet.data.auditEntryMetadata_editTags(auditEntryId,
@@ -392,8 +363,9 @@ public class ScarletDiscordUI
         }
         
         long within1day = System.currentTimeMillis() - 86400_000L;
-        User sc = this.discord.scarlet.vrc.getUser(vrcTargetId, within1day);
-        if (sc == null)
+        boolean training = ScarletSimulation.isTrainingId(vrcTargetId);
+        User sc = training ? null : this.discord.scarlet.vrc.getUser(vrcTargetId, within1day);
+        if (sc == null && !training)
         {
             hook.sendMessageFormat("No VRChat user found with id %s", vrcTargetId).setEphemeral(true).queue();
             return false;
@@ -406,6 +378,12 @@ public class ScarletDiscordUI
                 hook.sendMessage("You do not have permission to ban users.\n||(Your admin can enable this by giving your associated VRChat user ban management permissions in the group or with the command `/scarlet-discord-permissions type:Other name:groupex-bans-manage value:Allow`)||").setEphemeral(true).queue();
                 return false;
             }
+        }
+        if (training)
+        {
+            // Training user: the permission checks above are real; the ban itself is simulated.
+            hook.sendMessage("Banned the training user. *(Training simulation — no real ban occurred.)*").setEphemeral(false).queue();
+            return true;
         }
         if (!this.discord.checkSelfRespondVrcPerms(GroupPermissions.group_bans_manage, hook))
             return false;
@@ -502,8 +480,9 @@ public class ScarletDiscordUI
         }
 
         long within1day = System.currentTimeMillis() - 86400_000L;
-        User sc = this.discord.scarlet.vrc.getUser(vrcTargetId, within1day);
-        if (sc == null)
+        boolean training = ScarletSimulation.isTrainingId(vrcTargetId);
+        User sc = training ? null : this.discord.scarlet.vrc.getUser(vrcTargetId, within1day);
+        if (sc == null && !training)
         {
             hook.sendMessageFormat("No VRChat user found with id %s", vrcTargetId).setEphemeral(true).queue();
             return false;
@@ -516,6 +495,12 @@ public class ScarletDiscordUI
                 hook.sendMessage("You do not have permission to ban users.\n||(Your admin can enable this by giving your associated VRChat user ban management permissions in the group or with the command `/scarlet-discord-permissions type:Other name:groupex-bans-manage value:Allow`)||").setEphemeral(true).queue();
                 return false;
             }
+        }
+        if (training)
+        {
+            // Training user: the permission checks above are real; the timed ban itself is simulated.
+            hook.sendMessageFormat("Banned the training user for %s. *(Training simulation — no real ban or unban timer was created.)*", formatDuration(durationMillis)).setEphemeral(false).queue();
+            return true;
         }
         if (!this.discord.checkSelfRespondVrcPerms(GroupPermissions.group_bans_manage, hook))
             return false;
@@ -778,8 +763,9 @@ public class ScarletDiscordUI
         }
         
         long within1day = System.currentTimeMillis() - 86400_000L;
-        User sc = this.discord.scarlet.vrc.getUser(vrcTargetId, within1day);
-        if (sc == null)
+        boolean training = ScarletSimulation.isTrainingId(vrcTargetId);
+        User sc = training ? null : this.discord.scarlet.vrc.getUser(vrcTargetId, within1day);
+        if (sc == null && !training)
         {
             hook.sendMessageFormat("No VRChat user found with id %s", vrcTargetId).setEphemeral(true).queue();
             return;
@@ -792,6 +778,12 @@ public class ScarletDiscordUI
                 hook.sendMessage("You do not have permission to unban users.\n||(Your admin can enable this by giving your associated VRChat user ban management permissions in the group or with the command `/scarlet-discord-permissions type:Other name:groupex-bans-manage value:Allow`)||").setEphemeral(true).queue();
                 return;
             }
+        }
+        if (training)
+        {
+            // Training user: the permission checks above are real; the unban itself is simulated.
+            hook.sendMessage("Unbanned the training user. *(Training simulation — no real action occurred.)*").setEphemeral(false).queue();
+            return;
         }
         if (!this.discord.checkSelfRespondVrcPerms(GroupPermissions.group_bans_manage, hook))
             return;
@@ -1204,7 +1196,7 @@ public class ScarletDiscordUI
     {
         String[] parts = event.getButton().getCustomId().split(":");
         String auditEntryId = parts[1];
-        if (!this.checkAuditEntryModerationAccess(event.getMember(), event, auditEntryId))
+        if (!this.checkAuditEntryTagAccess(event.getMember(), event, auditEntryId))
             return;
         TextInput.Builder ti = TextInput
             .create("input-desc:"+auditEntryId, TextInputStyle.PARAGRAPH)
@@ -1227,7 +1219,7 @@ public class ScarletDiscordUI
     public void editDesc(ModalInteractionEvent event)
     {
         String[] parts = event.getModalId().split(":");
-        if (!this.checkAuditEntryModerationAccess(event.getMember(), event, parts[1]))
+        if (!this.checkAuditEntryTagAccess(event.getMember(), event, parts[1]))
             return;
         String desc = event.getValue("input-desc:"+parts[1]).getAsString();
         event.replyFormat("### Setting description:\n%s", desc).setEphemeral(true).queue();
@@ -2093,6 +2085,65 @@ public class ScarletDiscordUI
         }
     }
 
+    /**
+     * Who may TAG / DESCRIBE a moderation event (looser than redacting it). Instance hosts who can warn
+     * and kick but not ban must be able to tag the actions they take, so on top of the full moderation
+     * check this also allows: the moderator who performed the action (linked VRChat account), anyone
+     * with VRChat instance-moderation permission in the group, and the groupex-tags-edit override for
+     * roles without linked VRChat accounts. Returns null if allowed, else the reason to show.
+     */
+    String auditEntryTagDenial(Member member, net.dv8tion.jda.api.entities.channel.middleman.MessageChannel channel, String auditEntryId)
+    {
+        if (member == null)
+            return "Could not determine your guild permissions.";
+        // Staff are whoever the server lets post in its moderation threads: if your role can send
+        // messages in the thread (or channel) the event lives in, you can tag it. This follows the
+        // server's own Discord role/channel setup, so nothing extra has to be granted in Scarlet.
+        if (channel instanceof net.dv8tion.jda.api.entities.channel.middleman.GuildChannel)
+        {
+            net.dv8tion.jda.api.entities.channel.middleman.GuildChannel gc = (net.dv8tion.jda.api.entities.channel.middleman.GuildChannel)channel;
+            net.dv8tion.jda.api.Permission post = channel.getType().isThread()
+                ? net.dv8tion.jda.api.Permission.MESSAGE_SEND_IN_THREADS
+                : net.dv8tion.jda.api.Permission.MESSAGE_SEND;
+            if (member.hasPermission(gc, net.dv8tion.jda.api.Permission.VIEW_CHANNEL, post))
+                return null;
+        }
+        if (this.discord.checkMemberHasVRChatPermission(GroupPermissions.group_bans_manage, member)
+            || this.discord.checkMemberHasScarletPermission(ScarletPermission.GROUPEX_BANS_MANAGE, member, false)
+            || this.discord.checkMemberHasScarletPermission(ScarletPermission.GROUPEX_TAGS_EDIT, member, false)
+            || member.hasPermission(net.dv8tion.jda.api.Permission.MODERATE_MEMBERS)
+            || member.hasPermission(net.dv8tion.jda.api.Permission.MANAGE_SERVER))
+            return null;
+        String vrcId = this.discord.scarlet.data.globalMetadata_getSnowflakeId(member.getId());
+        if (vrcId != null)
+        {
+            if (this.discord.checkMemberHasVRChatPermission(GroupPermissions.group_instance_moderate, member))
+                return null;
+            ScarletData.AuditEntryMetadata meta = this.discord.scarlet.data.auditEntryMetadata(auditEntryId);
+            if (meta != null && meta.entry != null && (vrcId.equals(meta.entry.getActorId()) || vrcId.equals(meta.auxActorId)))
+                return null;
+        }
+        LOG.warn("Rejected tag/description edit by {} for audit entry {}", member.getId(), auditEntryId);
+        return vrcId == null
+            ? "You can't tag this event: your role can't post in this moderation thread. Ask an admin to give your role permission to send messages here, or link your VRChat account with `/link-vrchat-account` to tag actions you took yourself."
+            : "You can't tag this event: your role can't post in this moderation thread, and it isn't an action you took. Ask an admin to give your role permission to send messages here.";
+    }
+    boolean checkAuditEntryTagAccess(Member member, net.dv8tion.jda.api.entities.channel.middleman.MessageChannel channel, InteractionHook hook, String auditEntryId)
+    {
+        String denial = this.auditEntryTagDenial(member, channel, auditEntryId);
+        if (denial == null)
+            return true;
+        hook.sendMessage(denial).setEphemeral(true).queue();
+        return false;
+    }
+    boolean checkAuditEntryTagAccess(Member member, net.dv8tion.jda.api.interactions.callbacks.IReplyCallback event, String auditEntryId)
+    {
+        String denial = this.auditEntryTagDenial(member, event.getMessageChannel(), auditEntryId);
+        if (denial == null)
+            return true;
+        event.reply(denial).setEphemeral(true).queue();
+        return false;
+    }
     boolean checkAuditEntryModerationAccess(Member member, InteractionHook hook, String auditEntryId)
     {
         if (member == null)

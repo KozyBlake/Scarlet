@@ -42,7 +42,7 @@ public interface DCommands
                     return false;
                 if (equals_command($, datum))
                 {
-                    LOG.info("Skipping action for "+name+", identical already exists");
+                    LOG.debug("Skipping action for "+name+", identical already exists");
                     identical.accept($, datum);
                     return true;
                 }

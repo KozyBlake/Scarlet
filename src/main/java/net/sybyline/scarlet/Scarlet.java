@@ -1148,6 +1148,7 @@ public class Scarlet implements Closeable
     final ScarletSettings.FileValued<String[]> enforceInstancesWorldList = this.settings.new FileValuedStringArrayPattern("enforce_instances_world_list", I18n.tr("setting.enforce_instances_world_list"), new String[0], VrcIds.P_ID_WORLD, true);
     final ScarletSettings.FileValued<Integer> autoCloseBotInstanceMinutes = this.settings.new FileValuedIntRange("auto_close_bot_instance_minutes", I18n.tr("setting.auto_close_bot_instance_minutes"), 0, 0, 1440);
     final ScarletSettings.FileValued<Integer> auditPollingInterval = this.settings.new FileValuedIntRange("audit_polling_interval", I18n.tr("setting.audit_polling_interval"), 60, 10, 300);
+    final ScarletSettings.FileValued<Integer> auditCatchupMaxDays = this.settings.new FileValuedIntRange("audit_catchup_max_days", I18n.tr("setting.audit_catchup_max_days"), 14, 1, 90);
     // How often (seconds) to poll the group's live open instances so the follow-into-new-instance
     // feature reacts without waiting out the audit-log cadence + ingest lag. 0 disables the fast path
     // (falls back to audit-driven detection). Only polls at all when launch-on-instance-create is on.
@@ -3524,7 +3525,21 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
         {
             offsetMillis += (30_000L - currentPollInterval) / 10L;
         }
-        OffsetDateTime cursor = this.settings.lastAuditQuery.getOrSupply(),
+        OffsetDateTime cursor = this.settings.lastAuditQuery.getOrSupply();
+        // Bound the backlog after a long time offline: without this, a months-old cursor meant
+        // walking forward one day per poll for hours (and re-posting months-old moderation)
+        // before live events appeared again.
+        {
+            int maxDays = Math.max(1, this.auditCatchupMaxDays.get().intValue());
+            OffsetDateTime oldest = OffsetDateTime.now(ZoneOffset.UTC).minusDays(maxDays);
+            if (cursor.isBefore(oldest))
+            {
+                LOG.warn("Audit log position is "+Duration.between(cursor, oldest).toDays()+" day(s) older than the catch-up limit; skipping ahead to "+oldest+" (setting audit_catchup_max_days="+maxDays+")");
+                cursor = oldest;
+                this.settings.lastAuditQuery.set(cursor);
+            }
+        }
+        OffsetDateTime
                        // Re-query a little already-covered time on every poll: VRChat can
                        // ingest audit entries out of order, so an entry created just before
                        // the cursor may only become visible in the API after newer entries
@@ -3560,6 +3575,9 @@ Send-ScarletIPC -GroupID 'grp_00000000-0000-0000-0000-000000000000' -Message 'st
                 LOG.info("Catching up: Only querying a 24-hour period");
                 to = latest;
                 lastAuditQuery = to;
+                // Still behind: keep polling at the burst rate (every 10s) until caught up,
+                // rather than one day per full polling interval.
+                this.pollAuditSoon();
             }
             else
             {
